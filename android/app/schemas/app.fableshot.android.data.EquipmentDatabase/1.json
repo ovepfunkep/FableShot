@@ -1,0 +1,181 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "b4ddc4617d75fee86e7af260e72a8597",
+    "entities": [
+      {
+        "tableName": "equipment_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT, `model` TEXT, `notes` TEXT, `drawWeightLb` REAL, `drawLengthIn` REAL, `spine` INTEGER, `lengthMm` REAL, `massGrain` REAL, `diameterMm` REAL, `numberedCount` INTEGER, `bowId` TEXT, `arrowsId` TEXT, `favorite` INTEGER NOT NULL, `archived` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `createdAtMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "drawWeightLb",
+            "columnName": "drawWeightLb",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "drawLengthIn",
+            "columnName": "drawLengthIn",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "spine",
+            "columnName": "spine",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lengthMm",
+            "columnName": "lengthMm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "massGrain",
+            "columnName": "massGrain",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "diameterMm",
+            "columnName": "diameterMm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "numberedCount",
+            "columnName": "numberedCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bowId",
+            "columnName": "bowId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "arrowsId",
+            "columnName": "arrowsId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "favorite",
+            "columnName": "favorite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archived",
+            "columnName": "archived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "createdAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMs",
+            "columnName": "updatedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_equipment_items_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_equipment_items_kind` ON `${TABLE_NAME}` (`kind`)"
+          }
+        ]
+      },
+      {
+        "tableName": "equipment_revisions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`itemId` TEXT NOT NULL, `revision` INTEGER NOT NULL, `snapshotJson` TEXT NOT NULL, `changedAtMs` INTEGER NOT NULL, PRIMARY KEY(`itemId`, `revision`))",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "itemId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotJson",
+            "columnName": "snapshotJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "changedAtMs",
+            "columnName": "changedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "itemId",
+            "revision"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b4ddc4617d75fee86e7af260e72a8597')"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+Family: Manrope, Cyrillic + Latin.
+Source: https://github.com/google/fonts/tree/main/ofl/manrope
+Downloaded variable source: Manrope[wght].ttf
+SHA-256: 3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6
+License: SIL Open Font License 1.1, included in Manrope-OFL.txt.
+Static instances 400/500/600/700/800 generated with fontTools 4.60.1
+using scripts/prepare-fonts.py. Static instances keep consistent text weight
+on Android OEMs that render the bundled variable font at its default axis.

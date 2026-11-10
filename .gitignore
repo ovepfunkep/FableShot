@@ -1,0 +1,38 @@
+# Local Android tools, downloads and debugging credentials.
+.tools/
+.gradle/
+**/build/
+**/local.properties
+.idea/
+artifacts/
+.kotlin/
+*.iml
+
+# Built packages and local diaries/backups must never enter source control.
+*.apk
+*.aab
+*.apks
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.preferences_pb
+*.fableshot
+MyTargets_exported_data_*.csv
+MyTargets_backup_*.zip
+
+# Local secrets and signing material.
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+**/service-account*.json
+
+# OS metadata.
+.DS_Store
+Thumbs.db

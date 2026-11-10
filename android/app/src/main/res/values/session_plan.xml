@@ -1,0 +1,10 @@
+<resources>
+    <string name="plan_free">Без ограничения</string>
+    <string name="plan_fixed">По плану</string>
+    <string name="plan_end_count">Количество серий · 1–200</string>
+    <string name="plan_preview">%1$d серий по %2$d стрелы · всего %3$d</string>
+    <string name="plan_help">В план входят зачётные серии, разминка не входит. Закрытая неполная серия тоже считается одной серией. Можно закончить раньше. Если поменять число стрел в следующих сериях, план по числу серий сохранится.</string>
+    <string name="plan_finish">Завершить тренировку</string>
+    <string name="plan_progress">Закрыто %1$d из %2$d серий · внесено %3$d стрел</string>
+    <string name="next_round">Следующий раунд</string>
+</resources>

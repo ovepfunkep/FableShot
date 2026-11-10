@@ -1,0 +1,29 @@
+<resources>
+    <string name="archive_title">Архив дневника</string>
+    <string name="archive_description">Все тренировки и настройки в одном файле. Копию можно хранить на телефоне или перенести на другое устройство.</string>
+    <string name="archive_export_title">Сохранить копию</string>
+    <string name="archive_export_hint">Попадания, условия, снаряжение с историей изменений, корзина, настройки и исходники MyTargets.</string>
+    <string name="archive_export">Создать архив</string>
+    <string name="archive_save_file">Выбрать место сохранения</string>
+    <string name="archive_check_title">Проверить копию</string>
+    <string name="archive_check_hint">Выбери архив FableShot. Приложение проверит его и попробует восстановить отдельную копию данных.</string>
+    <string name="archive_check">Выбрать и проверить архив</string>
+    <string name="archive_working">Проверяем и переносим данные…</string>
+    <string name="archive_saved">Архив сохранён в выбранный файл.</string>
+    <string name="archive_failed">Операцию выполнить не удалось. Проверь файл и свободное место. Текущий дневник сохранён.</string>
+    <string name="archive_cancelled">Операция отменена. Незавершённый файл сохранения может потребоваться удалить.</string>
+    <string name="archive_valid">Копия прошла проверку</string>
+    <string name="archive_sessions">Тренировок, включая корзину: %1$d</string>
+    <string name="archive_shots">Отмеченных стрел: %1$d</string>
+    <string name="archive_equipment">Карточек снаряжения: %1$d</string>
+    <string name="archive_preview_hint">Данные восстановлены в отдельную проверочную копию. Текущий дневник не изменён. Замена дневника появится следующим шагом разработки.</string>
+    <string name="archive_apply">Восстановить этот дневник</string>
+    <string name="archive_apply_hint">После подтверждения этот архив заменит текущий дневник и настройки. Прежний комплект данных останется доступен для возврата.</string>
+    <string name="archive_current_counts">Сейчас: %1$d тренировок · %2$d отмеченных стрел</string>
+    <string name="archive_return_previous">Вернуться к предыдущему дневнику</string>
+    <string name="archive_apply_question">Заменить текущий дневник?</string>
+    <string name="archive_undo_question">Вернуться к прежнему дневнику?</string>
+    <string name="archive_confirmation">Будет переключён весь дневник вместе со снаряжением и настройками. Два дневника не объединяются. Активная тренировка текущего дневника останется в его сохранённой копии. Дополнительный архив можно сохранить кнопкой «Создать архив» перед продолжением.</string>
+    <string name="archive_ack">Понимаю, что это замена всего дневника</string>
+    <string name="archive_confirm_action">Подтвердить замену</string>
+</resources>
