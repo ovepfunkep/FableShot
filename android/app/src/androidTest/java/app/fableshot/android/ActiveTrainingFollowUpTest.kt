@@ -186,6 +186,27 @@ class ActiveTrainingFollowUpTest {
         assertEquals(footer, ui.onNodeWithTag("training-editor-footer").fetchSemanticsNode().boundsInRoot)
     }
 
+    @Test fun seriesMaximumFollowsEnteredHitsIncludingMissesAndShrinksAfterDeletion() {
+        start(numbering=false)
+        mount()
+        val target=ui.onNodeWithTag("training-target-area").fetchSemanticsNode().boundsInRoot
+        fun assertScore(value:String) {
+            ui.onNodeWithTag("end-score",useUnmergedTree=true).assertTextEquals(value)
+            assertEquals(target,ui.onNodeWithTag("training-target-area").fetchSemanticsNode().boundsInRoot)
+        }
+        assertScore("0/0")
+        seed(9);waitFacts {it.allShots.size==1};assertScore("9/10")
+        seed(0);waitFacts {it.allShots.size==2};assertScore("9/20")
+        seed(8);waitFacts {it.allShots.size==3};assertScore("17/30")
+        seed(10);waitFacts {it.allShots.size==4};assertScore("27/40")
+        ui.onNodeWithTag("shot-1").performClick()
+        ui.onNodeWithTag("remove-selected-shot").performClick()
+        ui.onNodeWithTag("confirm-remove-selected-shot").performClick()
+        waitFacts {it.allShots.size==3}
+        assertScore("27/30")
+        assertEquals(4,current().currentEnd!!.end.plannedCount)
+    }
+
     @Test fun roundAndSeriesBadgesOpenTheirOwnForecastSamples() {
         start(numbering = false)
         repeat(3) { seed(8) }

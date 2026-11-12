@@ -13,8 +13,15 @@ import java.util.UUID
 import kotlin.math.max
 
 data class PosterPalette(val background:Int,val surface:Int,val ink:Int,val muted:Int,val accent:Int,val onAccent:Int,val border:Int,val gold:Int)
-data class PosterRow(val source:JournalEndDetails,val round:Int,val number:Int,val countOnly:Boolean,val condition:Int,val maximumPerArrow:Int?)
+data class PosterRow(val source:JournalEndDetails,val round:Int,val number:Int,val countOnly:Boolean,val condition:Int,val maximumPerArrow:Int?) {
+    /** Displayed result covers entered shots; the saved series plan remains separate. */
+    val resultMaximum: Int? get() = maximumPerArrow?.takeUnless { countOnly }?.times(source.shots.size)
+}
 data class PosterCard(val round:Int,val rows:List<PosterRow>,val part:Int,val parts:Int,val roundRows:List<PosterRow>)
+
+internal fun posterResultMaximum(rows: List<PosterRow>): Int? =
+    if (rows.isNotEmpty() && rows.all { it.resultMaximum != null }) rows.sumOf { requireNotNull(it.resultMaximum) }
+    else null
 
 object TrainingPoster {
     /** Every entered series appears exactly once, including historical out-of-score entries. */
@@ -59,7 +66,7 @@ object TrainingPoster {
         }
         val scored=cards.flatMap {it.rows}.filter {it.round>0&&!it.countOnly}
         val total=scored.sumOf {it.source.shots.sumOf {shot -> shot.points}}
-        val maximum=if(scored.isNotEmpty()&&scored.all {it.maximumPerArrow!=null})scored.sumOf {it.source.end.plannedCount*requireNotNull(it.maximumPerArrow)}else null
+        val maximum=posterResultMaximum(scored)
         val volume=cards.flatMap {it.rows}.sumOf {it.source.volume}
         val rankEvaluation=details.rankAssessment(category).takeIf {it.finalResult}?.evaluation
         val rank=rankEvaluation?.result?.label
@@ -157,7 +164,7 @@ object TrainingPoster {
                         text(heading+(if(section.parts>1)" · ${section.part}/${section.parts}"else""),left+22f,gridTop+46f,34f,palette.ink,true,width=width-44)
                         val roundPoints=section.roundRows.sumOf {it.source.shots.sumOf {shot -> shot.points}}
                         val roundScored=section.roundRows.filterNot {it.countOnly}
-                        val roundMax=if(roundScored.all {it.maximumPerArrow!=null})roundScored.sumOf {it.source.end.plannedCount*requireNotNull(it.maximumPerArrow)}else null
+                        val roundMax=posterResultMaximum(roundScored)
                         text(if(roundScored.isNotEmpty())(roundMax?.let {"$roundPoints / $it"} ?: "Очки: $roundPoints")+" · средний ${compact(roundPoints.toDouble()/section.roundRows.sumOf {it.source.shots.size})}"
                             else"Стрел: ${section.roundRows.sumOf {it.source.volume}}",left+22f,gridTop+84f,25f,palette.muted,width=width-44)
                         section.rows.forEachIndexed {i,row ->
@@ -180,7 +187,7 @@ object TrainingPoster {
                                     canvas.drawText(label,x+(tile-paint.measureText(label))/2,top+35f,paint)
                                 }
                                 val sum=row.source.shots.sumOf {it.points}
-                                val label=row.maximumPerArrow?.let {"$sum/${row.source.end.plannedCount*it}"} ?: sum.toString()
+                                val label=row.resultMaximum?.let {"$sum/$it"} ?: sum.toString()
                                 setup(25f,palette.ink,true);canvas.drawText(label,left+width-22-paint.measureText(label),top+35f,paint)
                             }
                             if(scopes.size>1)text("У${row.condition+1}",left+22f,top+58f,15f,palette.muted)

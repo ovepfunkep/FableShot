@@ -1,0 +1,7 @@
+.technique-display-settings { display: grid; gap: 4px; }
+.technique-display-settings h3 { margin: 0 0 4px; font-size: 16px; line-height: 24px; }
+.technique-display-row { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; }
+.technique-display-row input { width: 20px; height: 20px; margin: 0 4px; flex: none; accent-color: var(--accent); }
+.technique-display-error { color: #ffd8d1; font-size: 13px; line-height: 20px; }
+.technique-display-error p { margin: 4px 0; }
+.technique-display-error button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--edge); border-radius: 16px; background: transparent; color: var(--accent); }

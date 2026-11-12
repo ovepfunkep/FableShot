@@ -86,7 +86,7 @@ class NumberedHitMotionTest {
         val before=ui.onNodeWithTag("training-editor-footer").fetchSemanticsNode().boundsInRoot
         ui.onNodeWithTag("target-input").performTouchInput {click(center)}
         repeat(2) {ui.mainClock.advanceTimeByFrame()}
-        ui.onNodeWithTag("end-score",useUnmergedTree=true).assertTextEquals("19/30")
+        ui.onNodeWithTag("end-score",useUnmergedTree=true).assertTextEquals("19/20")
         ui.onNodeWithTag("physical-arrow-picker").assertDoesNotExist()
         val frames=mutableSetOf<String>()
         repeat(4) {

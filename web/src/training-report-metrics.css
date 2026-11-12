@@ -1,0 +1,25 @@
+.report-metrics-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--edge); border-radius: 22px; background: var(--surface); }
+.report-metrics-card h3 { margin: 0; font-size: 15px; }
+.report-metrics-heading { display: flex; align-items: center; gap: 8px; }
+.report-metrics-result { background: var(--raised); }
+.report-metrics-result h3 { text-transform: uppercase; color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.report-metrics-score { display: flex; align-items: baseline; gap: 10px; color: var(--muted); font-size: 20px; font-variant-numeric: tabular-nums; }
+.report-metrics-score strong { font-size: 39px; line-height: 1; color: #f2f6ee; }
+.report-metrics-result progress { width: 100%; height: 6px; accent-color: var(--accent); }
+.report-metrics-muted { margin: 0; color: var(--muted); font-size: 12px; }
+.report-metrics-muted strong { color: #f2f6ee; }
+.report-metrics-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.report-metrics-inline span { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+.report-metrics-inline strong { font-size: 16px; color: #f2f6ee; }
+.report-metrics-scope { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+.report-metrics-scope select { width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); color: inherit; font: inherit; }
+.report-zone-bars { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); align-items: end; gap: 3px; min-height: 102px; }
+.report-zone-column { display: grid; justify-items: center; gap: 4px; min-width: 0; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.report-zone-column strong { color: #f2f6ee; }
+.report-zone-bar { width: 100%; border-radius: 4px; background: var(--accent); }
+.report-zone-bar.is-miss { background: var(--muted); }
+.report-metrics-heading > svg { flex: none; color: var(--accent); }
+.progress-score-value { align-self: center; justify-self: start; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.progress-score-help { color: var(--muted); font-size: 14px; }
+.progress-score-help ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.progress-score-help li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--edge); }

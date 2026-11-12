@@ -1,0 +1,66 @@
+import { expect, test } from '@playwright/test';
+import { openTraining } from './journal-navigation.ts';
+import { advanceSeries, appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
+import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+
+test('the report graphs all entered series while CG3 uses confirmed series only', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
+  await page.getByTestId('next-end').click();
+  await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
+  await page.getByTestId('next-end').click();
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  const trend = page.getByTestId('training-mean-trend');
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('0,0 / 10');
+  await expect(trend.getByText('Раунд 1 · серия 2', { exact: true })).toBeVisible();
+  await trend.getByTestId('training-mean-prev').click();
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('10,0 / 10');
+  await trend.getByTestId('training-mean-chart').click({ position: { x: 1, y: 70 } });
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('10,0 / 10');
+  await trend.getByTestId('training-mean-next').click();
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('0,0 / 10');
+  await expect(page.getByTestId('cg3-total')).toHaveText(/^105[.,]00$/);
+  await expect(page.getByTestId('cg3-formula')).toBeHidden();
+  await page.getByTestId('cg3-help').click();
+  await page.getByTestId('cg3-explain').click();
+  await expect(page.getByTestId('cg3-formula')).toBeVisible();
+});
+
+test('map and zone distribution share conditions while the map can isolate one series', async ({ page }) => {
+  let practice = emptyPractice();
+  for (const x of [.02, .04, .06]) practice = appendShot(practice, { code: 'X', points: 10, point: { x, y: 0 } });
+  practice = advanceSeries(practice);
+  practice = appendShot(practice, { code: '9', points: 9, point: { x: .16, y: 0 } });
+  practice = appendShot(practice, { code: 'M', points: 0, point: null });
+  practice = applyConditions(practice, { ...DEFAULT_CONDITIONS, distanceMeters: 30 });
+  practice = appendShot(practice, { code: '10', points: 10, point: { x: 0, y: 0 } });
+
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.addInitScript(data => localStorage.setItem('app.fableshot.practice-pilot.v3', JSON.stringify(data)), practice);
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  const map = page.getByTestId('training-hit-map');
+  await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
+  await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 4 из 5');
+  await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('M: 1');
+  await expect(page.getByTestId('report-zone-10')).toHaveAccessibleName('10: 3');
+  await expect(page.getByTestId('report-ten-share')).toHaveText('60,0%');
+
+  await map.getByTestId('hit-map-next').click();
+  await expect(map.getByTestId('hit-map-rms')).toHaveText('Разброс RMS 3,3 мм');
+  await expect(map.getByTestId('hit-map-shift')).toHaveText('Смещение 8,0 мм');
+  await map.getByTestId('hit-map-mode-points').click();
+  await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
+  await map.getByTestId('hit-map-series').selectOption('');
+  await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 4 из 5');
+  await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
+  await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 1 из 1');
+  await expect(page.getByTestId('report-result-average')).toHaveText('10,0');
+  await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
+  await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('M: 0');
+  await expect(page.getByTestId('cg3-card')).toHaveCount(0);
+});

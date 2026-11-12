@@ -1,0 +1,24 @@
+.exercise-rank {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  background: var(--surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.exercise-rank > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.exercise-rank > header h3 { margin: 0; font-size: 16px; line-height: 22px; }
+.exercise-rank > header button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--raised);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.exercise-rank > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 19px; }
+.exercise-rank > .exercise-rank__level { color: var(--accent); font-size: 16px; line-height: 22px; font-weight: 700; }

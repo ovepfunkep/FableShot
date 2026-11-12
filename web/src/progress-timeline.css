@@ -1,0 +1,54 @@
+.progress-timeline { min-width: 0; padding: 16px; display: grid; gap: 12px; }
+.progress-timeline > header { display: flex; align-items: center; gap: 9px; }
+.progress-timeline > header > svg { flex: none; color: var(--accent); }
+.progress-timeline svg path { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.progress-timeline > header h2 { margin: 0; flex: 1; font-size: 1rem; }
+.progress-timeline-help { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--edge); border-radius: 50%; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.progress-timeline-conditions { width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--edge); border-radius: 10px; padding: 8px; background: var(--surface); color: inherit; font: inherit; font-size: .75rem; }
+.progress-timeline-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
+.progress-timeline-metrics button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 18px; background: transparent; color: var(--muted); font: inherit; font-size: .75rem; cursor: pointer; }
+.progress-timeline-metrics button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.progress-timeline-range { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-timeline-plot { position: relative; display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 5px; }
+.progress-timeline-scale { height: 148px; padding-top: 12px; display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: .7rem; text-align: right; }
+.progress-timeline-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.progress-timeline-svg { display: block; max-width: none; height: 184px; overflow: hidden; }
+.progress-timeline-svg text { fill: var(--muted); font-size: 10px; }
+.progress-timeline-grid { stroke: var(--edge); stroke-width: 1; }
+.progress-timeline-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.progress-timeline-hit { fill: transparent; cursor: pointer; }
+.progress-timeline-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; pointer-events: none; }
+.progress-timeline-dot.selected { fill: var(--accent); }
+.progress-timeline-svg g:focus-visible .progress-timeline-dot { stroke-width: 4; }
+.progress-timeline-pan { position: absolute; z-index: 2; top: 76px; display: grid; place-items: center; width: 30px; height: 34px; padding: 0; border: 1px solid var(--edge); border-radius: 10px; background: var(--surface); color: var(--accent); cursor: pointer; }
+.progress-timeline-pan.previous { left: 40px; }
+.progress-timeline-pan.next { right: 0; }
+.progress-timeline-pan:disabled { opacity: .3; cursor: default; }
+.progress-timeline-selected { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; font-size: .8rem; }
+.progress-timeline-selected > span { min-width: 0; }
+.progress-timeline-selected time, .progress-timeline-selected span small { display: block; }
+.progress-timeline-selected span small { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-top: 3px; }
+.progress-timeline-selected strong { flex: none; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.progress-timeline-selected strong small { font-size: .75rem; font-weight: 400; color: var(--muted); }
+.progress-timeline :is(button, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.progress-timeline-condition-label { margin: 0; color: var(--muted); font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.progress-filters-open { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); text-align: left; font-size: 13px; }
+.progress-filters-open > :last-child { color: var(--accent); }
+.progress-filters-open > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.progress-filter-form { display: grid; gap: 12px; }
+.progress-filter-form > label, .progress-filter-dates label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.progress-filter-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.progress-filter-dates input { min-width: 0; width: 100%; min-height: 44px; border: 1px solid var(--edge); border-radius: 12px; padding: 8px; color: inherit; background: var(--raised); font: inherit; font-size: 16px; }
+.progress-filter-dates [aria-invalid=true] { border-color: #ffd8d1; }
+.progress-filter-error { color: #ffd8d1; margin: 0; font-size: 13px; }
+.progress-filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.progress-filter-actions button { flex: 1; min-height: 44px; padding: 8px 12px; border: 1px solid var(--edge); border-radius: 14px; background: transparent; font-size: 13px; }
+.progress-filter-actions .primary { background: var(--accent); color: var(--on-accent); }
+.progress-filter-sessions { display: grid; gap: 6px; margin: 0; padding: 10px; min-width: 0; border: 1px solid var(--edge); border-radius: 14px; }
+.progress-filter-sessions legend { color: var(--muted); font-size: 13px; }
+.progress-filter-session { display: flex; align-items: center; gap: 10px; min-height: 48px; cursor: pointer; }
+.progress-filter-session input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.progress-filter-session span { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.progress-filter-session small { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.progress-filter-count, .progress-filter-help { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.progress-filter-help summary { cursor: pointer; min-height: 36px; padding-block: 8px; }

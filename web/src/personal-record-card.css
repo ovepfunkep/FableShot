@@ -1,0 +1,103 @@
+.personal-record-list {
+  display: grid;
+}
+
+.personal-record-row,
+.personal-record-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  width: 100%;
+  padding: 8px 0;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
+
+.personal-record-row + .personal-record-row { border-top: 1px solid var(--edge); }
+.personal-record-row > span { display: grid; gap: 4px; }
+.personal-record-row > svg { flex: none; color: var(--muted); }
+.personal-record-row small,
+.personal-record-details p,
+.personal-record-values dt { color: var(--muted); }
+
+.personal-record-details { display: grid; gap: 12px; }
+.personal-record-details h3,
+.personal-record-details p,
+.personal-record-values,
+.personal-record-values dd { margin: 0; }
+
+.personal-record-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 36px;
+  text-align: center;
+}
+
+.personal-record-values div {
+  position: relative;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--raised);
+}
+
+.personal-record-values-arrow {
+  position: absolute;
+  inset-inline-end: 100%;
+  top: 50%;
+  width: 36px;
+  transform: translateY(-50%);
+}
+
+.personal-record-values dd { font-size: 1.35rem; font-weight: 700; }
+.personal-record-values div:last-child dd,
+.personal-record-link { color: var(--accent); }
+.personal-record-link > svg { flex: none; }
+
+.personal-record-notice {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  position: fixed;
+  inset: calc(env(safe-area-inset-top) + 56px) 12px auto;
+  max-width: 420px;
+  margin-inline: auto;
+  padding: 6px;
+  z-index: 15;
+  border: 1px solid color-mix(in srgb, var(--gold) 60%, transparent);
+  border-radius: 18px;
+  background: var(--raised);
+  box-shadow: 0 6px 28px #0004;
+}
+
+.personal-record-notice button {
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.personal-record-notice-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 6px;
+  text-align: start;
+}
+
+.personal-record-notice-text { display: grid; gap: 4px; }
+.personal-record-notice-text small,
+.personal-record-notice-values del { color: var(--muted); }
+.personal-record-notice-values { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.personal-record-notice-main > svg,
+.personal-record-notice-values b { color: var(--gold); }
+.personal-record-notice-values b { font-size: 1.15rem; animation: personal-record-pulse 450ms ease-out; }
+.personal-record-notice-dismiss { width: 44px; height: 44px; display: grid; place-items: center; }
+
+@keyframes personal-record-pulse { 50% { transform: scale(1.13); } }
+[data-motion='off'] .personal-record-notice-values b { animation: none; }
+@media (prefers-reduced-motion: reduce) { .personal-record-notice-values b { animation: none; } }

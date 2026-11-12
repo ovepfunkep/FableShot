@@ -1,0 +1,18 @@
+.assigned-ranks-tile .icon-button, .assigned-ranks-list .icon-button { flex: none; min-width: 44px; min-height: 44px; }
+.assigned-ranks-list, .assigned-ranks-form { display: grid; gap: 12px; }
+.assigned-ranks-list ul { list-style: none; padding: 0; margin: 0; }
+.assigned-ranks-list li { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--edge); }
+.assigned-ranks-list li > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.assigned-ranks-list li span { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+.assigned-ranks-form label { display: grid; gap: 5px; font-size: 13px; }
+.assigned-ranks-form :is(input:not([type="checkbox"]), select, textarea) {
+  width: 100%; min-height: 44px; border: 1px solid var(--edge); border-radius: 12px; padding: 8px;
+  background: var(--raised); color: inherit; font: inherit; font-size: 16px;
+}
+.assigned-ranks-form textarea { resize: vertical; }
+.assigned-ranks-form input[aria-invalid="true"] { border-color: #ed735f; }
+.assigned-ranks-form .assigned-ranks-current { display: flex; align-items: center; min-height: 44px; gap: 8px; }
+.assigned-ranks-current input { width: 18px; height: 18px; accent-color: var(--accent); }
+.assigned-ranks-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.assigned-ranks-actions button { min-height: 44px; border: 1px solid var(--edge); border-radius: 12px; padding: 6px 12px; background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.assigned-ranks-form [role="alert"] { margin: 0; color: #ed735f; }

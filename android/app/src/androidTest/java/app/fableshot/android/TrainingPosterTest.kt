@@ -16,6 +16,46 @@ import java.io.FileNotFoundException
 import java.util.UUID
 
 class TrainingPosterTest {
+    @Test fun incompleteSeriesAndRoundUseOnlyEnteredShotsIncludingMissesForDisplayedMaximum() {
+        val fixture=reportFixture()
+        val first=fixture.blocks.first()
+        val partial=first.ends.first().let { entry ->
+            entry.copy(end=entry.end.copy(plannedCount=6,state="open"),
+                shots=entry.shots.mapIndexed { index,shot ->
+                    val points=listOf(10,8,0)[index]
+                    shot.copy(points=points,zoneCode=if(points==0)"M"else points.toString())
+                })
+        }
+        val source=fixture.copy(blocks=listOf(first.copy(ends=listOf(partial,first.ends[1]))),plans=emptyList())
+        val rows=TrainingPoster.cards(source).flatMap {it.rows}
+        assertEquals(6,rows.first().source.end.plannedCount)
+        assertEquals(3,rows.first().source.shots.size)
+        assertEquals(18,rows.first().source.shots.sumOf {it.points})
+        assertEquals(30,rows.first().resultMaximum)
+        assertEquals(60,posterResultMaximum(rows))
+
+        val afterRemoval=rows.first().copy(source=partial.copy(shots=partial.shots.dropLast(1)))
+        assertEquals(20,afterRemoval.resultMaximum)
+        assertEquals(50,posterResultMaximum(listOf(afterRemoval,rows.last())))
+        assertEquals(6,partial.end.plannedCount)
+        assertEquals(3,partial.shots.size)
+    }
+
+    @Test fun posterNeverInventsScoredMaximumForCountOnlyOrUnknownTargets() {
+        val fixture=reportFixture()
+        val row=TrainingPoster.cards(fixture).first().rows.first()
+        val unknown=row.copy(maximumPerArrow=null)
+        val counted=row.copy(countOnly=true,source=row.source.copy(shots=emptyList(),
+            counts=listOf(JournalCount(row.source.end.id,5,0,0))))
+        assertNull(unknown.resultMaximum)
+        assertNull(counted.resultMaximum)
+        assertNull(posterResultMaximum(listOf(row,unknown)))
+        assertNull(posterResultMaximum(listOf(counted)))
+        assertNull(posterResultMaximum(emptyList()))
+        val empty=row.copy(source=row.source.copy(shots=emptyList()))
+        assertEquals(0,empty.resultMaximum)
+    }
+
     @Test fun everyRoundSeriesAndShotIsIncludedAndThemedImageCanBeSharedReadOnly() {
         val source=reportFixture()
         val cards=TrainingPoster.cards(source)

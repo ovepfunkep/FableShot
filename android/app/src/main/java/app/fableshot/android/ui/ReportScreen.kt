@@ -135,7 +135,8 @@ fun ReportScreen(details: SessionDetails,onEditShot:((String)->Unit)?=null,onEdi
                 Column(Modifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                         Text(roundLabels[end.end.id] ?: stringResource(R.string.end_number,end.end.number),style=MaterialTheme.typography.titleMedium)
-                        if (showResult) Text("${end.shots.sumOf{it.points}} / ${end.end.plannedCount*10}",style=MaterialTheme.typography.titleMedium)
+                        if (showResult) Text("${end.shots.sumOf{it.points}} / ${end.shots.size*10}",
+                            Modifier.testTag("legacy-series-total-${end.end.id}"),style=MaterialTheme.typography.titleMedium)
                     }
                     end.shots.sortedBy { it.inputIndex }.forEach { shot ->
                         Text(reportShotLabel(shot), style=MaterialTheme.typography.bodyMedium, color=MaterialTheme.colorScheme.onSurfaceVariant)

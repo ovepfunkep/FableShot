@@ -1,0 +1,9 @@
+.report-export-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.report-export-actions button, .report-export-share { min-height: 48px; padding: 10px; border: 1px solid var(--edge); border-radius: 15px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; }
+.report-export-actions button:disabled { opacity: .5; }
+.report-export-previews { display: grid; gap: 18px; }
+.report-export-previews figure { margin: 0; }
+.report-export-previews img { display: block; width: 100%; height: auto; border-radius: 16px; }
+.report-export-previews figcaption { text-align: center; padding: 12px; }
+.report-export-previews a { color: var(--accent); }
+.report-heading-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }

@@ -1,0 +1,9 @@
+.settings-content { gap: 20px; padding-block: 12px 20px; }
+.settings-entries { display: grid; gap: 12px; }
+.settings-entry { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 64px; padding: 16px; border: 0; border-radius: 16px; background: var(--surface); color: var(--text); text-align: start; font: inherit; }
+.settings-entry > span { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
+.settings-entry > svg { flex: none; }
+.settings-entry > svg:first-child { color: var(--accent); }
+.settings-entry > svg:last-child { color: var(--muted); width: 20px; height: 20px; }
+.settings-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.settings-footer { flex: none; padding: 0 20px calc(12px + env(safe-area-inset-bottom)); }

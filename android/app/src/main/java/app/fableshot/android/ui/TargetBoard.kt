@@ -95,6 +95,7 @@ fun TargetBoard(
     panOnly: Boolean = false,
     shaftDiameterMm: Double = 6.0,
     targetDiameterMm: Int = 400,
+    onBlockedTap: () -> Unit = {},
 ) {
     var zoom by remember(sessionId) { mutableFloatStateOf(1f) }
     var pan by remember(sessionId) { mutableStateOf(Offset.Zero) }
@@ -110,6 +111,7 @@ fun TargetBoard(
     val context = LocalContext.current
     val numberTypeface = remember(context) { context.resources.getFont(R.font.manrope_700) }
     val latestOnPoint by rememberUpdatedState(onPoint)
+    val latestOnBlockedTap by rememberUpdatedState(onBlockedTap)
     val latestShots by rememberUpdatedState(shots)
     val latestSelected by rememberUpdatedState(selected)
     val description = stringResource(R.string.target_touch_description)
@@ -171,6 +173,7 @@ fun TargetBoard(
                         val startedOnControl = controls.contains(last)
                         val startedAt = SystemClock.uptimeMillis()
                         var aiming = false
+                        var movedBeyondTap = false
                         fun inside(position: Offset): Boolean {
                             val point=normal(position)
                             val outer=profile.zones.maxOf { it.outerRadius } + shaftDiameterMm / targetDiameterMm
@@ -213,7 +216,10 @@ fun TargetBoard(
                                     zoom = next
                                 } else if (!transformed && !startedOnControl && (startedOnFace || panOnly)) {
                                     val change = event.changes.firstOrNull { it.id == first.id }
-                                    if (change != null) last = change.position
+                                    if (change != null) {
+                                        last = change.position
+                                        if ((last - first.position).getDistance() > viewConfiguration.touchSlop) movedBeyondTap = true
+                                    }
                                     if (panOnly) {
                                         val delta = change?.let { it.position - it.previousPosition } ?: Offset.Zero
                                         val nextPan = pan + delta
@@ -225,8 +231,9 @@ fun TargetBoard(
                                         pointer = last.takeIf { aiming && inputEnabled && pressed == 1 && inside(it) }
                                     }
                                 }
-                                if (pressed == 0 && !panOnly && !transformed && !startedOnControl && startedOnFace && inputEnabled && boardSize.width > 0 && inside(last)) {
-                                    latestOnPoint(normal(last))
+                                if (pressed == 0 && !panOnly && !transformed && !startedOnControl && startedOnFace && boardSize.width > 0 && inside(last)) {
+                                    if (inputEnabled) latestOnPoint(normal(last))
+                                    else if (!movedBeyondTap) latestOnBlockedTap()
                                 }
                                 if ((!startedOnControl && (startedOnFace || panOnly)) || transformed) event.changes.forEach { it.consume() }
                                 if (pressed == 0) break

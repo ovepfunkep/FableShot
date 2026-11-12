@@ -1,0 +1,135 @@
+/* FableTheme.kt uses separate colors for highlighted text and filled actions. */
+html[data-theme-appearance] {
+  color: var(--ink);
+  background: var(--app-bg);
+  font-variant-numeric: tabular-nums;
+  --text: var(--ink);
+  --surface-variant: var(--raised);
+  --accent-line: color-mix(in srgb, var(--accent) 58%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 8%, transparent);
+  --danger-wash: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  --geometry-line: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+html[data-theme-appearance="dark"] {
+  color-scheme: dark;
+  --ink: #f2f6ed;
+  --muted: #b1bcaf;
+  --edge: #3d4b40;
+  --info: #8dd7ea;
+  --gold: #ffd882;
+  --danger: #ffd8d1;
+  --warning: #ffd8b5;
+  --on-accent: #17220d;
+  --on-action: #14200d;
+}
+html[data-theme-appearance="light"] {
+  color-scheme: light;
+  --ink: #17221b;
+  --muted: #59675c;
+  --edge: #d7dfd4;
+  --info: #176a80;
+  --gold: #966500;
+  --danger: #9b2e2b;
+  --warning: #884013;
+  --on-accent: #fff;
+  --on-action: #fff;
+}
+html[data-theme-style="sport"] { --card-radius: 24px; --action: #c6f43d; --on-action: #14200d; }
+html[data-theme-style="pop"] { --card-radius: 28px; }
+html[data-theme-style="minimal"] {
+  --card-radius: 18px;
+  --geometry-line: color-mix(in srgb, var(--accent) 3.2%, transparent);
+}
+
+html[data-theme-style="sport"][data-theme-appearance="dark"] {
+  --app-bg: #101610; --surface: #1a231c; --raised: #263129; --accent: #c6f43d;
+}
+html[data-theme-style="sport"][data-theme-appearance="light"] {
+  --app-bg: #f4f6f1; --surface: #fff; --raised: #e9eee3; --accent: #496411;
+}
+html[data-theme-style="pop"][data-theme-appearance="dark"] {
+  --app-bg: #181023; --surface: #291d39; --raised: #3a294c; --accent: #ceb2ff; --action: #caabff;
+}
+html[data-theme-style="pop"][data-theme-appearance="light"] {
+  --app-bg: #faf6ff; --surface: #fff; --raised: #f0e7fc; --accent: #6033ac; --action: #6033ac;
+}
+html[data-theme-style="minimal"][data-theme-appearance="dark"] {
+  --app-bg: #0d131e; --surface: #182131; --raised: #233046; --accent: #9cbdff; --action: #91b5ff;
+}
+html[data-theme-style="minimal"][data-theme-appearance="light"] {
+  --app-bg: #f7f9fc; --surface: #fff; --raised: #ecf1f8; --accent: #195be7; --action: #195be7;
+}
+
+/* Screens that still declare their old Sport palette explicitly. */
+html[data-theme-appearance] .primary,
+html[data-theme-appearance] .mytargets-import .mytargets-apply { background: var(--action); color: var(--on-action); }
+html[data-theme-appearance] .equipment-catalog-form-actions .primary,
+html[data-theme-appearance] .mytargets-import .mytargets-apply { border-color: var(--action); }
+
+html[data-theme-appearance] .journal-home-hero {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 78% 45%, transparent 52px, var(--geometry-line) 53px, transparent 54px 104px, var(--geometry-line) 105px, transparent 106px),
+    radial-gradient(circle at 12% 15%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px),
+    radial-gradient(circle at 25% 80%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px),
+    radial-gradient(circle at 70% 95%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px),
+    var(--raised);
+}
+html[data-theme-appearance] :is(.journal-home-eyebrow, .journal-home-conditions > div) { color: var(--muted); }
+html[data-theme-appearance] .journal-home-edit { color: var(--ink); }
+html[data-theme-appearance] .journal-home-edit:active { background: var(--accent-wash); }
+html[data-theme-appearance] :is(.tile-heading strong, .journal-home-totals strong, .journal-tab-card-result > span:first-child strong,
+  .practice-timer-badge .timer-clock, .report-metrics-score strong, .report-metrics-muted strong, .report-metrics-inline strong, .report-zone-column strong) { color: var(--ink); }
+html[data-theme-appearance] :is(.journal-timeline, .journal-timeline-point)::before { border-color: var(--accent-line); }
+html[data-theme-appearance] .journal-timeline::after { color: var(--accent-line); border-color: var(--accent-line); }
+html[data-theme-appearance] .journal-timeline-point::before { background: var(--accent-line); }
+html[data-theme-appearance] :is(.journal-timeline-entry:last-child button, .stage-tile, .target-profile-option[aria-pressed="true"], .hit-map-series-controls select) { border-color: var(--accent-line); }
+
+html[data-theme-appearance] :is(.training-controls, .lens, .preference-switch, .condition-number-choices button[aria-pressed="true"], .condition-tabs button[aria-pressed="true"]) { background: var(--raised); }
+html[data-theme-appearance] .fade-left { background: linear-gradient(to right, var(--raised), transparent); }
+html[data-theme-appearance] .fade-right { background: linear-gradient(to left, var(--raised), transparent); }
+html[data-theme-appearance] :is(.zoom, .series-navigation) { background: color-mix(in srgb, var(--surface) 93%, transparent); }
+html[data-theme-appearance] :is(.lens, .arrow-slot) { border-color: var(--edge); }
+html[data-theme-appearance] .arrow-entered { border-color: var(--muted); }
+html[data-theme-appearance] .arrow-entering { border-color: var(--accent); animation-name: theme-arrow-entering; }
+@keyframes theme-arrow-entering { from { border-color: var(--muted); } }
+html[data-theme-appearance] :is(.condition-number-choices button[aria-pressed="true"], .condition-tabs button[aria-pressed="true"]) { color: var(--ink); }
+html[data-theme-appearance] :is(.condition-input > span, .technique-window, .technique-field > span, .technique-footer) { background: var(--app-bg); }
+html[data-theme-appearance] :is(.condition-sheet .condition-input > span, .technique-sheet .technique-field > span) { background: var(--surface); }
+html[data-theme-appearance] .sheet-handle { background: var(--muted); }
+html[data-theme-appearance] .preference-switch { border-color: var(--muted); }
+html[data-theme-appearance] .preference-switch span { background: var(--muted); }
+html[data-theme-appearance] .preference-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+html[data-theme-appearance] .preference-switch[aria-checked="true"] span { background: var(--on-accent); }
+html[data-theme-appearance] :is(.rank-next strong, .rank-scale__threshold--next) { color: var(--info); }
+html[data-theme-appearance] :is(.archive-reset, .assigned-ranks-form [role="alert"], .conditions-error, .diary-notes-grid [role="alert"],
+  .diary-notes-grid .diary-notes-danger, .equipment-catalog-error, .equipment-catalog-form [role="alert"], .equipment-error,
+  .history-trash-label, .journal-tab-error, .practice-error, .practice-timer-error, .preferences-error, .reflection-error,
+  .technique-danger, .technique-display-error, .technique-error) { color: var(--danger); }
+html[data-theme-appearance] :is(.assigned-ranks-form input[aria-invalid="true"], .condition-input.invalid, .diary-notes-grid [aria-invalid="true"],
+  .equipment-field input[aria-invalid="true"], .timer-duration-field.invalid) { border-color: var(--danger); }
+html[data-theme-appearance] :is(.mytargets-import .mytargets-warning, .mytargets-import [role="alert"]) { color: var(--warning); }
+html[data-theme-appearance] .journal-tab-history-card.is-deleted { background: var(--danger-wash); }
+
+html[data-theme-appearance] :is(.archive-panel, .equipment-catalog-card, .journal-home-hero, .journal-home-card, .journal-tab-panel,
+  .numbered-arrow-analysis, .report-metrics-card, .statistics-settings-section, .technique-card, .training-hit-map, .training-mean) { border-radius: var(--card-radius); }
+html[data-theme-appearance] :is(.condition-sheet, .equipment-sheet, .practice-timer-sheet, .rank-dialog, .stage-picker, .technique-sheet) {
+  border-radius: calc(var(--card-radius) + 4px) calc(var(--card-radius) + 4px) 0 0;
+}
+
+.web-theme-settings { display: grid; gap: 18px; }
+.web-theme-settings fieldset { margin: 0; min-width: 0; padding: 0; border: 0; }
+.web-theme-settings legend { margin-bottom: 8px; padding: 0; font-size: 15px; font-weight: 700; }
+.web-theme-styles { display: grid; gap: 8px; }
+.web-theme-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.web-theme-style, .web-theme-mode { position: relative; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); font-size: 13px; font-weight: 700; cursor: pointer; }
+.web-theme-style { min-height: 54px; }
+.web-theme-mode { justify-content: center; text-align: center; }
+.web-theme-style:has(:checked), .web-theme-mode:has(:checked) { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
+.web-theme-style:has(:focus-visible), .web-theme-mode:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.web-theme-settings fieldset:disabled label { opacity: .55; cursor: default; }
+.web-theme-settings input { width: 100%; height: 100%; margin: 0; position: absolute; inset: 0; opacity: 0; cursor: inherit; }
+.web-theme-swatch { width: 42px; height: 30px; border-radius: 9px; flex: none; border: 1px solid #0002; }
+.web-theme-swatch[data-swatch="sport"] { background: #c6f43d; }
+.web-theme-swatch[data-swatch="pop"] { background: #c2a0ff; border-radius: 14px; }
+.web-theme-swatch[data-swatch="minimal"] { background: #4d86f7; }

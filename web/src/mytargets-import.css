@@ -1,0 +1,28 @@
+.mytargets-import { display: grid; gap: 14px; min-width: 0; }
+.mytargets-import p { margin: 0; font-size: 14px; line-height: 1.5; }
+.mytargets-import input, .mytargets-import select, .mytargets-import button { font: inherit; }
+.mytargets-import button { min-height: 44px; padding: 10px 14px; color: inherit; background: transparent; border: 1px solid var(--edge); border-radius: 16px; }
+.mytargets-import button:disabled { opacity: .45; }
+.mytargets-file { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--edge); border-radius: 16px; font-size: 14px; }
+.mytargets-file input { width: 100%; min-width: 0; font-size: 13px; }
+.mytargets-summary { display: grid; gap: 7px; font-size: 14px; line-height: 1.5; }
+.mytargets-summary strong { overflow-wrap: anywhere; }
+.mytargets-search { display: grid; gap: 7px; font-size: 14px; }
+.mytargets-search input, .mytargets-mapping input, .mytargets-mapping select { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; padding: 10px; color: inherit; background: var(--surface); border: 1px solid var(--edge); border-radius: 12px; font-size: 16px; }
+.mytargets-selection-actions { display: flex; gap: 8px; }
+.mytargets-selection-actions button { flex: 1; }
+.mytargets-sessions { display: grid; gap: 4px; }
+.mytargets-session, .mytargets-check { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; min-height: 44px; box-sizing: border-box; font-size: 14px; line-height: 1.5; }
+.mytargets-session input, .mytargets-check input { width: 20px; height: 20px; flex: none; margin: 2px 0; accent-color: var(--accent); }
+.mytargets-session span { display: grid; gap: 4px; min-width: 0; }
+.mytargets-session strong { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mytargets-session small, .mytargets-caption { color: var(--muted); }
+.mytargets-details { font-size: 14px; line-height: 1.5; }
+.mytargets-details summary { cursor: pointer; padding: 12px 0; min-height: 44px; box-sizing: border-box; }
+.mytargets-details ul { margin: 8px 0; padding-left: 20px; display: grid; gap: 8px; }
+.mytargets-mapping { display: grid; gap: 10px; min-width: 0; padding: 12px; margin: 12px 0; border: 1px solid var(--edge); border-radius: 12px; }
+.mytargets-mapping legend { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; }
+.mytargets-mapping label { display: grid; gap: 5px; font-size: 13px; }
+.mytargets-import .mytargets-warning, .mytargets-import [role=alert] { color: #ffd8b5; }
+.mytargets-import .mytargets-apply { color: var(--on-accent); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.mytargets-caption { font-size: 12px !important; }

@@ -113,6 +113,7 @@ internal fun TrainingEditorFooter(
     onNotes: (() -> Unit)? = null,
     selectionTagPrefix: String? = null,
     missTag: String = "miss",
+    nextRoundPulse: Int = 0,
 ) {
     Surface(Modifier.fillMaxWidth().testTag("training-editor-footer"), tonalElevation = 4.dp) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -138,7 +139,8 @@ internal fun TrainingEditorFooter(
                 verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onMiss, Modifier.width(56.dp).height(buttonHeight).testTag(missTag),
                     contentPadding = PaddingValues(8.dp), enabled = missEnabled) { Text("M") }
-                FablePrimaryButton(mainText, onMain, Modifier.weight(1f).height(buttonHeight).testTag(mainTag), enabled = mainEnabled,
+                FablePrimaryButton(mainText, onMain, Modifier.weight(1f).height(buttonHeight).testTag(mainTag)
+                    .then(nextRoundFeedback(endId,nextRoundPulse)), enabled = mainEnabled,
                     preserveDisabledAppearance = mainEnabled, singleLine = true)
             }
             }

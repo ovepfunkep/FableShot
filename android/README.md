@@ -1,6 +1,6 @@
 # Android FableShot
 
-Kotlin, Jetpack Compose, Room и DataStore. Правила разработки — в корневом [AGENTS.md](../AGENTS.md), текущее состояние и следующий шаг — в [очереди](../docs/work-queue.md). Ниже только инструкции сборки; это не перечень реализованных функций.
+Kotlin, Jetpack Compose, Room и DataStore. Текущее состояние и следующий шаг — в [очереди](../docs/work-queue.md). Ниже инструкции сборки.
 
 ## Сборка на текущем компьютере
 

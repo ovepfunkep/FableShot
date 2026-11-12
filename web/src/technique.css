@@ -1,0 +1,84 @@
+.technique-window {
+  position: fixed; inset: 0; width: min(100%, 550px); max-width: none; height: 100dvh; max-height: none;
+  margin: auto; padding: 0; border: 0; background: #101610; color: inherit; overflow: hidden;
+}
+.technique-window::backdrop, .technique-sheet::backdrop { background: rgb(0 0 0 / 42%); }
+.technique-screen { display: flex; flex-direction: column; height: 100%; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.technique-header { display: flex; align-items: center; min-height: 64px; gap: 4px; padding: 0 8px; flex: none; }
+.technique-header h2 { flex: 1; font-size: 22px; line-height: 28px; margin: 0; }
+.technique-scroll { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.technique-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.technique-row > h3 { flex: 1; min-width: 0; }
+.technique-card { padding: 12px; background: var(--surface); border-radius: 20px; }
+.technique-card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; overflow-wrap: anywhere; }
+.technique-fields { display: flex; flex-direction: column; gap: 20px; padding-top: 4px; }
+.technique-field { position: relative; display: block; border: 1px solid var(--edge); border-radius: 4px; padding: 15px 12px 8px; min-width: 0; }
+.technique-field > span { position: absolute; left: 8px; top: -9px; padding: 0 4px; background: #101610; color: var(--muted); font-size: 12px; line-height: 18px; }
+.technique-field input, .technique-field textarea { display: block; width: 100%; min-width: 0; border: 0; outline: none; margin: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; line-height: 24px; user-select: text; }
+.technique-field textarea { resize: vertical; min-height: 80px; max-height: 40dvh; }
+.technique-field:focus-within { border-color: var(--accent); }
+.technique-text-button { min-height: 44px; padding: 8px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-weight: 700; font-size: 14px; line-height: 20px; }
+.technique-text-button[aria-pressed="true"] { background: var(--raised); }
+.technique-outline-button { min-height: 48px; padding: 10px 16px; align-self: flex-start; border: 1px solid var(--edge); border-radius: 999px; background: transparent; color: var(--accent); font-size: 14px; font-weight: 700; }
+.technique-outline-step { display: flex; align-items: center; text-align: left; gap: 10px; width: 100%; margin: 4px 0; padding: 12px; border: 0; border-radius: 12px; background: var(--raised); }
+.technique-outline-step > span:nth-child(2) { flex: 1; min-width: 0; }
+.technique-outline-step strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.technique-outline-step small { display: block; color: var(--accent); font-size: 11px; line-height: 16px; }
+.technique-outline-step svg { flex: none; width: 18px; }
+.technique-outline-number { color: var(--muted); font-variant-numeric: tabular-nums; }
+.technique-footer { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 12px; background: #101610; }
+.technique-footer .primary { width: 100%; }
+.technique-muted { margin: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
+.technique-export-notice { padding: 4px 16px; }
+.technique-screen > .technique-display-settings { padding: 12px 16px; border-top: 1px solid var(--edge); }
+.technique-error { margin: 0; padding: 8px 16px; color: #ffd8d1; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.technique-error button { display: block; min-height: 40px; border: 0; background: none; color: var(--accent); font: inherit; padding: 6px 0; }
+.technique-check { display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 20px; min-height: 44px; }
+.technique-check input { flex: none; accent-color: var(--accent); width: 20px; height: 20px; }
+.technique-library-actions { display: flex; gap: 12px; align-items: center; }
+.technique-library-actions .primary { min-height: 48px; border-radius: 999px; padding-inline: 20px; }
+.technique-library > .technique-text-button, .technique-library > .technique-chip { align-self: flex-start; }
+.technique-chip, .technique-version-chip { align-self: flex-start; min-height: 36px; padding: 6px 12px; border: 1px solid var(--edge); background: transparent; border-radius: 10px; font-size: 13px; line-height: 20px; }
+.technique-chip[aria-pressed="true"] { background: var(--raised); border-color: var(--accent); }
+.technique-empty { margin: 20px 0; color: var(--muted); font-size: 14px; line-height: 22px; text-align: center; }
+.technique-library-card { display: flex; gap: 6px; align-items: flex-start; position: relative; }
+.technique-open-document { display: flex; gap: 10px; align-items: center; text-align: left; flex: 1; min-width: 0; border: 0; padding: 4px 0; background: transparent; }
+.technique-open-document svg { flex: none; color: var(--accent); }
+.technique-open-document > span { min-width: 0; }
+.technique-open-document strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 16px; line-height: 24px; font-weight: 700; overflow-wrap: anywhere; }
+.technique-open-document small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.technique-document-menu, .technique-import { position: relative; }
+.technique-document-menu > summary, .technique-import > summary { list-style: none; display: grid; place-items: center; min-width: 40px; height: 44px; cursor: pointer; border-radius: 999px; }
+.technique-document-menu > summary { font-size: 24px; }
+.technique-import > summary { color: var(--accent); font-size: 14px; font-weight: 700; padding: 8px 12px; }
+.technique-document-menu > summary::-webkit-details-marker, .technique-import > summary::-webkit-details-marker { display: none; }
+.technique-menu { position: absolute; right: 0; top: 44px; z-index: 3; min-width: 200px; padding: 8px 0; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); box-shadow: 0 6px 20px #0006; }
+.technique-import .technique-menu { right: auto; left: 0; }
+.technique-menu button { display: block; width: 100%; text-align: left; min-height: 44px; padding: 10px 16px; font-size: 14px; line-height: 20px; border: 0; background: transparent; }
+.technique-menu button:active { background: var(--surface); }
+.technique-reader-heading { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.technique-reader h1 { font-size: 30px; line-height: 38px; overflow-wrap: anywhere; }
+.technique-reader > p { margin: 0; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+.technique-preserve { white-space: pre-wrap; }
+.technique-reading-phase { display: flex; flex-direction: column; gap: 12px; }
+.technique-reading-phase h3 { margin: 8px 0 0; font-size: 22px; line-height: 28px; }
+.technique-reading-step { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.technique-reading-step h4 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; }
+.technique-reading-step.is-compact h4 { font-size: 22px; line-height: 28px; }
+.technique-reading-step p { margin: 0; font-size: 14px; line-height: 22px; white-space: pre-wrap; }
+.technique-focus-fields { margin-top: 12px; }
+.technique-sheet { position: fixed; inset: auto 0 0; width: min(100%, 550px); max-width: none; max-height: calc(100dvh - 12px); padding: 0; margin: 0 auto; border: 0; border-radius: 28px 28px 0 0; background: var(--surface); color: inherit; overflow: auto; }
+.technique-sheet-content { padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.technique-handle { width: 32px; height: 4px; margin: 0 auto 8px; border-radius: 99px; background: var(--muted); opacity: .6; }
+.technique-sheet h2 { margin: 0; font-size: 22px; line-height: 28px; }
+.technique-sheet p { margin: 0; font-size: 14px; line-height: 22px; }
+.technique-sheet .technique-field > span { background: var(--surface); }
+.technique-selector { display: flex; align-items: center; justify-content: space-between; text-align: left; gap: 12px; min-height: 48px; padding: 8px 12px; border: 0; border-radius: 12px; background: var(--raised); font-size: 14px; line-height: 20px; }
+.technique-selector small { color: var(--muted); font-size: 12px; }
+.technique-danger { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 999px; background: transparent; color: #ffd8d1; font-size: 14px; line-height: 20px; }
+.technique-confirm-actions { display: flex; justify-content: flex-end; gap: 12px; }
+@media (max-width: 360px) {
+  .technique-header h2 { font-size: 20px; }
+  .technique-scroll { padding-inline: 12px; }
+  .technique-menu { min-width: 184px; }
+}

@@ -1,0 +1,49 @@
+.practice-timer-badge {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 40px; max-width: 108px; height: 40px; padding: 0 10px; border: 0;
+  border-radius: 999px; background: transparent; color: var(--muted);
+}
+.practice-timer-badge svg { flex: none; }
+.practice-timer-badge.is-running svg { color: var(--accent); }
+.practice-timer-badge .timer-clock { font-size: 12px; line-height: 18px; color: #f2f6ee; }
+.practice-timer-sheet {
+  position: fixed; inset: auto 0 0; margin: 0 auto; width: min(100%, 550px); max-width: none;
+  max-height: calc(100dvh - 12px); padding: 0; border: 0; overflow: auto;
+  border-radius: 28px 28px 0 0; background: var(--surface); color: inherit;
+}
+.practice-timer-sheet::backdrop, .practice-timer-confirm::backdrop { background: rgb(0 0 0 / 42%); }
+.practice-timer-content { display: flex; flex-direction: column; gap: 16px; padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); }
+.practice-timer-content header { touch-action: none; user-select: none; }
+.practice-timer-handle { display: block; width: 32px; height: 4px; margin: 0 auto 20px; border-radius: 99px; background: var(--muted); opacity: .6; }
+.practice-timer-content h2, .practice-timer-confirm h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; }
+.practice-timer-content h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; }
+.practice-timer-phases { display: flex; gap: 12px; align-items: center; }
+.timer-phase { min-height: 40px; padding: 6px 16px; border: 1px solid var(--edge); border-radius: 12px; background: transparent; font-size: 14px; line-height: 20px; font-weight: 700; }
+.timer-phase[aria-pressed="true"] { background: var(--raised); border-color: transparent; }
+.timer-clock { display: inline-flex; justify-content: center; align-items: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timer-clock-cell { display: inline-flex; justify-content: center; width: .64em; height: 1.15em; overflow: hidden; line-height: 1.15; }
+.timer-clock-cell > span { display: inline-block; }
+.timer-clock-cell.timer-clock-colon { width: .28em; }
+.practice-timer-content > .timer-clock { width: 100%; font-size: 57px; line-height: 64px; font-weight: 400; }
+.practice-timer-status { margin: 0; align-self: center; font-size: 14px; line-height: 20px; }
+.practice-timer-actions { display: flex; gap: 12px; }
+.practice-timer-actions .primary { flex: 1; }
+.timer-reset { min-height: 56px; padding: 12px 24px; border: 1px solid var(--edge); border-radius: 999px; background: transparent; font-size: 14px; line-height: 20px; font-weight: 700; }
+.practice-timer-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
+.practice-timer-content hr { margin: 0; width: 100%; border: 0; border-top: 1px solid var(--edge); }
+.practice-timer-durations { display: flex; gap: 12px; }
+.timer-duration-field { display: flex; position: relative; align-items: center; flex: 1; min-width: 0; min-height: 56px; padding: 14px 12px 5px; border: 1px solid var(--edge); border-radius: 4px; }
+.timer-duration-field > span { position: absolute; left: 8px; top: -8px; padding: 0 4px; color: var(--muted); font-size: 12px; line-height: 16px; background: var(--surface); }
+.timer-duration-field input { min-width: 0; width: 100%; padding: 0; border: 0; outline: none; background: transparent; color: inherit; font: inherit; font-size: 16px; line-height: 24px; }
+.timer-duration-field:focus-within { border-color: var(--accent); }
+.timer-duration-field:has(input:disabled) { opacity: .5; }
+.timer-duration-field.invalid { border-color: #ffd8d1; }
+.practice-timer-error { margin: 0; color: #ffd8d1; font-size: 14px; line-height: 20px; }
+.timer-save { align-self: flex-start; min-height: 48px; padding: 10px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-size: 14px; line-height: 20px; font-weight: 700; }
+.practice-timer-confirm { width: min(360px, calc(100% - 40px)); padding: 24px; border: 0; border-radius: 28px; background: var(--surface); color: inherit; }
+.practice-timer-confirm p { margin: 16px 0 24px; font-size: 14px; line-height: 20px; color: var(--muted); }
+.practice-timer-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.practice-timer-confirm-actions button { min-height: 40px; padding: 8px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-size: 14px; line-height: 20px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .timer-clock-cell > span { transform: none !important; }
+}

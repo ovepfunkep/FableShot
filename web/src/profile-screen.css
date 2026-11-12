@@ -1,0 +1,46 @@
+.conditions-content.profile-content { gap: 20px; padding-block: 20px; }
+.profile-content > * { flex-shrink: 0; }
+.profile-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--card-radius, 24px);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  color: inherit;
+  text-align: start;
+  min-width: 0;
+}
+.profile-panel h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.profile-name, .profile-metric, .profile-notebook {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+.profile-name > svg, .profile-metric > svg:first-child, .profile-notebook > svg:first-child { color: var(--accent); }
+.profile-name > svg { width: 36px; height: 36px; }
+.profile-metric > div { display: grid; gap: 2px; }
+.profile-metric strong { font-size: 1.5rem; line-height: 1.15; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.profile-metric span { color: var(--muted); font-size: .8125rem; }
+.profile-metrics { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.profile-metrics .profile-metric { grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-height: 84px; }
+.profile-primary { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.profile-primary svg, .profile-achievements-heading svg { flex: none; }
+.profile-form { display: grid; gap: 12px; }
+.profile-form label { display: grid; gap: 5px; }
+.profile-form input { width: 100%; min-height: 44px; border: 1px solid var(--edge); border-radius: 12px; padding: 8px; background: var(--surface); color: inherit; font: inherit; }
+.profile-achievements-heading { display: flex; gap: 8px; align-items: center; }
+.profile-achievements-heading svg { color: var(--accent); }
+.profile-achievements-heading > span { margin-inline-start: auto; color: var(--muted); font-size: .875rem; }
+.profile-achievements {
+  background-image:
+    radial-gradient(circle at 98% 24%, transparent 16px, var(--geometry-line) 17px, transparent 18px 27px, var(--geometry-line) 28px, transparent 29px),
+    radial-gradient(circle at 83% 80%, transparent 9px, var(--geometry-line) 10px, transparent 11px);
+}
+.profile-achievements > p { margin: 0; color: var(--muted); font-size: .875rem; }
+.profile-achievement-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; min-height: 44px; border: 0; border-radius: 12px;
+  background: transparent; color: inherit; text-align: start; padding: 4px 0;
+}
+.profile-achievement-row > small { color: var(--muted); }
+.profile-achievements-link { justify-self: start; border: 0; background: transparent; padding: 8px 0; min-height: 44px; color: var(--muted); }

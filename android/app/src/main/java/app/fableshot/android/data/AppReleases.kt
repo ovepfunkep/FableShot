@@ -65,6 +65,7 @@ object AppReleases {
             "Единый компактный редактор и понятные проценты роста помогают разбирать тренировки.",
         )),
         AppRelease(59, "0.30.1", "Плавность и компактные результаты", emptyList(), important = false),
+        AppRelease(60, "0.30.2", "Максимум серии по внесённым стрелам", emptyList(), important = false),
     ).asReversed()
 }
 

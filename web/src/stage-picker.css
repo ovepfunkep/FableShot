@@ -1,0 +1,172 @@
+.stage-picker {
+  position: fixed;
+  inset: auto 0 0;
+  width: min(100%, 550px);
+  max-width: none;
+  max-height: min(680px, calc(100dvh - 12px));
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--surface);
+  color: inherit;
+}
+
+.stage-picker::backdrop, .stage-picker-confirm::backdrop { background: rgb(0 0 0 / 42%); }
+
+.stage-picker__content {
+  display: flex;
+  flex-direction: column;
+  max-height: min(680px, calc(100dvh - 12px));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.stage-picker__header {
+  flex: none;
+  padding: 20px 20px 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stage-picker__handle {
+  display: block;
+  width: 32px;
+  height: 4px;
+  margin: 0 auto 20px;
+  border-radius: 99px;
+  background: var(--muted);
+  opacity: .6;
+}
+
+.stage-picker__header h2, .stage-picker-confirm h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.625rem;
+  letter-spacing: -.3px;
+}
+
+.stage-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  list-style: none;
+}
+
+.stage-picker__card {
+  position: relative;
+  flex: none;
+  border-radius: 24px;
+  background: var(--surface);
+}
+
+.stage-picker__card--selected { background: var(--surface-variant, #263129); }
+
+.stage-picker__select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.stage-picker__select:active, .stage-picker__trash:active { background: rgb(255 255 255 / 6%); }
+
+.stage-picker__headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding-right: 52px;
+}
+
+.stage-picker__name { font-size: 1rem; line-height: 1.375rem; font-weight: 700; }
+.stage-picker__current { color: var(--accent); font-size: .75rem; line-height: 1rem; font-weight: 600; }
+.stage-picker__result { font-size: .875rem; line-height: 1.25rem; font-variant-numeric: tabular-nums; }
+.stage-picker__volume { color: var(--muted); font-size: .75rem; line-height: 1rem; }
+
+.stage-picker__trash {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.stage-picker__bin {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 0 0 2px 2px;
+}
+
+.stage-picker__bin::before, .stage-picker__bin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: currentColor;
+}
+
+.stage-picker__bin::before { top: -4px; width: 17px; height: 1.5px; border-radius: 1px; }
+.stage-picker__bin::after { top: -7px; width: 6px; height: 2px; border-radius: 1px; }
+
+.stage-picker__footer { flex: none; padding: 12px 20px; }
+.stage-picker__new.primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 20px;
+  border-radius: 18px;
+  font-size: .875rem;
+  line-height: 1.25rem;
+}
+.stage-picker__new span { font-size: 1.2rem; line-height: 1; }
+
+.stage-picker-confirm {
+  width: min(340px, calc(100% - 48px));
+  padding: 0;
+  border: 0;
+  border-radius: 28px;
+  background: var(--surface-variant, #263129);
+  color: inherit;
+}
+
+.stage-picker-confirm__content { padding: 24px; }
+.stage-picker-confirm p { margin: 12px 0 20px; color: var(--muted); font-size: .875rem; line-height: 1.3rem; }
+.stage-picker-confirm__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.stage-picker-confirm__actions button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--accent);
+  font-size: .875rem;
+  font-weight: 700;
+}
+.stage-picker-confirm__actions button:active { background: rgb(255 255 255 / 8%); }

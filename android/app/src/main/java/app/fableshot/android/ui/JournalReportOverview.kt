@@ -130,7 +130,7 @@ private fun CompactReportEnd(end: JournalEndDetails, number: Int, countOnly: Boo
                 val summary = if (countOnly) {
                     if (showVolume) "${end.volume}/${end.end.plannedCount} стрел" else ""
                 } else listOfNotNull(
-                    if (showResult) "$total/${end.end.plannedCount * 10}" else null,
+                    if (showResult) "$total/${shots.size * 10}" else null,
                     if (showAverage) average else null,
                 ).joinToString(" · ")
                 if (summary.isNotEmpty()) Text(summary, Modifier.testTag("report-series-total-${end.end.id}"), style = MaterialTheme.typography.labelLarge)

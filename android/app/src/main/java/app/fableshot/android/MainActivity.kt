@@ -201,6 +201,7 @@ internal fun ActivePractice(
     var numberSaveError by remember(end.id) { mutableStateOf(false) }
     var editing by remember(end.id) { mutableStateOf<ShotEntity?>(null) }
     var removing by remember(end.id) { mutableStateOf(false) }
+    var nextRoundPulse by remember(end.id) { mutableIntStateOf(0) }
     val pendingEdits = remember(end.id) { mutableStateMapOf<String, ShotEntity>() }
     val motion=app.fableshot.android.ui.LocalFableVisuals.current.motion
     LaunchedEffect(postHitId,motion) {
@@ -257,6 +258,10 @@ internal fun ActivePractice(
     val full=shots.size >= if(flexible) MAX_SERIES_ARROWS else end.plannedCount
     val round = remember(journal,end.id) { journal?.roundProgress(end.id) }
     val roundFull = round?.roundArrowLimit?.let { limit -> round.ends.sumOf { it.volume } >= limit } == true
+    val nextActionResource = journal?.let { app.fableshot.android.ui.nextTrainingAction(it) } ?: R.string.next_end
+    val suggestNextRound = (roundFull || (!flexible && full)) && nextActionResource == R.string.next_round &&
+        editing == null && !busy && !viewingPast
+    LaunchedEffect(suggestNextRound) { if (!suggestNextRound) nextRoundPulse = 0 }
     val canEnter=targetVerified&&!busy&&(editing!=null||(!viewingPast&&!full&&!roundFull&&postHitId==null&&pendingNumberedAppend==null))
     val canAdvance=!viewingPast&&!busy&&(if(flexible) shots.isNotEmpty() else full || roundFull)
     val slots=if(flexible&&!viewingPast&&!full) maxOf(end.plannedCount,shots.size+1) else end.plannedCount
@@ -312,7 +317,7 @@ internal fun ActivePractice(
         val rankCategory=LocalRankPreferences.current.category
         val roundStageRank=remember(projected,rankCategory,end.id,draft) { projected?.roundRank(rankCategory,end.id,draft) }
         val seriesStageRank=remember(projected,rankCategory,end.id,draft) { projected?.seriesRank(rankCategory,end.id,draft) }
-        val seriesMaximum = end.plannedCount * 10
+        val seriesMaximum = displayed.size * 10
         TrainingSummary(
             round = TrainingSummaryMetric(
                 position = "${round?.number ?: 1}" + (round?.count?.let { "/$it" } ?: ""),
@@ -345,7 +350,12 @@ internal fun ActivePractice(
                         editing = old.copy(x=point.x,y=point.y,points=score.points,origin="target",zoneCode=score.code)
                     }
                 }, viewportHeight = maxHeight, profile = profile,
-                shaftDiameterMm = shaftDiameter, targetDiameterMm = targetDiameter)
+                shaftDiameterMm = shaftDiameter, targetDiameterMm = targetDiameter,
+                onBlockedTap = {
+                    if (suggestNextRound) {
+                        nextRoundPulse = if (nextRoundPulse == Int.MAX_VALUE) 1 else nextRoundPulse + 1
+                    }
+                })
             if (editing == null && navigation != null) Box(Modifier.align(Alignment.TopStart).padding(start=16.dp,top=2.dp)) { navigation() }
             if (!targetVerified && !viewingPast) TextButton(onConditions, Modifier.align(Alignment.Center)) {
                 Text("Выбрать мишень для продолжения")
@@ -354,7 +364,7 @@ internal fun ActivePractice(
         val nextAction = when {
             editing != null -> Triple("Сохранить", "save-edit", {saveEdit()})
             viewingPast -> Triple("К текущей серии", "practice-return-current", onReturnToCurrent)
-            else -> Triple(stringResource(journal?.let { app.fableshot.android.ui.nextTrainingAction(it) } ?: R.string.next_end),
+            else -> Triple(stringResource(nextActionResource),
                 "next-end", { commands.next(end.id) })
         }
         TrainingEditorFooter(displayed, slots, editing?.id,
@@ -369,7 +379,8 @@ internal fun ActivePractice(
                     commands.numberedNumeric(end.id, 0, null)
                 } else editing = old.copy(points=0,x=null,y=null,origin="manual",zoneCode="M")
             }, onUndo = { if (editing != null) editing = null else commands.undo(end.id) },
-            canUndo = !busy && (editing != null || canUndo), timerBadge = timerBadge)
+            canUndo = !busy && (editing != null || canUndo), timerBadge = timerBadge,
+            nextRoundPulse = if (suggestNextRound) nextRoundPulse else 0)
     }
     if (removing && editing != null) app.fableshot.android.ui.ScaledAlertDialog(
         onDismissRequest = { removing = false }, title = { Text("Удалить попадание?") },

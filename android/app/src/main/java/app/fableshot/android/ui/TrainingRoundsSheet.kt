@@ -103,33 +103,45 @@ fun TrainingSeriesSheet(details: JournalDetails, selectedEndId: String, busy: Bo
     var removing by remember { mutableStateOf<JournalEndDetails?>(null) }
     val showResult = !hideScores && statisticVisible(StatisticFeature.Result)
     val showAverage = !hideScores && statisticVisible(StatisticFeature.Average)
+    val showVolume = statisticVisible(StatisticFeature.Volume)
     ModalBottomSheet(onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().heightIn(max = 680.dp).navigationBarsPadding()
-            .padding(horizontal = 20.dp).testTag("training-series-sheet")) {
-            Text("Серии · раунд ${round.number}", style = MaterialTheme.typography.titleLarge)
-            LazyColumn(contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            .testTag("training-series-sheet")) {
+            Text("Серии · раунд ${round.number}", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge)
+            LazyColumn(contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(round.ends, key = { it.end.id }) { entry ->
                     val number = round.ends.indexOf(entry) + 1
                     val shots = entry.shots
+                    val countOnly = details.orderedBlocks.first { it.block.id == entry.end.blockId }.block.mode == "count_only"
                     Surface(onClick = { onSelectEnd(entry.end.id); onDismiss() }, enabled = !busy,
                         shape = MaterialTheme.shapes.large,
                         color = if (entry.end.id == selectedEndId) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
                         modifier = Modifier.fillMaxWidth().testTag("training-select-series-$number")) {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Серия $number", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                            val summary = buildList {
-                                if (showResult && shots.isNotEmpty()) add("${shots.sumOf { it.points }} очков")
-                                if (showAverage && shots.isNotEmpty()) add(averageNumber(shots.sumOf { it.points }.toDouble() / shots.size))
-                                if (shots.isEmpty()) add("—")
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Серия $number", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                if (entry.end.id == selectedEndId) Text("Текущая", Modifier.testTag("training-current-series-$number"),
+                                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                if (onRemoveEnd != null) IconButton({removing=entry},
+                                    Modifier.testTag("remove-series-$number"),enabled=!busy) {
+                                    FableIcon(Glyph.Trash,description="Удалить серию $number")
+                                }
                             }
-                            Text(summary.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
-                            if (onRemoveEnd != null) IconButton({removing=entry},
-                                Modifier.testTag("remove-series-$number"),enabled=!busy) {
-                                FableIcon(Glyph.Trash,description="Удалить серию $number")
+                            if (!countOnly) {
+                                val points = shots.sumOf { it.points }
+                                val average = if (shots.isEmpty()) "—" else averageNumber(points.toDouble() / shots.size)
+                                val summary = buildList {
+                                    if (showResult) add("$points/${shots.size * 10} очков")
+                                    if (showAverage) add("средний $average")
+                                }
+                                if (summary.isNotEmpty()) Text(summary.joinToString(" · "),
+                                    Modifier.testTag("training-series-result-$number"), style = MaterialTheme.typography.bodyMedium)
                             }
+                            if (showVolume) Text("Стрел: ${entry.volume}", Modifier.testTag("training-series-volume-$number"),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

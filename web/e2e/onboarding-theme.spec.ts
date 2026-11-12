@@ -1,0 +1,62 @@
+import { expect, test } from '@playwright/test';
+import { openSettingsCategory } from './journal-navigation.ts';
+
+test.use({ storageState: { cookies: [], origins: [] } });
+
+test('first launch offers an isolated example and lets the user reopen it from settings', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByTestId('onboarding-screen')).toBeVisible();
+  await expect(page.getByTestId('onboard-start')).toBeVisible();
+  await expect(page.getByTestId('onboard-import')).toBeVisible();
+  await page.getByTestId('onboard-example').click();
+  await page.getByTestId('target').click();
+  await expect(page.getByTestId('tutorial-shot-0')).toContainText(/10|X/);
+  await page.getByTestId('tutorial-next').click();
+  await page.getByTestId('tutorial-next').click();
+  await page.getByTestId('tutorial-shot-0').click();
+  await page.getByTestId('tutorial-miss').click();
+  await page.getByTestId('tutorial-save').click();
+  await expect(page.getByTestId('tutorial-shot-0')).toContainText('M');
+  await page.getByTestId('tutorial-next').click();
+  await page.getByTestId('tutorial-home').click();
+  expect(await page.evaluate(() => localStorage.getItem('app.fableshot.practice-diary.v1'))).toBeNull();
+  await page.reload();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'help', 'settings-onboarding');
+  await page.getByTestId('settings-onboarding').click();
+  await page.getByTestId('onboard-import').click();
+  await expect(page.getByTestId('mytargets-import')).toBeVisible();
+});
+
+test('style and light theme persist and System follows an appearance change', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('./');
+  await page.getByTestId('onboard-skip').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'sport');
+  expect(await page.locator('html').evaluate(root => getComputedStyle(root).fontVariantNumeric)).toBe('tabular-nums');
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'appearance', 'style-pop');
+  const choose = (id: string) => page.locator('.web-theme-settings label').filter({ has: page.getByTestId(id) }).click({ timeout: 5000 });
+  await choose('style-pop');
+  await choose('appearance-light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-appearance', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-appearance', 'light');
+  await page.screenshot({ path: '../artifacts/web-0.18.0-pop-light.png' });
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'appearance', 'style-minimal');
+  await choose('style-minimal');
+  await choose('appearance-system');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme-appearance', 'light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme-appearance', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'minimal');
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  const background = await page.getByTestId('home-hero').evaluate(hero => getComputedStyle(hero).backgroundImage);
+  expect(background).toMatch(/0\.032/);
+});

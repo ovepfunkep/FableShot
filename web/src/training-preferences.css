@@ -1,0 +1,26 @@
+.training-preferences { display: grid; gap: 12px; }
+.preference-row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.preference-title { flex: 1; font-size: 14px; font-weight: 700; line-height: 24px; }
+.preference-help-anchor { display: inline-block; white-space: nowrap; vertical-align: middle; }
+.preference-help { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1.5px solid var(--muted); border-radius: 50%; background: none; color: var(--muted); line-height: 1; padding: 0; }
+.preference-switch { display: flex; align-items: center; width: 52px; height: 32px; flex: none; padding: 4px; border: 2px solid #879487; border-radius: 99px; background: #354237; }
+.preference-switch span { width: 16px; height: 16px; border-radius: 50%; background: #b6c1b4; }
+.preference-switch[aria-checked=true] { background: var(--accent); border-color: var(--accent); justify-content: flex-end; padding: 2px; }
+.preference-switch[aria-checked=true] span { background: #253313; width: 24px; height: 24px; }
+.preferences-error { color: #ffd8d1; font-size: 13px; margin: 0; }
+.preferences-help-dialog { width: min(360px, calc(100% - 40px)); padding: 24px; border: 0; border-radius: 28px; background: var(--surface); color: inherit; }
+.preferences-help-dialog::backdrop { background: #0008; }
+.preferences-help-dialog h2 { font-size: 20px; margin: 0 0 14px; }
+.preferences-help-dialog p { font-size: 14px; line-height: 1.65; margin: 0; }
+:root[data-motion=off] .score-change, :root[data-motion=off] .arrow-entering { animation: none; }
+.stage-summary-hidden button { min-height: 36px; border: 0; background: none; text-align: left; font-size: 14px; padding: 0; }
+.stage-summary-hidden { padding-block: 4px; }
+.technique-condition-link { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 1px solid var(--edge); border-radius: 18px; background: var(--surface); text-align: left; }
+.technique-condition-link span { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.technique-condition-link strong { font-size: 14px; }
+.technique-condition-link small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-focus { display: flex; align-items: center; gap: 12px; background: none; border: 0; text-align: left; padding: 0; color: var(--muted); }
+.statistics-settings { display: grid; gap: 12px; }
+.statistics-settings > button { justify-self: start; }
+.statistics-settings-section { padding: 14px 16px; border: 1px solid var(--edge); border-radius: 20px; background: var(--surface); }
+.statistics-settings-section h2 { margin: 0 0 8px; font-size: 16px; }

@@ -1,0 +1,39 @@
+.equipment-catalog { display: grid; gap: 14px; padding: 8px 20px 24px; }
+.equipment-catalog-header { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.equipment-catalog-header > svg { flex: none; color: var(--accent); }
+.equipment-catalog-header h1 { flex: 1; min-width: 0; font-size: 20px; }
+.equipment-catalog-add { width: 44px; height: 44px; border: 1px solid var(--edge); border-radius: 14px; background: var(--raised); color: var(--accent); font-size: 28px; }
+.equipment-catalog-tabs { display: flex; gap: 6px; overflow-x: auto; }
+.equipment-catalog-tabs button { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--edge); border-radius: 14px; font-size: 13px; white-space: nowrap; }
+.equipment-catalog-tabs button[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
+.equipment-catalog-tabs small { font-variant-numeric: tabular-nums; }
+.equipment-catalog-search, .equipment-catalog-form label { display: grid; gap: 6px; font-size: 13px; }
+.equipment-catalog-search input, .equipment-catalog-form input, .equipment-catalog-form select, .equipment-field textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); color: inherit; font: inherit; font-size: 16px; }
+.equipment-field textarea { resize: vertical; }
+.equipment-catalog-items { display: grid; gap: 12px; }
+.equipment-catalog-card { padding: 10px 12px 14px; border: 1px solid var(--edge); border-radius: 20px; background: var(--surface); }
+.equipment-catalog-card header { display: flex; align-items: center; gap: 10px; }
+.equipment-catalog-card header > svg { flex: none; color: var(--accent); }
+.equipment-catalog-card h2 { flex: 1; min-width: 0; margin: 0; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.equipment-catalog-card .icon-button { flex: none; width: 44px; height: 44px; color: var(--accent); }
+.equipment-catalog-values { display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
+.equipment-catalog-values span { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.equipment-catalog-values svg { flex: none; width: 18px; height: 18px; }
+.equipment-catalog-notes { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.equipment-catalog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.equipment-catalog-actions .equipment-catalog-star { margin-right: auto; color: var(--muted); }
+.equipment-catalog-actions .equipment-catalog-star[aria-pressed=true] { color: var(--accent); }
+.equipment-catalog-archive, .equipment-catalog-archive-filter { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 14px; background: transparent; color: var(--muted); font-size: 13px; }
+.equipment-catalog-archive-filter { justify-self: start; }
+.equipment-catalog-archive-filter[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
+.equipment-catalog-empty { display: flex; gap: 12px; align-items: center; padding: 20px 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.equipment-catalog-empty > svg { flex: none; }
+.equipment-catalog-empty p { margin: 0; }
+.equipment-catalog-more, .equipment-catalog-select, .equipment-catalog-error button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--edge); border-radius: 14px; background: transparent; color: var(--accent); }
+.equipment-catalog-select { margin-top: 12px; }
+.equipment-catalog-error, .equipment-catalog-form [role=alert] { color: #ffd8d1; font-size: 14px; line-height: 1.5; }
+.equipment-catalog-form { display: grid; gap: 16px; }
+.equipment-catalog-form small { color: var(--muted); line-height: 1.5; }
+.equipment-catalog-form-actions { display: flex; gap: 10px; }
+.equipment-catalog-form-actions button { flex: 1; min-height: 48px; border: 1px solid var(--edge); border-radius: 16px; background: transparent; }
+.equipment-catalog-form-actions .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }

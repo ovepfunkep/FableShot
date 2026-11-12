@@ -1,0 +1,20 @@
+.notebook-content { display: grid; gap: 14px; }
+.notebook-search { display: flex; gap: 10px; align-items: center; }
+.notebook-search label { flex: 1; min-width: 0; }
+.notebook-search input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 14px; color: inherit; background: var(--surface); font: inherit; }
+.notebook-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.notebook-filters button { min-height: 40px; padding: 7px 14px; border: 1px solid var(--edge); border-radius: 18px; background: transparent; color: var(--muted); }
+.notebook-filters button[aria-pressed=true] { border-color: var(--accent); background: var(--raised); color: var(--accent); }
+.notebook-list { display: grid; gap: 12px; list-style: none; padding: 0; margin: 0; }
+.notebook-list > li { min-width: 0; overflow: hidden; border: 1px solid var(--accent); border-radius: 18px; background: var(--surface); }
+.notebook-list > li.is-archived { border-color: var(--edge); }
+.notebook-note { display: grid; gap: 8px; width: 100%; padding: 14px; border: 0; background: transparent; text-align: start; color: inherit; overflow-wrap: anywhere; }
+.notebook-note-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; }
+.notebook-note-meta svg { width: 18px; height: 18px; color: var(--accent); }
+.notebook-body, .notebook-context { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+.notebook-body { -webkit-line-clamp: 4; }
+.notebook-context { -webkit-line-clamp: 3; font-size: 13px; color: var(--muted); }
+.notebook-source { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px 14px; border: 0; border-top: 1px solid var(--edge); color: var(--accent); text-align: start; background: transparent; font-size: 12px; }
+.notebook-source svg { flex: none; }
+.notebook-unavailable { margin: 0; padding: 8px 14px; color: var(--muted); font-size: 12px; }
+.notebook-empty { margin: 0; color: var(--muted); font-size: 14px; }

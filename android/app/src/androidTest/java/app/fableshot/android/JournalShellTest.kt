@@ -218,7 +218,7 @@ class JournalShellTest {
         ui.onNodeWithTag("report-series-total-$secondEnd",useUnmergedTree=true).assertTextEquals("41/60 · 6,8")
         captureRoundScreen("report-compact-rounds.png")
         tag("report-screen").performScrollToNode(hasTestTag("report-round-total-2"))
-        tag("report-round-total-2").assertTextEquals("Раунд 2 · 40/120 · 6,7")
+        tag("report-round-total-2").assertTextEquals("Раунд 2 · 40/60 · 6,7")
         ui.onNodeWithTag("report-series-total-$thirdEnd",useUnmergedTree=true).assertTextEquals("40/60 · 6,7")
         val saved=store.journal.details(first.session.id)!!
         ui.onNodeWithTag("report-hit-${saved.allShots.first { it.zoneCode=="X" }.id}",useUnmergedTree=true).assertTextEquals("X")
@@ -231,9 +231,9 @@ class JournalShellTest {
         ui.waitUntil(10_000) {
             ui.onAllNodes(hasTestTag("report-edit-${saved.allShots.last().id}") and hasText("10")).fetchSemanticsNodes().isNotEmpty()
         }
-        ui.runOnIdle { ui.activity.onBackPressedDispatcher.onBackPressed() }
+        click("history-editor-close")
         waitTag("journal-report");tag("report-screen").performScrollToNode(hasTestTag("report-round-total-2"))
-        tag("report-round-total-2").assertTextEquals("Раунд 2 · 44/120 · 7,3")
+        tag("report-round-total-2").assertTextEquals("Раунд 2 · 44/60 · 7,3")
         Unit
     }
 
@@ -295,7 +295,7 @@ class JournalShellTest {
         awaitFact { store.journal.active.first()!!.allShots.size==1 }
         assertEquals(bounds,tag("target-board").fetchSemanticsNode().boundsInRoot)
         aim(9);awaitFact { store.journal.active.first()!!.allShots.size==2 }
-        tag("end-score").assertTextEquals("19/30")
+        tag("end-score").assertTextEquals("19/20")
         assertEquals(bounds,tag("target-board").fetchSemanticsNode().boundsInRoot)
         captureRoundScreen("norms-live.png")
         Unit
