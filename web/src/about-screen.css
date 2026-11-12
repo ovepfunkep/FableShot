@@ -6,3 +6,5 @@
 .about-credits-list h2 { margin: 0; color: var(--accent); font-size: 1.2rem; }
 .about-credits-list p { max-width: 30ch; margin: 0 auto; line-height: 1.5; }
 .about-copyright { color: var(--muted); text-align: center; font-size: .8125rem; }
+.android-update { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--edge); border-radius: var(--card-radius); background: var(--surface); }
+.android-update-notes { margin: 0; max-height: 9rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: .875rem; }

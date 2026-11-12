@@ -165,14 +165,17 @@ function stageRank(practice: Practice, round: Round | undefined, series: Series 
   const roundVolume = round.series.reduce((count, item) => count + item.shots.length, 0);
   const plannedVolume = practice.roundRule.unit === 'arrows' ? practice.roundRule.limit : null;
   const referenceVolume = plannedVolume ?? (roundClosed ? roundVolume : null);
-  const exercise = candidates.find(item => item.arrows === referenceVolume) ?? candidates.find(item => item.arrows === 60) ?? candidates[0];
+  const longExercise = candidates.find(item => item.arrows === 60);
+  const barebowForecast = bow === 'barebow' && conditions.distanceMeters === 18 ? longExercise : undefined;
+  const exercise = barebowForecast ?? candidates.find(item => item.arrows === referenceVolume) ?? longExercise ?? candidates[0];
   const { points, entered } = sample.reduce((total, item) => ({
     points: total.points + summarize(item.shots).points,
     entered: total.entered + item.shots.length,
   }), { points: 0, entered: 0 });
   const evaluation = evaluateRank(exercise, points, entered);
-  return { ...base, reason: null, evaluation, label: entered > 0 ? evaluation.pace?.label ?? 'ниже порога' : null,
-    finalResult: !series && roundClosed && evaluation.complete };
+  const finalResult = !series && roundClosed && evaluation.complete;
+  return { ...base, reason: null, evaluation: { ...evaluation, result: finalResult ? evaluation.result : null },
+    label: entered > 0 ? evaluation.pace?.label ?? 'ниже порога' : null, finalResult };
 }
 
 export function roundRank(practice: Practice, roundId: number, category: RankCategory | null): StageRank {

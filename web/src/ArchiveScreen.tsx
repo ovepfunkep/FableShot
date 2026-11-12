@@ -12,6 +12,7 @@ import type { NativeConversion } from './native-conversion.ts';
 import type { buildNativeRecords } from './native-activation.ts';
 import { getNativeSource } from './native-source-store.ts';
 import packageInfo from '../package.json';
+import { pickAndroidArchive, usesAndroidArchivePicker } from './archive-picker.ts';
 import './archive-screen.css';
 
 function Summary({ summary }: { summary: ArchiveSummary }) {
@@ -38,7 +39,6 @@ export function ArchiveScreen({ onBack, onAchievement }: { onBack: () => void; o
   const alive = useRef(false);
   const running = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
-  const nativePicker = useRef<HTMLInputElement>(null);
   useEffect(() => {
     alive.current = true;
     try { setRecovery(lastRecovery()); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось прочитать резервную копию.'); }
@@ -53,34 +53,51 @@ export function ArchiveScreen({ onBack, onAchievement }: { onBack: () => void; o
     catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Операция не завершена. Исходный дневник сохранён.'); }
     finally { running.current = false; if (alive.current) setBusy(false); }
   }
-  async function select(event: ChangeEvent<HTMLInputElement>, native = false) {
+  async function select(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; event.target.value = '';
-    setPreview(null); setNativePreview(null); setExpected(null);
     if (!file) return;
+    await action(() => checkFile(file));
+  }
+  async function chooseArchive() {
+    if (!usesAndroidArchivePicker()) { picker.current?.click(); return; }
     await action(async () => {
-      const original = captureArchiveState(true);
-      if (native) {
-        const { inspectNativeArchive, MAX_NATIVE_ARCHIVE_BYTES } = await import('./native-archive.ts');
-        if (file.size > MAX_NATIVE_ARCHIVE_BYTES) throw new Error('Архив Android должен быть не больше 64 МБ.');
-        const { buildNativeConversion } = await import('./native-conversion.ts');
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        let conversion: NativeConversion;
-        try {
-          conversion = buildNativeConversion(await inspectNativeArchive(bytes));
-        } catch (cause) {
-          const code = cause instanceof Error ? cause.message : '';
-          throw new Error(code === 'unsupported_archive_version' ? 'Версия архива Android пока не поддерживается.'
-            : 'Не удалось проверить содержимое архива Android. Проверь, что это полный архив FableShot.', { cause });
-        }
-        const { buildNativeRecords } = await import('./native-activation.ts');
-        const projection = buildNativeRecords(conversion, { sha256: await archiveDigest(bytes), bytes: bytes.length });
-        if (alive.current) { setNativePreview({ conversion, bytes, projection }); setExpected(original); }
-        return;
-      }
-      if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Архив должен быть не больше 76 МБ.');
-      const candidate = await inspectWebArchive(new Uint8Array(await file.arrayBuffer()));
-      if (alive.current) { setPreview(candidate); setExpected(original); }
+      const file = await pickAndroidArchive();
+      if (file) await checkFile(file);
     });
+  }
+  async function checkFile(file: File) {
+    setPreview(null); setNativePreview(null); setExpected(null);
+    if (!file.size) throw new Error('Выбранный архив пуст. Сохрани его на телефон и выбери повторно.');
+    if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Архив должен быть не больше 76 МБ.');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const original = captureArchiveState(true);
+    {
+      try {
+        const candidate = await inspectWebArchive(bytes);
+        if (alive.current) { setPreview(candidate); setExpected(original); }
+        return;
+      } catch {
+        // The shared picker accepts both formats. Each verifier still performs
+        // its complete validation before any preview or replacement is allowed.
+      }
+    }
+    {
+      const { inspectNativeArchive, MAX_NATIVE_ARCHIVE_BYTES } = await import('./native-archive.ts');
+      if (file.size > MAX_NATIVE_ARCHIVE_BYTES) throw new Error('Архив Android должен быть не больше 64 МБ.');
+      const { buildNativeConversion } = await import('./native-conversion.ts');
+      let conversion: NativeConversion;
+      try {
+        conversion = buildNativeConversion(await inspectNativeArchive(bytes));
+      } catch (cause) {
+        const code = cause instanceof Error ? cause.message : '';
+        throw new Error(code === 'unsupported_archive_version' ? 'Версия архива Android пока не поддерживается.'
+          : 'Не удалось проверить содержимое архива Android. Проверь, что это полный архив FableShot.', { cause });
+      }
+      const { buildNativeRecords } = await import('./native-activation.ts');
+      const projection = buildNativeRecords(conversion, { sha256: await archiveDigest(bytes), bytes: bytes.length });
+      if (alive.current) { setNativePreview({ conversion, bytes, projection }); setExpected(original); }
+      return;
+    }
   }
   async function download(records: DataRecords) {
     const bytes = await createWebArchive(records, packageInfo.version);
@@ -140,10 +157,8 @@ export function ArchiveScreen({ onBack, onAchievement }: { onBack: () => void; o
     <div className="conditions-content archive-content">
       <p className="archive-caption">Тренировки, снаряжение, памятки и настройки — в одном файле. Проверка архива не меняет текущий дневник.</p>
       <button type="button" className="archive-action" disabled={busy} data-testid="archive-save" onClick={() => void saveBackup()}>Сохранить архив</button>
-      <input ref={picker} type="file" hidden accept=".zip,application/zip" data-testid="archive-file" onChange={event => void select(event)} />
-      <button type="button" className="archive-action" disabled={busy} onClick={() => picker.current?.click()}>Выбрать и проверить архив</button>
-      <input ref={nativePicker} type="file" hidden accept=".zip,application/zip" data-testid="native-archive-file" onChange={event => void select(event, true)} />
-      <button type="button" className="archive-action" disabled={busy} onClick={() => nativePicker.current?.click()}>Проверить архив Android</button>
+      <input ref={picker} type="file" hidden accept=".fableshot,.zip,application/zip,application/octet-stream" data-testid="archive-file" onChange={event => void select(event)} />
+      <button type="button" className="archive-action" disabled={busy} onClick={() => void chooseArchive()}>Выбрать и проверить архив</button>
       {hasOriginal && <button type="button" className="archive-action" data-testid="native-archive-original" disabled={busy} onClick={() => void action(async () => {
         const reference = loadDiary().nativeArchive;
         if (!reference) return;

@@ -10,6 +10,10 @@ export function knownHitPoints(shots: readonly Shot[]): Point[] {
   return points;
 }
 
+export function knownMissPoints(shots: readonly Shot[]): Point[] {
+  return shots.flatMap(shot => shot.missPoint ? [shot.missPoint] : []);
+}
+
 export function hitCentroid(points: readonly Point[]): Point | null {
   if (!points.length) return null;
   const sum = points.reduce((total, point) => ({ x: total.x + point.x, y: total.y + point.y }), { x: 0, y: 0 });

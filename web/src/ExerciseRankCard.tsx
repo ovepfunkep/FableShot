@@ -28,7 +28,7 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
     </header>
     {evaluation && category ? <>
       <p className="exercise-rank__level" data-testid="exercise-rank-level">
-        {finalResult ? 'По очкам' : 'Разряд'} · {rank.label}
+        {finalResult ? 'По очкам' : 'Темп'} · {rank.label}
       </p>
       {statisticVisible(preferences, 'average') && <RankScale evaluation={evaluation} />}
       {statisticVisible(preferences, 'volume') && <p data-testid="exercise-rank-progress">

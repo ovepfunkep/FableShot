@@ -1,6 +1,8 @@
 param(
     [string] $JdkHome = $env:JAVA_HOME,
-    [switch] $Offline
+    [switch] $Offline,
+    [switch] $Release,
+    [string] $Keystore
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,7 +10,8 @@ $webRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $webRoot
 $toolchain = Get-Content -Raw -LiteralPath (Join-Path $repoRoot '.tools/android-toolchain.json') | ConvertFrom-Json
 $toolchainRoot = [IO.Path]::GetFullPath($toolchain.ToolchainRoot)
-$mirror = [IO.Path]::GetFullPath((Join-Path $toolchainRoot 'pilot-apk-web'))
+$mirrorName = if ($Release) { 'release-apk-web' } else { 'pilot-apk-web' }
+$mirror = [IO.Path]::GetFullPath((Join-Path $toolchainRoot $mirrorName))
 if (!$mirror.StartsWith($toolchainRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
     $mirror -match '[^\x00-\x7F]' -or $mirror -eq $webRoot) {
     throw 'The pilot build needs a dedicated ASCII directory in the Android toolchain.'
@@ -41,6 +44,15 @@ $capConfig = Get-Content -Raw -LiteralPath (Join-Path $webRoot 'capacitor.config
 if ($capConfig.appId -ne 'app.fableshot.android.webpilot' -or $capConfig.webDir -ne 'dist' -or $capConfig.server.url) {
     throw 'The pilot must use the isolated package ID and bundle the local web build.'
 }
+$utf8 = [Text.UTF8Encoding]::new($false)
+if ($Release) {
+    if (!$Keystore -or !(Test-Path -LiteralPath $Keystore -PathType Leaf) -or !$env:FABLESHOT_ANDROID_SIGNING_PASSWORD) {
+        throw 'Release signing requires -Keystore and FABLESHOT_ANDROID_SIGNING_PASSWORD.'
+    }
+    $Keystore = (Resolve-Path -LiteralPath $Keystore).Path
+    $capConfig.appId = 'app.fableshot.android.react'
+    $capConfig.appName = 'FableShot'
+}
 
 New-Item -ItemType Directory -Path $mirror -Force | Out-Null
 foreach ($dir in @('node_modules', 'dist')) {
@@ -57,9 +69,8 @@ foreach ($dir in @('node_modules', 'dist')) {
     & robocopy.exe $source $destination @copyOptions
     if ($LASTEXITCODE -gt 7) { throw "Could not copy $dir into the pilot build." }
 }
-foreach ($file in @('package.json', 'capacitor.config.json')) {
-    Copy-Item -LiteralPath (Join-Path $webRoot $file) -Destination (Join-Path $mirror $file) -Force
-}
+Copy-Item -LiteralPath (Join-Path $webRoot 'package.json') -Destination (Join-Path $mirror 'package.json') -Force
+[IO.File]::WriteAllText((Join-Path $mirror 'capacitor.config.json'), ($capConfig | ConvertTo-Json -Depth 10), $utf8)
 
 $env:JAVA_HOME = $JdkHome
 $env:ANDROID_HOME = $toolchain.SdkRoot
@@ -82,15 +93,15 @@ try {
 
 # Maintained plugin sources belong only to the isolated Capacitor shell.
 $nativeSource = Join-Path $webRoot 'native/android'
-$nativeDestination = Join-Path $shell 'app/src/main/java/app/fableshot/android/webpilot'
+$nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.Replace('.', '/'))
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
 foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java')) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
-    Copy-Item -LiteralPath $source -Destination (Join-Path $nativeDestination $file) -Force
+    $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")
+    [IO.File]::WriteAllText((Join-Path $nativeDestination $file), $java, $utf8)
 }
 
-$utf8 = [Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText((Join-Path $shell 'local.properties'), ('sdk.dir=' + $toolchain.SdkRoot.Replace('\', '/') + "`n"), $utf8)
 
 # Use the verified binary distribution of the exact version in the Capacitor template.
@@ -119,18 +130,21 @@ $manifest = $manifest.Replace('@mipmap/ic_launcher_round', '@drawable/fableshot_
 
 Push-Location -LiteralPath $shell
 try {
-    $gradleTasks = @(':app:assembleDebug', '--console=plain', '--max-workers=2')
+    $task = if ($Release) { ':app:assembleRelease' } else { ':app:assembleDebug' }
+    $gradleTasks = @($task, '--console=plain', '--max-workers=2')
     if ($Offline) { $gradleTasks += '--offline' }
     & ./gradlew.bat @gradleTasks
     if ($LASTEXITCODE) { throw 'Pilot Android build failed.' }
 } finally { Pop-Location }
 
-$apkDir = Join-Path $shell 'app/build/outputs/apk/debug'
+$variant = if ($Release) { 'release' } else { 'debug' }
+$expectedApk = if ($Release) { 'app-release-unsigned.apk' } else { 'app-debug.apk' }
+$apkDir = Join-Path $shell "app/build/outputs/apk/$variant"
 $metadata = Get-Content -Raw -LiteralPath (Join-Path $apkDir 'output-metadata.json') | ConvertFrom-Json
 $element = $metadata.elements[0]
 if ($metadata.applicationId -ne $capConfig.appId -or $element.versionName -ne $package.version -or $element.versionCode -ne $versionCode -or
-    $metadata.elements.Count -ne 1 -or $element.outputFile -ne 'app-debug.apk') {
-    throw 'Unexpected pilot APK metadata.'
+    $metadata.elements.Count -ne 1 -or $element.outputFile -ne $expectedApk) {
+    throw 'Unexpected APK metadata.'
 }
 $apk = Join-Path $apkDir $element.outputFile
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -151,6 +165,19 @@ try {
 
 $artifacts = Join-Path $repoRoot 'artifacts'
 New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
-$output = Join-Path $artifacts 'FableShot-Web-pilot.apk'
+$outputName = if ($Release) { 'FableShot.apk' } else { 'FableShot-Web-pilot.apk' }
+$output = Join-Path $artifacts $outputName
+if ($Release) {
+    $buildTools = Join-Path $toolchain.SdkRoot 'build-tools/36.0.0'
+    $aligned = Join-Path $apkDir 'app-release-aligned.apk'
+    $signed = Join-Path $apkDir 'app-release-signed.apk'
+    & (Join-Path $buildTools 'zipalign.exe') -P 16 -f 4 $apk $aligned
+    if ($LASTEXITCODE) { throw 'Release alignment failed.' }
+    & (Join-Path $buildTools 'apksigner.bat') sign --ks $Keystore --ks-key-alias fableshot --ks-pass env:FABLESHOT_ANDROID_SIGNING_PASSWORD --out $signed $aligned
+    if ($LASTEXITCODE) { throw 'Release signing failed.' }
+    & (Join-Path $buildTools 'apksigner.bat') verify --print-certs $signed
+    if ($LASTEXITCODE) { throw 'Release signature verification failed.' }
+    $apk = $signed
+}
 Copy-Item -LiteralPath $apk -Destination $output -Force
 Write-Output "Verified $($metadata.applicationId) $($element.versionName): $output"

@@ -10,7 +10,7 @@ import type { AchievementEnrollment, AchievementLedger } from './achievement-led
 import { isPersonalRecordEvent } from './personal-record-events.ts';
 import type { PersonalRecordEvent } from './personal-record-events.ts';
 import type { Point, Shot } from './target.ts';
-import { isOnFace } from './target.ts';
+import { isInMissRing, isOnFace } from './target.ts';
 import { appendShot, completePractice, emptyPractice, ROUND_LIMIT } from './practice.ts';
 import { DEFAULT_CONDITIONS, DEFAULT_ROUND_RULE, MAX_SERIES_ARROWS, isConditions, isRoundRule } from './conditions.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
@@ -48,11 +48,12 @@ function isPoint(value: unknown): value is Point {
 
 function isShot(value: unknown): value is Shot {
   if (value === null || typeof value !== 'object') return false;
-  const { point, points, code, physicalArrowNumber, imported, sourcePoint } = value as Partial<Shot>;
+  const { point, points, code, physicalArrowNumber, imported, sourcePoint, missPoint } = value as Partial<Shot>;
   if (imported !== undefined && imported !== true) return false;
   if (sourcePoint !== undefined && (imported !== true || !isPoint(sourcePoint))) return false;
   if (physicalArrowNumber !== undefined && !validNumberedCount(physicalArrowNumber)) return false;
   if (typeof points !== 'number' || !Number.isInteger(points) || points < 0 || points > 10) return false;
+  if (missPoint !== undefined && (points !== 0 || !isPoint(missPoint))) return false;
   if (points === 0) return point === null && code === 'M';
   return (isPoint(point) || (point === null && imported === true)) && (code === String(points) || (points === 10 && code === 'X'));
 }
@@ -84,7 +85,8 @@ function isSeries(value: unknown, legacy = false): value is Series {
       if (used.has(shot.physicalArrowNumber)) return false;
       used.add(shot.physicalArrowNumber);
     }
-    return shot.point === null || isOnFace(shot.point, target);
+    return (shot.point === null || isOnFace(shot.point, target)) &&
+      (shot.missPoint === undefined || isInMissRing(shot.missPoint, target));
   });
 }
 

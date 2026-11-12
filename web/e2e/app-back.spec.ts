@@ -1,0 +1,54 @@
+import { expect, test } from '@playwright/test';
+import { openTraining } from './journal-navigation.ts';
+
+test('browser Back closes the active overlay, returns through settings and leaves from Home', async ({ page }) => {
+  await page.goto('./?previous=1');
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-about').click();
+  await page.getByTestId('settings-version').click();
+  await expect(page.getByTestId('release-history')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByTestId('release-history')).toHaveCount(0);
+  await expect(page.getByTestId('settings-screen')).toHaveAttribute('data-section', 'about');
+  await page.goBack();
+  await expect(page.getByTestId('settings-screen')).toHaveAttribute('data-section', 'root');
+  await page.goBack();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  await page.getByTestId('nav-history').click();
+  await page.goBack();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\?previous=1$/);
+});
+
+test('Android Back handler protects edits and gives control to the system at Home', async ({ page }) => {
+  await page.goto('./');
+  const back = () => page.evaluate(() => (window as Window & { fableShotBack: () => boolean }).fableShotBack());
+  await openTraining(page);
+  await page.getByTestId('target').click();
+  expect(await back()).toBe(true);
+  await expect(page.getByRole('dialog', { name: 'Завершить тренировку?' })).toBeVisible();
+  expect(await back()).toBe(true);
+  await expect(page.getByRole('dialog', { name: 'Завершить тренировку?' })).not.toBeVisible();
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await back();
+  await page.getByTestId('training-confirm').click();
+  await page.locator('[data-testid^="report-end-"]').first().click();
+  await page.getByTestId('shot-1').click();
+  const target = page.getByTestId('target');
+  const box = (await target.boundingBox())!;
+  await target.click({ position: { x: box.width / 2 + Math.min(box.width, box.height) * .2, y: box.height / 2 } });
+  await back();
+  const discard = page.getByRole('dialog', { name: 'Отменить правки?' });
+  await expect(discard).toBeVisible();
+  await back();
+  await expect(discard).not.toBeVisible();
+  await back();
+  await page.getByTestId('training-confirm').click();
+  await back();
+  await expect(page.getByTestId('journal-report')).toBeVisible();
+  await back();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  expect(await back()).toBe(false);
+});

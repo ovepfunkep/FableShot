@@ -12,6 +12,9 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -19,11 +22,14 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Locale;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
@@ -34,6 +40,131 @@ public class DocumentExportPlugin extends Plugin {
     private static final int MAX_BYTES = 12 * 1024 * 1024;
     private static final Pattern UNSAFE_NAME = Pattern.compile("[<>:\"/\\\\|?*\\x00-\\x1f\\x7f-\\x9f]");
     private final AtomicBoolean exporting = new AtomicBoolean(false);
+
+    @PluginMethod
+    public void shareDocuments(PluginCall call) {
+        if (!exporting.compareAndSet(false, true)) {
+            call.reject("Дождись открытия меню отправки.", "EXPORT_BUSY");
+            return;
+        }
+        getBridge().execute(() -> {
+            File directory = null;
+            try {
+                JSONArray files = call.getArray("files");
+                if (files == null || files.length() < 1 || files.length() > 100) throw new IOException("Нет файлов для отправки.");
+                File root = new File(getContext().getCacheDir(), "shared-reports");
+                if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Не удалось подготовить файл.");
+                File[] previous = root.listFiles();
+                if (previous != null) for (File old : previous) {
+                    if (old.isDirectory() && old.lastModified() < System.currentTimeMillis() - 86400000L) removeShareDirectory(old);
+                }
+                directory = new File(root, UUID.randomUUID().toString());
+                if (!directory.mkdir()) throw new IOException("Не удалось подготовить файл.");
+                ArrayList<Uri> uris = new ArrayList<>();
+                String mime = null;
+                int total = 0;
+                for (int index = 0; index < files.length(); index++) {
+                    JSONObject file = files.getJSONObject(index);
+                    String type = file.getString("mimeType"), name = file.getString("name"), encoded = file.getString("dataBase64");
+                    String extension = "image/png".equals(type) ? ".png" : "application/pdf".equals(type) ? ".pdf" : null;
+                    if (extension == null || name.length() > 160 || name.length() <= extension.length() ||
+                        !name.equals(name.trim()) || !name.toLowerCase(Locale.ROOT).endsWith(extension) || UNSAFE_NAME.matcher(name).find() ||
+                        encoded.length() > ((MAX_BYTES + 2) / 3) * 4 || encoded.length() % 4 != 0 || !encoded.matches("[A-Za-z0-9+/]*={0,2}")) {
+                        throw new IOException("Некорректный файл отчёта.");
+                    }
+                    if (mime != null && !mime.equals(type)) throw new IOException("Выбери один формат отчёта.");
+                    mime = type;
+                    byte[] bytes = Base64.decode(encoded, Base64.NO_WRAP);
+                    total += bytes.length;
+                    if (bytes.length == 0 || bytes.length > MAX_BYTES || total > 76 * 1024 * 1024) throw new IOException("Отчёт слишком большой для отправки.");
+                    File target = new File(directory, name);
+                    if (target.exists()) throw new IOException("Повторяющееся имя файла.");
+                    try (FileOutputStream output = new FileOutputStream(target)) { output.write(bytes); }
+                    uris.add(FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", target));
+                }
+                Intent send = new Intent(uris.size() == 1 ? Intent.ACTION_SEND : Intent.ACTION_SEND_MULTIPLE)
+                    .setType(mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if (uris.size() == 1) send.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+                else send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+                ClipData clip = ClipData.newRawUri("FableShot", uris.get(0));
+                for (int index = 1; index < uris.size(); index++) clip.addItem(new ClipData.Item(uris.get(index)));
+                send.setClipData(clip);
+                File staged = directory;
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        getActivity().startActivity(Intent.createChooser(send, "Поделиться тренировкой").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+                        call.resolve(new JSObject().put("opened", true));
+                    } catch (RuntimeException error) {
+                        removeShareDirectory(staged);
+                        call.reject("Не удалось открыть отправку отчёта.", "SHARE_FAILED", error);
+                    } finally { exporting.set(false); }
+                });
+            } catch (Exception error) {
+                if (directory != null) removeShareDirectory(directory);
+                exporting.set(false);
+                call.reject("Не удалось подготовить отправку: " + error.getMessage(), "SHARE_FAILED", error);
+            }
+        });
+    }
+
+    private void removeShareDirectory(File directory) {
+        File[] files = directory.listFiles();
+        if (files != null) for (File file : files) removeStaged(file);
+        removeStaged(directory);
+    }
+    private final AtomicBoolean importing = new AtomicBoolean(false);
+
+    @PluginMethod
+    public void pickArchive(PluginCall call) {
+        if (!importing.compareAndSet(false, true)) {
+            call.reject("Выбор архива уже открыт.", "IMPORT_BUSY");
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        getActivity().runOnUiThread(() -> {
+            try { startActivityForResult(call, intent, "archiveSelected"); }
+            catch (RuntimeException error) {
+                importing.set(false);
+                call.reject("Не удалось открыть выбор архива.", "IMPORT_FAILED", error);
+            }
+        });
+    }
+
+    @ActivityCallback
+    private void archiveSelected(PluginCall call, ActivityResult result) {
+        if (call == null) { importing.set(false); return; }
+        getBridge().execute(() -> {
+            try {
+                if (result.getResultCode() == Activity.RESULT_CANCELED) {
+                    call.resolve(new JSObject().put("cancelled", true));
+                    return;
+                }
+                Uri uri = result.getData() == null ? null : result.getData().getData();
+                if (result.getResultCode() != Activity.RESULT_OK || uri == null) {
+                    throw new IOException("Выбор файла не завершён.");
+                }
+                // Provider SIZE may be zero for a complete file. Read the granted stream,
+                // enforcing the limit on actual bytes rather than trusting metadata.
+                final int limit = 76 * 1024 * 1024;
+                try (InputStream input = getContext().getContentResolver().openInputStream(uri);
+                     ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                    if (input == null) throw new IOException("Не удалось открыть архив.");
+                    byte[] buffer = new byte[16 * 1024];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (count > limit - output.size()) throw new IOException("Архив должен быть не больше 76 МБ.");
+                        output.write(buffer, 0, count);
+                    }
+                    if (output.size() == 0) throw new IOException("Выбранный архив пуст. Сохрани его на телефон и выбери повторно.");
+                    call.resolve(new JSObject().put("cancelled", false).put("bytes", output.size())
+                        .put("dataBase64", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)));
+                }
+            } catch (Exception error) {
+                call.reject("Не удалось прочитать архив: " + error.getMessage(), "IMPORT_FAILED", error);
+            } finally { importing.set(false); }
+        });
+    }
 
     @PluginMethod
     public void exportDocument(PluginCall call) {

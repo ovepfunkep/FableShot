@@ -28,22 +28,4 @@
 
 .report-round { display: flex; flex-direction: column; gap: 7px; }
 .report-round h3 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.report-series {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 5px 9px;
-  border: 1px solid var(--accent);
-  border-radius: 16px;
-  background: var(--surface);
-  text-align: start;
-}
-.report-hits { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; flex: 1 0 min-content; }
-.report-hit { flex: 0 0 auto; min-width: 20px; padding: 1px 3px; border: .5px solid var(--edge); border-radius: 5px; text-align: center; font-size: 12px; line-height: 16px; font-weight: 600; }
-.report-series-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
-.report-series-number { color: var(--muted); font-size: 11px; line-height: 16px; }
-.report-series-summary strong { font-size: 12px; line-height: 16px; }
 .report-round-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

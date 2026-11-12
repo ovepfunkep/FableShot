@@ -147,7 +147,7 @@ test('Android diary activates after confirmation and round-trips the original ZI
   await openSettingsCategory(page, 'data', 'settings-archive');
   await page.getByTestId('settings-archive').click();
   const originalZip = Buffer.from(zipSync(files));
-  await page.getByTestId('native-archive-file').setInputFiles({ name: 'native.zip', mimeType: 'application/zip', buffer: originalZip });
+  await page.getByTestId('archive-file').setInputFiles({ name: 'native.zip', mimeType: 'application/zip', buffer: originalZip });
   await expect(page.getByTestId('native-archive-preview')).toContainText('формат 14');
   await expect(page.getByTestId('native-archive-preview').locator('div').filter({ has: page.getByText('Совместимые тренировки', { exact: true }) }).locator('dd')).toHaveText('120');
   await expect(page.getByTestId('archive-restore')).toHaveCount(0);

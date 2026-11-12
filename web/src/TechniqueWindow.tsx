@@ -114,7 +114,6 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
   const [exportNotice, setExportNotice] = useState('');
   const modal = useRef<HTMLDialogElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const backRef = useRef<() => void>(() => {});
   const headingId = useId();
   const library = state.library;
   const text = reading?.version.payload ?? null;
@@ -164,26 +163,6 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     if (reading || ownFocus) { setReading(null); setOwnFocus(false); setApplyingError(''); return; }
     onClose();
   }
-  useLayoutEffect(() => { backRef.current = back; });
-  useEffect(() => {
-    const key = 'fableshotTechniqueWindow';
-    function markOpen() {
-      if (window.history.state?.[key] === headingId) return;
-      const next = { ...window.history.state, [key]: headingId };
-      if (window.history.state?.[key]) window.history.replaceState(next, '');
-      else window.history.pushState(next, '');
-    }
-    function pop() {
-      if (window.history.state?.[key] === headingId) return;
-      backRef.current();
-      queueMicrotask(() => { if (modal.current?.isConnected) markOpen(); });
-    }
-    markOpen(); window.addEventListener('popstate', pop);
-    return () => {
-      window.removeEventListener('popstate', pop);
-      queueMicrotask(() => { if (!modal.current?.isConnected && window.history.state?.[key] === headingId) window.history.back(); });
-    };
-  }, [headingId]);
   useEffect(() => {
     if (!editorId || !draft) return;
     const previous = libraryRef.current?.documents.find(item => item.id === editorId)?.draft;

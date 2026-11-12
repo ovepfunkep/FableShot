@@ -8,9 +8,11 @@ import { getTargetProfile } from './target.ts';
 import './sport-ranks.css';
 
 export function RankTag({ rank, onOpen, testId }: { rank: StageRank; onOpen?: () => void; testId?: string }) {
-  const contents = <><strong>{rank.label ?? '—'}</strong><span>{rank.classLabel ?? 'Разряд'}</span></>;
+  const barebowPace = rank.bow === 'barebow' && rank.evaluation?.exercise.arrows === 60 && !rank.finalResult && !!rank.label;
+  const label = barebowPace && rank.label !== 'ниже порога' ? `Темп ${rank.label}` : rank.label;
+  const contents = <><strong>{label ?? '—'}</strong><span>{rank.classLabel ?? 'Разряд'}</span></>;
   if (onOpen) return <button type="button" className="rank-tag" data-testid={testId} onClick={onOpen}
-    aria-label={`${rank.scopeLabel} · разряд${rank.label ? ` ${rank.label}` : ''}`}>{contents}</button>;
+    aria-label={`${rank.scopeLabel} · ${label ?? 'разряд'}`}>{contents}</button>;
   return rank.label ? <span className="rank-tag" data-testid={testId}>{contents}</span> : null;
 }
 
@@ -102,7 +104,7 @@ export function RankDetails({ rank, onClose, onOpenReference, onCategory }: {
   return <RankDialog title={`${rank.scopeLabel} · нормативы`} testId="rank-details" onClose={onClose}>
     <div className="rank-detail">
       {evaluation ? <>
-        <h3 data-testid="rank-headline">{rank.finalResult ? 'По очкам' : 'Разряд'} · {rank.label ?? '—'}</h3>
+        <h3 data-testid="rank-headline">{rank.finalResult ? 'По очкам' : 'Темп'} · {rank.label ?? '—'}</h3>
         <p>{bowCategoryName(evaluation.exercise.bow)} · {evaluation.exercise.distance} м · {evaluation.exercise.arrows} стрел</p>
         {conditions && <p className="rank-muted" data-testid="rank-target-conditions">
           {conditions.targetDiameterMm / 10} см · {getTargetProfile(conditions.targetProfileId)?.title}

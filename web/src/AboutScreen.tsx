@@ -1,4 +1,6 @@
 import { WebReleaseVersion } from './WebReleaseNotes.tsx';
+import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
+import type { useAndroidUpdates } from './android-updates.ts';
 import './about-screen.css';
 
 const thanks = [
@@ -7,9 +9,10 @@ const thanks = [
   'Клуб «Вольные Стрелки» за незабываемую атмосферу дружелюбия',
 ];
 
-export function AboutScreen({ onReleaseNotes }: { onReleaseNotes: () => void }) {
+export function AboutScreen({ onReleaseNotes, updates }: { onReleaseNotes: () => void; updates: ReturnType<typeof useAndroidUpdates> }) {
   return <section className="about-screen" aria-label="О FableShot">
     <WebReleaseVersion onOpen={onReleaseNotes} />
+    <AndroidUpdateCard updates={updates} manual />
     <div className="about-links">
       <a className="technique-condition-link" href="https://github.com/ovepfunkep/FableShot" target="_blank" rel="noreferrer">GitHub</a>
       <a className="technique-condition-link" href="https://t.me/IncludeIntelligence" target="_blank" rel="noreferrer">Telegram</a>

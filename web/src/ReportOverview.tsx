@@ -5,7 +5,7 @@ import type { DiaryEntry } from './persistence.ts';
 import { getTargetProfile, summarize } from './target.ts';
 import type { Conditions } from './conditions.ts';
 import type { Shot } from './target.ts';
-import { zoneColor } from './TargetBoard.tsx';
+import { SeriesResult } from './SeriesResult.tsx';
 import { formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { TechniqueReflection } from './TechniqueReflection.tsx';
@@ -40,14 +40,6 @@ function ReportIcon({ name }: { name: 'back' | 'target' | 'distance' | 'bow' }) 
     {name === 'distance' && <path d="M3 12h18M7 8l-4 4 4 4m10-8 4 4-4 4M3 4v2m18-2v2" />}
     {name === 'bow' && <path d="M7 3q13 9 0 18L7 3m0 9h14m-4-4 4 4-4 4" />}
   </svg>;
-}
-
-function HitChip({ shot }: { shot: Shot }) {
-  const miss = shot.points === 0;
-  return <span className="report-hit" style={{
-    backgroundColor: miss ? 'var(--raised)' : zoneColor(shot.points),
-    color: miss ? 'var(--muted)' : shot.points === 3 || shot.points === 4 ? '#fff' : '#111811',
-  }}>{shot.code}</span>;
 }
 
 function ReportDuration({ time }: { time: TrainingTime }) {
@@ -152,13 +144,8 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
           </div>
           {round.series.map((series, seriesIndex) => series.shots.length > 0 && <button type="button" className="report-series"
             key={series.id} data-testid={`report-end-${series.id}`} disabled={deleted} onClick={() => onSelectSeries(series.id)}>
-            <span className="report-series-summary">
-              <span className="report-series-number" aria-label={`Серия ${seriesIndex + 1}`}>{seriesIndex + 1}</span>
-              <strong data-testid={`report-series-total-${series.id}`}>{summary(series.shots)}</strong>
-            </span>
-            {visible('result') && <span className="report-hits">
-              {series.shots.map((shot, index) => <HitChip key={index} shot={shot} />)}
-            </span>}
+            <SeriesResult number={seriesIndex + 1} shots={series.shots} summary={summary(series.shots)}
+              totalTestId={`report-series-total-${series.id}`} showHits={visible('result')} />
           </button>)}
         </section>;
       })}
@@ -167,7 +154,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         onCategory={rankCategory => update({ ...preferences, rankCategory })} onOpenReference={onRankReference} />}
       <TrainingReportMetrics practice={practice} entries={entries} />
     </div>
-    {exportOpen && entry && <ReportExport entry={{ ...entry, practice }} onClose={() => setExportOpen(false)} onAchievement={onAchievement} />}
+    {hasShots && entry && <ReportExport entry={{ ...entry, practice }} grants={grants} open={exportOpen} onClose={() => setExportOpen(false)} onAchievement={onAchievement} />}
     {conditionsOpen && <BottomSheet title="Условия тренировки" onClose={() => setConditionsOpen(false)}>
       <div className="report-conditions" data-testid="report-conditions">
         {[...uniqueConditions].map(([key, conditions]) => <div key={key} className="report-condition-group">

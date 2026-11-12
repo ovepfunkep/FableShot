@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EquipmentPicker } from './EquipmentPicker.tsx';
 import { equipmentSnapshot, loadEquipment } from './equipment.ts';
@@ -15,25 +15,7 @@ export function BottomSheet({ title, onClose, children, tag }: {
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const drag = useRef<number | null>(null);
-  const identity = useId();
-  const close = useRef(onClose);
-  useLayoutEffect(() => { close.current = onClose; }, [onClose]);
-  useLayoutEffect(() => {
-    dialog.current?.showModal();
-  }, []);
-  useEffect(() => {
-    const key = 'fableshotConditionsSheet';
-    const element = dialog.current;
-    if (window.history.state?.[key] !== identity) {
-      window.history.pushState({ ...window.history.state, [key]: identity }, '');
-    }
-    function closeOnBack() { if (window.history.state?.[key] !== identity) close.current(); }
-    window.addEventListener('popstate', closeOnBack);
-    return () => {
-      window.removeEventListener('popstate', closeOnBack);
-      queueMicrotask(() => { if (!element?.isConnected && window.history.state?.[key] === identity) window.history.back(); });
-    };
-  }, [identity]);
+  useLayoutEffect(() => { dialog.current?.showModal(); }, []);
   return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag}
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
@@ -123,23 +105,6 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const [removingPreset, setRemovingPreset] = useState<TrainingPreset | null>(null);
   const [error, setError] = useState('');
   const [help, setHelp] = useState(false);
-  const back = useRef(onBack);
-  useLayoutEffect(() => { back.current = onBack; }, [onBack]);
-  useEffect(() => {
-    const key = 'fableshotConditions';
-    let mounted = true;
-    if (!window.history.state?.[key]) window.history.pushState({ ...window.history.state, [key]: true }, '');
-    function closeOnBack() { if (!window.history.state?.[key]) back.current(); }
-    window.addEventListener('popstate', closeOnBack);
-    return () => {
-      mounted = false;
-      window.removeEventListener('popstate', closeOnBack);
-      queueMicrotask(() => {
-        // StrictMode immediately remounts the component at the same screen.
-        if (!mounted && !document.querySelector('[data-testid="journal-setup"]') && window.history.state?.[key]) window.history.back();
-      });
-    };
-  }, []);
   const profile = getTargetProfile(profileId)!;
   const mm = Number(diameter.replace(',', '.')) * 10;
   const meters = Number(distance.replace(',', '.'));

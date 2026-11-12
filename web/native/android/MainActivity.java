@@ -1,11 +1,16 @@
 package app.fableshot.android.webpilot;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.HapticFeedbackConstants;
 import android.view.WindowManager;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -15,9 +20,31 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DocumentExportPlugin.class);
+        registerPlugin(AndroidUpdatesPlugin.class);
         registerPlugin(TrainingWindowPlugin.class);
         super.onCreate(savedInstanceState);
         showTrainingWhenLocked(this, false);
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            private boolean awaitingResponse;
+
+            @Override
+            public void handleOnBackPressed() {
+                if (awaitingResponse || getBridge() == null) return;
+                awaitingResponse = true;
+                getBridge().getWebView().evaluateJavascript("window.fableShotBack?.()", handled -> {
+                    awaitingResponse = false;
+                    if ("false".equals(handled) && !isFinishing() && !isDestroyed()) {
+                        // Only the ready Home screen returns false.
+                        setEnabled(false);
+                        try {
+                            getOnBackPressedDispatcher().onBackPressed();
+                        } finally {
+                            setEnabled(true);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     @Override
@@ -35,6 +62,42 @@ public class MainActivity extends BridgeActivity {
             activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
         } else {
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+        }
+    }
+
+    @CapacitorPlugin(name = "AndroidUpdates")
+    public static class AndroidUpdatesPlugin extends Plugin {
+        private boolean production() {
+            return "app.fableshot.android.react".equals(getContext().getPackageName());
+        }
+
+        @SuppressWarnings("deprecation")
+        @PluginMethod
+        public void installedVersion(PluginCall call) {
+            try {
+                PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
+                long code = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+                call.resolve(new JSObject().put("production", production()).put("code", code));
+            } catch (Exception error) {
+                call.reject("Не удалось прочитать версию Android.", "VERSION_UNAVAILABLE", error);
+            }
+        }
+
+        @PluginMethod
+        public void openDownload(PluginCall call) {
+            String url = call.getString("url");
+            if (!production() || url == null || !url.matches("https://github\\.com/ovepfunkep/FableShot/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/FableShot-android-[1-9][0-9]*\\.apk")) {
+                call.reject("Некорректная ссылка на обновление.");
+                return;
+            }
+            getActivity().runOnUiThread(() -> {
+                try {
+                    getActivity().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    call.resolve();
+                } catch (RuntimeException error) {
+                    call.reject("Не удалось открыть загрузку APK.", "DOWNLOAD_UNAVAILABLE", error);
+                }
+            });
         }
     }
 

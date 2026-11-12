@@ -6,6 +6,7 @@ import type { DataRecords } from '../src/app-storage.ts';
 import { archiveSourceToken, createWebArchive, inspectWebArchive, lastRecovery, replaceArchiveRecords, unpackArchive } from '../src/web-archive.ts';
 import { appendShot, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
+import { DEFAULT_TARGET, markTargetPoint } from '../src/target.ts';
 
 function records(count: number): DataRecords {
   const result = Object.fromEntries(DATA_KEYS.map(key => [key, null])) as DataRecords;
@@ -16,6 +17,25 @@ function records(count: number): DataRecords {
   result['app.fableshot.training-preferences.v1'] = JSON.stringify({ version: 1, preferences: DEFAULT_PREFERENCES });
   return result;
 }
+
+test('archives keep directional misses distinct from the M button and retain shaft scoring at the boundary', async () => {
+  const boundary = markTargetPoint({ x: 1.015, y: 0 }, DEFAULT_TARGET);
+  const ring = markTargetPoint({ x: 1.06, y: 0 }, DEFAULT_TARGET);
+  assert.equal(boundary?.points, 1);
+  assert.deepEqual(ring, { code: 'M', points: 0, point: null, missPoint: { x: 1.06, y: 0 } });
+  assert.equal(markTargetPoint({ x: 1.101, y: 0 }, DEFAULT_TARGET), null);
+  const original = records(1);
+  const diary = JSON.parse(original[DATA_KEYS[0]]!);
+  const shots = diary.entries[0].practice.rounds[0].series[0].shots;
+  shots.push(ring, { code: 'M', points: 0, point: null });
+  original[DATA_KEYS[0]] = JSON.stringify(diary);
+  const restored = await inspectWebArchive(await createWebArchive(original, 'test'));
+  assert.deepEqual(restored.records, original);
+  ring!.missPoint!.x = .5;
+  shots[1] = ring;
+  original[DATA_KEYS[0]] = JSON.stringify(diary);
+  await assert.rejects(createWebArchive(original, 'test'));
+});
 
 function source(initial: DataRecords, failOn?: string) {
   const map = new Map(Object.entries(initial).filter((pair): pair is [string, string] => pair[1] !== null));

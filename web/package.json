@@ -1,13 +1,13 @@
 {
   "name": "fableshot-web",
   "private": true,
-  "version": "0.25.0",
+  "version": "0.26.3",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "config": {
-    "androidVersionCode": 28
+    "androidVersionCode": 35
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -22,6 +22,7 @@
     "@pdf-lib/fontkit": "1.1.1",
     "fflate": "0.8.3",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "5.4.624",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "sql.js": "1.16.0"

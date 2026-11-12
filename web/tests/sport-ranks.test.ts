@@ -37,11 +37,11 @@ test('includes misses and X and updates the scoped series and round samples inde
   const second = seriesRank(practice, 3, 'male');
   const round = roundRank(practice, 1, 'male');
   assert.equal(first.label, 'ниже порога');
-  assert.equal(second.label, 'I');
+  assert.equal(second.label, 'МСМК');
   assert.equal(first.classLabel, 'КЛб(М)');
   assert.equal(round.evaluation?.entered, 3);
   assert.equal(round.evaluation?.points, 20);
-  assert.equal(round.evaluation?.projected, 200);
+  assert.equal(round.evaluation?.projected, 400);
   assert.equal(round.evaluation?.result, null);
 });
 
@@ -55,8 +55,8 @@ test('selects the planned exercise first, actual arrows for a closed free round,
   assert.equal(open.evaluation?.exercise.arrows, 60);
   assert.equal(open.finalResult, false);
   const closed = training(items, unlimited, savedAt);
-  assert.equal(roundRank(closed, 1, 'male').evaluation?.exercise.arrows, 30);
-  assert.equal(roundRank(closed, 1, 'male').finalResult, true);
+  assert.equal(roundRank(closed, 1, 'male').evaluation?.exercise.arrows, 60);
+  assert.equal(roundRank(closed, 1, 'male').finalResult, false);
   assert.equal(seriesRank(closed, 2, 'male').finalResult, false);
   assert.equal(roundRank(training([series(2, arrows(61, 9))], unlimited, savedAt), 1, 'male').finalResult, false);
 });
@@ -64,7 +64,7 @@ test('selects the planned exercise first, actual arrows for a closed free round,
 test('needs an explicit category and keeps the category-specific thresholds', () => {
   const practice = training([series(2, [...arrows(29, 7), hit(0, 'M')])]);
   assert.equal(roundRank(practice, 1, null).reason, 'Выбери категорию сравнения');
-  assert.equal(roundRank(practice, 1, 'male').label, 'ниже порога');
+  assert.equal(roundRank(practice, 1, 'male').label, 'III');
   assert.equal(roundRank(practice, 1, 'female').label, 'III');
   assert.equal(roundRank(practice, 1, 'female').classLabel, 'КЛб(Ж)');
   const empty = roundRank(training([series(2, [])]), 1, 'male');
@@ -77,11 +77,11 @@ test('does not pool incompatible conditions or infer a discipline from the equip
   const mixed = training([series(2, [hit(10)], indoor), series(3, [hit(10)], far)]);
   assert.match(roundRank(mixed, 1, 'male').reason ?? '', /разные условия/);
   assert.equal(roundRank(mixed, 1, 'male').evaluation, null);
-  assert.equal(seriesRank(mixed, 2, 'male').label, 'I');
+  assert.equal(seriesRank(mixed, 2, 'male').label, 'МСМК');
   assert.equal(seriesRank(mixed, 3, 'male').label, null);
   const missing = { ...indoor, equipment: { ...indoor.equipment!, bow: { name: 'Баребоу', category: null } } };
   assert.match(seriesRank(training([series(2, [hit(10)], missing)]), 2, 'male').reason ?? '', /тип лука/);
-  assert.equal(roundRank(training([series(2, [hit(10)]), series(3, [], far)]), 1, 'male').label, 'I');
+  assert.equal(roundRank(training([series(2, [hit(10)]), series(3, [], far)]), 1, 'male').label, 'МСМК');
 });
 
 test('matches only verified target combinations and retains unsupported formats in the grid', () => {

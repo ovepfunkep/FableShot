@@ -31,7 +31,8 @@ export async function archiveDigest(bytes: Uint8Array): Promise<string> {
 
 /** Check declared sizes and paths before allowing the ZIP inflater to allocate a payload. */
 export function unpackArchive(bytes: Uint8Array): Record<string, Uint8Array> {
-  if (!bytes.length || bytes.length > MAX_ARCHIVE_BYTES) throw new Error('Архив превышает допустимый размер.');
+  if (!bytes.length) throw new Error('Выбранный архив пуст. Сохрани его на телефон и выбери повторно.');
+  if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error('Архив превышает допустимый размер.');
   try {
     return checkedUnzip(bytes, { maxInputBytes: MAX_ARCHIVE_BYTES, maxExpandedBytes: MAX_UNPACKED_BYTES + NATIVE_ARCHIVE_BYTE_LIMIT,
       maxEntries: 3, allowedName: name => name === 'manifest.json' || name === payloadPath || name === nativePath,

@@ -33,6 +33,33 @@ test('saved series opens without network under the project path', async ({ page,
   await expect(reopened.getByTestId('report-round-1').getByText('M', { exact: true })).toBeVisible();
 });
 
+test('the miss ring saves direction, stays out of grouping, and can be replaced in the series editor', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const target = await targetBounds(page);
+  const center = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  const radius = Math.min(target.width, target.height) * .44;
+  await page.touchscreen.tap(center.x + radius * 1.06, center.y);
+  await page.getByRole('button', { name: 'Отметить промах' }).click();
+  await page.touchscreen.tap(center.x, center.y);
+  await expect(page.getByTestId('series-score')).toHaveText('10/30');
+  await page.getByRole('button', { name: 'Завершить тренировку' }).click();
+  await page.getByTestId('training-confirm').click();
+  await expect(page.getByTestId('hit-map-miss')).toHaveCount(1);
+  await expect(page.getByTestId('hit-map-coverage')).toContainText('2 из 3');
+  await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
+
+  await page.locator('[data-testid^="report-end-"]').first().click();
+  await page.getByTestId('shot-1').click();
+  await page.getByTestId('target').click();
+  await page.getByTestId('next-end').click();
+  await expect(page.getByTestId('shot-1')).toHaveAttribute('aria-label', /10/);
+  await page.getByTestId('shot-1').click();
+  await page.getByRole('button', { name: 'Закрыть редактор', exact: true }).click();
+  await expect(page.getByTestId('hit-map-miss')).toHaveCount(0);
+  await expect(page.getByTestId('report-round-total-1')).toContainText('20/30');
+});
+
 test('lens follows aim and the target stays inside the screen layout', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 570 });
   await page.goto('./');
@@ -104,6 +131,8 @@ test('previous series edits are saved when selecting another shot, and deletion 
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
   await page.getByTestId('training-series-open').click();
   await expect(page.getByTestId('training-series-result-1')).toContainText('10/20');
+  await expect(page.getByTestId('training-select-series-1').locator('.report-hit')).toHaveText(['10', 'M']);
+  await expect(page.getByTestId('training-select-series-2')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('training-select-series-1').click();
   await expect(page.getByTestId('next-end')).toHaveText('К текущей серии');
   await page.getByTestId('shot-1').click();
@@ -118,6 +147,11 @@ test('previous series edits are saved when selecting another shot, and deletion 
   await openTraining(page);
   await expect(page.getByTestId('round-score')).toHaveText('8/10');
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  await page.getByTestId('training-series-open').click();
+  await page.getByTestId('remove-series-1').click();
+  await expect(page.getByRole('dialog', { name: 'Удалить серию?' })).toBeVisible();
+  await page.getByTestId('confirm-remove-series').click();
+  await expect(page.getByTestId('round-score')).toHaveText('0/0');
 });
 
 test('a full 30-arrow round keeps the next action pinned and requires an explicit transition', async ({ page }) => {

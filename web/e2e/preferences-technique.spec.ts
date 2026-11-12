@@ -51,7 +51,7 @@ test('average precision and disabled animation apply to training, selectors and 
   await page.reload();
   await openTraining(page);
   await page.getByTestId('training-series-open').click();
-  await expect(page.getByTestId('training-series-result-1')).toContainText('средний 10,00');
+  await expect(page.getByTestId('training-series-result-1')).toHaveText('10/10 · 10,00');
   await page.getByTestId('training-select-series-1').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await expect(page.getByTestId('report-round-total-1')).toHaveText('Раунд 1 · 10/10 · 10,00');

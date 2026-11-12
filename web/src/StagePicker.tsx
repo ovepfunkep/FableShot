@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { currentSeries, roundShots } from './practice.ts';
 import type { Practice } from './practice.ts';
@@ -6,6 +6,7 @@ import { summarize } from './target.ts';
 import type { Shot } from './target.ts';
 import { formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import { SeriesResult } from './SeriesResult.tsx';
 import './stage-picker.css';
 
 type PickerKind = 'round' | 'series';
@@ -33,7 +34,6 @@ type Entry = {
 
 type Confirmation = { type: 'new-round' } | { type: 'delete'; entry: Entry };
 
-const historyKey = 'fableshotStagePicker';
 
 function openModal(dialog: HTMLDialogElement | null) {
   dialog?.showModal();
@@ -75,41 +75,13 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
   const confirm = useRef<HTMLDialogElement>(null);
   const drag = useRef<{ id: number; y: number } | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const latest = useRef({ onClose, confirmation });
   const isRound = kind === 'round';
   const entries = stageEntries(kind, practice, roundId, seriesId);
   const canStartRound = (currentSeries(practice)?.round.series ?? []).some(series => series.shots.length > 0);
   const roundNumber = practice.rounds.findIndex(round => round.id === roundId) + 1;
 
-  useLayoutEffect(() => { latest.current = { onClose, confirmation }; }, [onClose, confirmation]);
   useLayoutEffect(() => openModal(sheet.current), []);
   useLayoutEffect(() => openModal(confirm.current), [confirmation]);
-
-  useEffect(() => {
-    // A same-URL history entry also catches Back in a WebView or an installed web app.
-    function markOpen() {
-      const previous = window.history.state;
-      if (previous?.[historyKey] === titleId) return;
-      const state = { ...previous, [historyKey]: titleId };
-      if (previous?.[historyKey]) window.history.replaceState(state, '');
-      else window.history.pushState(state, '');
-    }
-    function back() {
-      if (window.history.state?.[historyKey] === titleId) return;
-      if (latest.current.confirmation) {
-        setConfirmation(null);
-        markOpen();
-      } else latest.current.onClose();
-    }
-    markOpen();
-    window.addEventListener('popstate', back);
-    return () => {
-      window.removeEventListener('popstate', back);
-      queueMicrotask(() => {
-        if (!sheet.current?.isConnected && window.history.state?.[historyKey] === titleId) window.history.back();
-      });
-    };
-  }, [titleId]);
 
   function startDrag(event: PointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
@@ -156,11 +128,14 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
             const deleteLabel = `Удалить ${isRound ? 'раунд' : 'серию'} ${entry.number}`;
             const result = summarize(entry.shots);
             const average = formatAverage(result.average, preferences.averageHundredths);
-            return <li key={entry.id} className={`stage-picker__card${entry.selected ? ' stage-picker__card--selected' : ''}`}>
-              <button type="button" className="stage-picker__select"
+            return <li key={entry.id} className={`stage-picker__card${isRound ? '' : ' stage-picker__card--series'}${entry.selected ? ' stage-picker__card--selected' : ''}`}>
+              <button type="button" className={isRound ? 'stage-picker__select' : 'report-series stage-picker__series-select'}
                 data-testid={`training-select-${kind}-${entry.number}`}
+                aria-label={label} aria-pressed={entry.selected}
                 onClick={() => { onChoose(entry.seriesId); onClose(); }}>
-                <span className="stage-picker__headline">
+                {!isRound ? <SeriesResult number={entry.number} shots={entry.shots}
+                  summary={preferences.hideScores ? '' : `${result.points}/${result.maximum} · ${average}`}
+                  totalTestId={`training-series-result-${entry.number}`} showHits={!preferences.hideScores} /> : <><span className="stage-picker__headline">
                   <span className="stage-picker__name">{label}</span>
                   {entry.selected && <span className="stage-picker__current"
                     data-testid={`training-current-${kind}-${entry.number}`}>{isRound ? 'Текущий' : 'Текущая'}</span>}
@@ -172,6 +147,7 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
                 <span className="stage-picker__volume" data-testid={`training-${kind}-volume-${entry.number}`}>
                   {isRound ? `${entry.occupiedSeriesCount} серий · ${entry.shots.length} стрел` : `Стрел: ${entry.shots.length}`}
                 </span>
+                </>}
               </button>
               <button type="button" className="stage-picker__trash" aria-label={deleteLabel}
                 data-testid={`remove-${kind}-${entry.number}`}

@@ -1,6 +1,6 @@
 export type Point = { x: number; y: number };
 export type Hit = { points: number; code: string };
-export type Shot = Hit & { point: Point | null; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
+export type Shot = Hit & { point: Point | null; missPoint?: Point; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
 export type TargetSpec = { profileId: string; diameterMm: number; shaftDiameterMm: number };
 export type TargetProfile = {
   id: string;
@@ -11,6 +11,7 @@ export type TargetProfile = {
 };
 
 const BOUNDARY_EPSILON = 1e-9;
+export const MISS_RING_WIDTH = .1;
 const xZone = { code: 'X', points: 10, outerRadius: .05 };
 
 function rings(minimum = 1, smallTen = false): TargetProfile['zones'] {
@@ -67,7 +68,21 @@ export function outerRadius(spec: TargetSpec): number {
 }
 
 export function isOnFace(point: Point, spec: TargetSpec = DEFAULT_TARGET): boolean {
-  return Math.hypot(point.x, point.y) <= outerRadius(spec) + shaftRadius(spec);
+  return Math.hypot(point.x, point.y) <= outerRadius(spec) + shaftRadius(spec) + BOUNDARY_EPSILON;
+}
+
+export function isInMissRing(point: Point, spec: TargetSpec): boolean {
+  return Math.hypot(point.x, point.y) <= outerRadius(spec) + MISS_RING_WIDTH + BOUNDARY_EPSILON && !isOnFace(point, spec);
+}
+
+export function isOnTargetInput(point: Point, spec: TargetSpec): boolean {
+  return isOnFace(point, spec) || isInMissRing(point, spec);
+}
+
+export function markTargetPoint(point: Point, spec: TargetSpec): Shot | null {
+  if (!isOnTargetInput(point, spec)) return null;
+  const hit = scorePoint(point, spec);
+  return hit.points ? { ...hit, point } : { ...hit, point: null, missPoint: point };
 }
 
 /** The shaft's nearest edge decides the score while the stored centre stays unchanged. */

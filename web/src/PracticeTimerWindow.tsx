@@ -73,10 +73,8 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
   const [saveError, setSaveError] = useState(false);
   const sheet = useRef<HTMLDialogElement>(null);
   const confirmation = useRef<HTMLDialogElement>(null);
-  const identity = useId();
   const titleId = useId();
   const drag = useRef<{ id: number; y: number } | null>(null);
-  const latest = useRef({ nextPhase, onClose });
   const ongoing = state.status === 'Running' || state.status === 'Paused';
   const validSeries = durationValue(series);
   const validRest = durationValue(rest);
@@ -89,31 +87,8 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
 
   useEffect(() => { setSeries(String(settings.seriesSeconds)); }, [settings.seriesSeconds]);
   useEffect(() => { setRest(String(settings.restSeconds)); }, [settings.restSeconds]);
-  useLayoutEffect(() => { latest.current = { nextPhase, onClose }; }, [nextPhase, onClose]);
   useLayoutEffect(() => { sheet.current?.showModal(); }, []);
   useLayoutEffect(() => { if (nextPhase) confirmation.current?.showModal(); }, [nextPhase]);
-  useEffect(() => {
-    const key = 'fableshotTimerSheet';
-    const element = sheet.current;
-    function markOpen() {
-      if (window.history.state?.[key] === identity) return;
-      const state = { ...window.history.state, [key]: identity };
-      if (window.history.state?.[key]) window.history.replaceState(state, '');
-      else window.history.pushState(state, '');
-    }
-    function back() {
-      if (window.history.state?.[key] === identity) return;
-      if (latest.current.nextPhase) { setNextPhase(null); markOpen(); }
-      else latest.current.onClose();
-    }
-    markOpen();
-    window.addEventListener('popstate', back);
-    return () => {
-      window.removeEventListener('popstate', back);
-      queueMicrotask(() => { if (!element?.isConnected && window.history.state?.[key] === identity) window.history.back(); });
-    };
-  }, [identity]);
-
   function startDrag(event: PointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
     drag.current = { id: event.pointerId, y: event.clientY };

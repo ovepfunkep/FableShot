@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { BOW_CATEGORIES, MAX_NUMBERED_ARROWS, bowCategoryName, editEquipment, equipmentSnapshot, loadEquipment, saveEquipment, selectableEquipment, validNumberedCount, validShaftDiameter } from './equipment.ts';
 import type { EquipmentArrows, EquipmentBow, EquipmentEdit, EquipmentItem, EquipmentKind, EquipmentKit, EquipmentLibrary, EquipmentSnapshot } from './equipment.ts';
@@ -87,7 +87,6 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
   const sheet = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const drag = useRef<{ id: number; y: number } | null>(null);
-  const latest = useRef({ component, kit, onClose });
   const library = state.library;
   const available = library && selectableEquipment(library);
   const chosen = available && selected ? available.kits.find(item => item.id === selected.id) : null;
@@ -99,46 +98,6 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
   const numberedCountValid = parsedNumberedCount === undefined || (/^\d+$/.test(countText) && validNumberedCount(parsedNumberedCount));
 
   useLayoutEffect(() => { sheet.current?.showModal(); }, []);
-  useLayoutEffect(() => { latest.current = { component, kit, onClose }; }, [component, kit, onClose]);
-  useEffect(() => {
-    const historyKey = 'fableshotEquipmentSheet';
-    function markOpen() {
-      if (window.history.state?.[historyKey] === titleId) return;
-      const state = { ...window.history.state, [historyKey]: titleId };
-      if (window.history.state?.[historyKey]) window.history.replaceState(state, '');
-      else window.history.pushState(state, '');
-    }
-    function back() {
-      if (window.history.state?.[historyKey] === titleId) return;
-      if (latest.current.component) {
-        setComponent(null);
-        markOpen();
-      } else if (latest.current.kit) {
-        setKit(null);
-        markOpen();
-      } else latest.current.onClose();
-    }
-    markOpen();
-    window.addEventListener('popstate', back);
-    return () => {
-      window.removeEventListener('popstate', back);
-      queueMicrotask(() => {
-        if (!sheet.current?.isConnected && window.history.state?.[historyKey] === titleId) window.history.back();
-      });
-    };
-  }, [titleId]);
-  useEffect(() => {
-    function back(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      if (component) setComponent(null);
-      else if (kit) setKit(null);
-      else onClose();
-    }
-    window.addEventListener('keydown', back);
-    return () => window.removeEventListener('keydown', back);
-  }, [component, kit, onClose]);
-
   function persist(draft: EquipmentEdit, form: HTMLFormElement): EquipmentLibrary | null {
     if (!library) return null;
     try {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Practice } from './practice.ts';
 import type { TechniqueSelection } from './technique.ts';
 import {
@@ -23,24 +23,8 @@ function ReflectionEditor({ entry, error, onChange, onSave, onClose }: {
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
   const headingId = useId();
   useLayoutEffect(() => { dialog.current?.showModal(); }, []);
-  useEffect(() => {
-    const key = 'fableshotReflectionWindow';
-    if (window.history.state?.[key] !== headingId) window.history.pushState({ ...window.history.state, [key]: headingId }, '');
-    function pop() {
-      if (window.history.state?.[key] !== headingId) close.current();
-    }
-    window.addEventListener('popstate', pop);
-    return () => {
-      window.removeEventListener('popstate', pop);
-      queueMicrotask(() => {
-        if (!dialog.current?.isConnected && window.history.state?.[key] === headingId) window.history.back();
-      });
-    };
-  }, [headingId]);
   return <dialog ref={dialog} className="reflection-dialog" aria-labelledby={headingId} data-testid="technique-reflection-dialog"
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>

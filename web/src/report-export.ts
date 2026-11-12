@@ -7,6 +7,12 @@ import type { RankCategory } from './sport-ranks.ts';
 import { getTargetProfile, summarize } from './target.ts';
 import { currentSeries } from './practice.ts';
 import { calculateProgress } from './progress-scoring.ts';
+import { roundRank } from './sport-ranks.ts';
+import { buildNumberedArrowAnalysis } from './numbered-arrow-analysis.ts';
+import { elapsedTrainingTime, formatTrainingTime } from './training-time.ts';
+import { groupAchievementGrants } from './achievement-ledger.ts';
+import type { AchievementGrant } from './achievement-ledger.ts';
+import type { StatisticFeature } from './statistics-visibility.ts';
 
 export const REPORT_CSV_COLUMNS = ['format', 'record_type', 'session_id', 'session_revision', 'title', 'local_date',
   'time_zone', 'time_source', 'source', 'block_id', 'block_number', 'mode', 'distance_m', 'target_profile',
@@ -56,23 +62,27 @@ export function reportCsv(entry: DiaryEntry): Uint8Array {
       end_state: entry.practice.savedAt === null && round === entry.practice.rounds.at(-1) && series === round.series.at(-1) ? 'open' : 'closed',
       planned_arrows: series.plannedCount ?? Math.max(3, series.shots.length) };
     if (!series.shots.length) emit({ ...fields, record_type: 'empty_end' });
-    series.shots.forEach((shot, index) => emit({ ...fields, record_type: 'shot', shot_id: `${series.id}:${index + 1}`,
+    series.shots.forEach((shot, index) => {
+      const position = shot.point ?? shot.missPoint;
+      emit({ ...fields, record_type: 'shot', shot_id: `${series.id}:${index + 1}`,
       input_order: index + 1, points: shot.points, zone: shot.code,
       // External FableShot coordinates are Y-up; React stores screen coordinates Y-down.
-      x: shot.point?.x, y: shot.point ? -shot.point.y : null, score_source: shot.imported ? 'imported' : 'manual',
-      position_source: shot.point ? shot.imported ? 'imported' : 'target' : null, position_status: shot.point ? 'confirmed' : 'missing',
+      x: position?.x, y: position ? -position.y : null, score_source: shot.imported ? 'imported' : 'manual',
+      position_source: position ? shot.imported && !shot.missPoint ? 'imported' : 'target' : null, position_status: position ? 'confirmed' : 'missing',
       physical_arrow_number: shot.physicalArrowNumber, source_x: shot.sourcePoint?.x, source_y: shot.sourcePoint?.y,
-      source_coordinate_system: shot.sourcePoint ? 'mytargets-raw-y-down' : null }));
+      source_coordinate_system: shot.sourcePoint ? 'mytargets-raw-y-down' : null });
+    });
     });
   });
   return new TextEncoder().encode(`\uFEFF${rows.join('\r\n')}\r\n`);
 }
 
-export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null, hundredths: boolean) {
+export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null, hundredths: boolean,
+  details: { grants?: readonly AchievementGrant[]; disabledStatistics?: readonly StatisticFeature[] } = {}) {
   const practice = entry.practice;
   const rounds = practice.rounds.flatMap((round, r) => {
     const series = round.series.flatMap((series, s) => series.shots.length ? [{ ...series, number: s + 1 }] : []);
-    return series.length ? [{ number: r + 1, series, result: summarize(series.flatMap(series => series.shots)) }] : [];
+    return series.length ? [{ number: r + 1, series, result: summarize(series.flatMap(series => series.shots)), rank: roundRank(practice, round.id, category) }] : [];
   });
   const shots = rounds.flatMap(round => round.series.flatMap(series => series.shots));
   if (!shots.length) throw new Error('Сначала отметь хотя бы одну стрелу.');
@@ -104,7 +114,15 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
   const final = rank.finalResult ? rank.evaluation : null;
   const lower = final?.result;
   const upper = final?.next;
+  const duration = entry.trainingTime ? elapsedTrainingTime(entry.trainingTime, Date.now()) : null;
+  const focus = practice.techniqueUses?.at(-1)?.selection;
   return { entryId: entry.id, startedAt: entry.startedAt, completed: practice.savedAt !== null, rounds, result, analysis,
+    title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank,
+    duration: duration === null ? null : `${formatTrainingTime(duration)}${entry.trainingTime?.partial ? ' · учтённое время' : ''}`,
+    focus: [focus?.focus1, focus?.focus2].filter((value): value is string => !!value),
+    records: entry.personalRecords ?? [], achievements: groupAchievementGrants(details.grants ?? []),
+    numberedArrows: buildNumberedArrowAnalysis(rounds.flatMap(round => round.series)),
+    disabledStatistics: details.disabledStatistics ?? [],
     average: formatAverage(result.average, hundredths),
     conditions: conditions.map(condition => [`${condition.distanceMeters} м`, `${condition.targetDiameterMm / 10} см`,
       getTargetProfile(condition.targetProfileId)?.title, condition.equipment?.name].filter(Boolean).join(' · ')),

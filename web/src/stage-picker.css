@@ -69,6 +69,11 @@
 
 .stage-picker__card--selected { background: var(--surface-variant, #263129); }
 
+.stage-picker__card--series { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 4px; border: 1px solid var(--accent); border-radius: 16px; }
+.stage-picker__card--series.stage-picker__card--selected { box-shadow: inset 3px 0 var(--accent); }
+.stage-picker__series-select { border: 0; background: transparent; min-height: 48px; }
+.stage-picker__card--series .stage-picker__trash { position: static; width: 44px; height: 44px; }
+
 .stage-picker__select {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Icon } from './TrainingChrome.tsx';
 import './settings-screen.css';
@@ -43,15 +42,6 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
   children?: ReactNode;
 }) {
   const selected = sections.find(item => item.id === section);
-  useEffect(() => {
-    function back(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || event.defaultPrevented || !section || document.querySelector('dialog[open]')) return;
-      event.preventDefault();
-      onSection(null);
-    }
-    window.addEventListener('keydown', back);
-    return () => window.removeEventListener('keydown', back);
-  }, [section, onSection]);
   const content = { appearance, motion, training, statistics, data, help, about };
   return <main className="conditions-page settings-page" data-testid="settings-screen" data-section={section ?? 'root'}>
     <header className="topbar">

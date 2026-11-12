@@ -17,7 +17,8 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await page.getByRole('button', { name: 'Мужчины', exact: true }).click();
   await page.keyboard.press('Escape');
   for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
-  await expect(page.getByTestId('rank-round')).toContainText('I');
+  await expect(page.getByTestId('rank-round')).toContainText('МСМК');
+  await expect(page.getByTestId('rank-series')).toContainText('МСМК');
   await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Отметить промах' }).click();
   await expect(page.getByTestId('rank-round')).toContainText('II');

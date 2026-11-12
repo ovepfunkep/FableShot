@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { DEFAULT_TARGET, getTargetProfile, isOnFace, scorePoint, shaftRadius } from './target.ts';
+import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius } from './target.ts';
 import type { Point, Shot, TargetSpec } from './target.ts';
 
 type Size = { width: number; height: number };
@@ -38,8 +38,16 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: num
   ctx.arc(x, y, radius, 0, Math.PI * 2);
 }
 
-function paintFace(ctx: CanvasRenderingContext2D, center: Point, radius: number, spec: TargetSpec) {
+function paintFace(ctx: CanvasRenderingContext2D, center: Point, radius: number, spec: TargetSpec, showMissRing = false) {
   const profile = getTargetProfile(spec.profileId)!;
+  if (showMissRing) {
+    circle(ctx, center.x, center.y, radius * (outerRadius(spec) + MISS_RING_WIDTH));
+    ctx.fillStyle = '#536052';
+    ctx.fill();
+    ctx.strokeStyle = '#758175';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
   for (const zone of [...profile.zones].reverse()) {
     circle(ctx, center.x, center.y, radius * zone.outerRadius);
     ctx.fillStyle = zoneColor(zone.points);
@@ -81,7 +89,7 @@ function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
     const ctx = canvas.current && canvasContext(canvas.current, 124, 112);
     if (!ctx) return;
     const radius = aim.radius * 2.5;
-    paintFace(ctx, { x: 62 - aim.point.x * radius, y: 56 - aim.point.y * radius }, radius, spec);
+    paintFace(ctx, { x: 62 - aim.point.x * radius, y: 56 - aim.point.y * radius }, radius, spec, true);
     circle(ctx, 62, 56, radius * shaftRadius(spec));
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#152016';
@@ -140,11 +148,12 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     if (!ctx) return;
     const radius = radiusOf(size) * view.zoom;
     const center = { x: size.width / 2 + view.x, y: size.height / 2 + view.y };
-    paintFace(ctx, center, radius, spec);
+    paintFace(ctx, center, radius, spec, true);
     function paintShot(shot: Shot, index: number, selected: boolean) {
-      if (!shot.point || !ctx) return;
-      const x = center.x + shot.point.x * radius;
-      const y = center.y + shot.point.y * radius;
+      const position = shot.point ?? shot.missPoint;
+      if (!position || !ctx) return;
+      const x = center.x + position.x * radius;
+      const y = center.y + position.y * radius;
       if (selected) {
         circle(ctx, x, y, 13);
         ctx.fillStyle = '#101510';
@@ -154,7 +163,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
         ctx.stroke();
       }
       circle(ctx, x, y, 9);
-      ctx.fillStyle = '#14200d';
+      ctx.fillStyle = shot.missPoint ? '#536052' : '#14200d';
       ctx.fill();
       ctx.lineWidth = selected ? 3 : 2;
       ctx.strokeStyle = selected ? '#c6f43d' : '#fff';
@@ -205,7 +214,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
   function showAim(position: Point) {
     const point = normalized(position);
     const rect = surface.current?.getBoundingClientRect();
-    setAim(rect && isOnFace(point, spec)
+    setAim(rect && isOnTargetInput(point, spec)
       ? { point, screen: { x: rect.left + position.x, y: rect.top + position.y }, radius: radiusOf(size) * viewRef.current.zoom } : null);
   }
 
@@ -223,7 +232,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     }
     track.multi = false;
     track.blocked = null;
-    if (!isOnFace(normalized(position), spec)) return;
+    if (!isOnTargetInput(normalized(position), spec)) return;
     if (!inputEnabled || panOnly) {
       if (onBlockedTap) track.blocked = { id: event.pointerId, origin: position };
       return;
@@ -266,7 +275,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     const shouldScore = commit && inputEnabled && !track.multi && track.aimId === event.pointerId;
     const point = normalized(local(event));
     const shouldSuggest = commit && !inputEnabled && !track.multi && track.blocked?.id === event.pointerId
-      && distance(local(event), track.blocked.origin) <= 8 && isOnFace(point, spec);
+      && distance(local(event), track.blocked.origin) <= 8 && isOnTargetInput(point, spec);
     track.pointers.delete(event.pointerId);
     if (track.pointers.size === 0) {
       if (track.multi) rememberZoom();
@@ -275,7 +284,8 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
       track.blocked = null;
     }
     if (shouldScore) {
-      if (isOnFace(point, spec)) onShot({ point, ...scorePoint(point, spec) });
+      const shot = markTargetPoint(point, spec);
+      if (shot) onShot(shot);
     } else if (shouldSuggest) onBlockedTap?.();
   }
 

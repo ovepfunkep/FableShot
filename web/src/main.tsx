@@ -1,5 +1,8 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
+import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
+import { useAndroidUpdates } from './android-updates.ts';
 import { createRoot } from 'react-dom/client';
+import { useAppBack } from './app-back.ts';
 import { ReportOverview } from './ReportOverview.tsx';
 import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
@@ -78,6 +81,7 @@ function initialDiary(): { diary: Diary | null; error: string } {
 }
 
 function App() {
+  const androidUpdates = useAndroidUpdates();
   const { preferences, readable: preferencesReadable, update: updatePreferences } = useTrainingPreferences();
   const [state, setState] = useState(initialDiary);
   const diaryRef = useRef(state.diary);
@@ -415,7 +419,11 @@ function App() {
 
   function mark(shot: Shot) {
     if (pendingShot) return;
-    if (editing) setEdit({ ...editing, shot: { ...editing.shot, ...shot } });
+    if (editing) {
+      const updated = { ...editing.shot, ...shot };
+      if (!shot.missPoint) delete updated.missPoint;
+      setEdit({ ...editing, shot: updated });
+    }
     else if (canAppend && update(previous => appendShot(previous, shot))) {
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
       const recorded = stored && findSeries(stored, series.id)?.series.shots[shots.length] === shot;
@@ -478,6 +486,16 @@ function App() {
     confirmDialog.current?.showModal();
   }
 
+  function leaveTraining() {
+    if (completed) setPage('report');
+    else if (hasHits) openConfirm('finish');
+    else if (writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId) }))) {
+      setSessionId(null);
+      setTab('home');
+      setPage('journal');
+    }
+  }
+
   function confirmAction() {
     if (confirm === 'discard') {
       setEdit(null);
@@ -494,43 +512,6 @@ function App() {
       setPage('report');
     }
   }
-
-  const editorBack = useRef(() => {});
-  useEffect(() => {
-    editorBack.current = () => {
-      if (dirty) openConfirm('discard');
-      else if (editing) setEdit(null);
-      else closeSeriesEditor();
-    };
-  });
-  useEffect(() => {
-    if (!seriesEditor) return;
-    const key = 'fableshotSeriesEditor';
-    function enter() {
-      if (!window.history.state?.[key]) window.history.pushState({ ...window.history.state, [key]: true }, '');
-    }
-    function pop() {
-      if (window.history.state?.[key]) return;
-      editorBack.current();
-      queueMicrotask(() => { if (document.querySelector('[data-testid="history-shot-editor"]')) enter(); });
-    }
-    function escape(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
-        event.preventDefault();
-        editorBack.current();
-      }
-    }
-    enter();
-    window.addEventListener('popstate', pop);
-    window.addEventListener('keydown', escape);
-    return () => {
-      window.removeEventListener('popstate', pop);
-      window.removeEventListener('keydown', escape);
-      queueMicrotask(() => {
-        if (!document.querySelector('[data-testid="history-shot-editor"]') && window.history.state?.[key]) window.history.back();
-      });
-    };
-  }, [seriesEditor]);
 
   function pulseNextRound() {
     if (!suggestRound || !preferences.animations || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -617,13 +598,50 @@ function App() {
 
   const firstOnboarding = page === 'journal' && tab === 'home' && state.diary !== null && entries.length === 0 &&
     preferencesReadable && !preferences.onboardingSeen && !onboardingDismissed;
-  if (firstOnboarding || onboardingRequested || tutorialRequested) {
-    function leaveOnboarding() {
-      if (preferencesReadable && !preferences.onboardingSeen) updatePreferences({ ...preferences, onboardingSeen: true });
-      setOnboardingDismissed(true);
-      setOnboardingRequested(false);
-      setTutorialRequested(false);
+  const showingOnboarding = firstOnboarding || onboardingRequested || tutorialRequested;
+  function leaveOnboarding() {
+    if (preferencesReadable && !preferences.onboardingSeen) updatePreferences({ ...preferences, onboardingSeen: true });
+    setOnboardingDismissed(true);
+    setOnboardingRequested(false);
+    setTutorialRequested(false);
+  }
+  function leaveConditions() {
+    setSetupMemo(null);
+    setPage(conditionsBack);
+  }
+  useAppBack(showingOnboarding || page !== 'journal' || tab !== 'home', () => {
+    if (showingOnboarding) { leaveOnboarding(); return; }
+    switch (page) {
+      case 'journal': setTab('home'); break;
+      case 'conditions': leaveConditions(); break;
+      case 'report': leaveReport(); break;
+      case 'editor':
+        if (dirty) openConfirm('discard');
+        else if (editing) setEdit(null);
+        else closeSeriesEditor();
+        break;
+      case 'training':
+        if (pendingShot) closeNumberPicker();
+        else if (dirty) openConfirm('discard');
+        else if (editing) setEdit(null);
+        else leaveTraining();
+        break;
+      case 'archive': setPage('settings'); break;
+      case 'statistics':
+      case 'settings':
+        if (settingsSection || page === 'statistics') {
+          setSettingsSection(null);
+          setPage('settings');
+        } else setPage('journal');
+        break;
+      case 'best-ranks': setPage(ranksBack); break;
+      case 'achievements':
+      case 'notebook':
+      case 'records': setPage('profile'); break;
+      case 'profile': setPage('journal'); break;
     }
+  });
+  if (showingOnboarding) {
     return <>{offlineLabel}<WebOnboarding initialExample={tutorialRequested} onClose={leaveOnboarding} onStart={() => {
       leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
       if (ongoing) selectEntry(ongoing, 'conditions');
@@ -635,6 +653,7 @@ function App() {
     displayName={preferences.displayName} onProfile={() => setPage('profile')}>
     {offlineLabel}
     {error}
+    {tab === 'home' && <AndroidUpdateCard updates={androidUpdates} />}
     {tab === 'home' && state.diary && <JournalHome active={!!ongoing || !!paused} paused={!ongoing && !!paused} recent={recent}
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
@@ -716,7 +735,7 @@ function App() {
         <Icon name="help" /><span>Как отмечать попадания</span><Icon name="right" />
       </button>
     </>}
-    about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} />}>
+    about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
     {rankWindow}
     {myTargetsOpen && <MyTargetsImport onClose={() => setMyTargetsOpen(false)} />}
@@ -739,7 +758,7 @@ function App() {
       initialNumbering={setup ? suggested.numberedArrows : practice.numberedArrows ?? null}
       onTimer={openTimer}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
-      onBack={() => { setSetupMemo(null); setPage(conditionsBack); }} onApply={(conditions, rule, numberedArrows) => {
+      onBack={leaveConditions} onApply={(conditions, rule, numberedArrows) => {
         if (setup) {
           return startPractice(conditions, rule, numberedArrows);
         }
@@ -805,12 +824,7 @@ function App() {
         onClick={() => {
           if (editing) openConfirm('delete');
           else if (seriesEditor) closeSeriesEditor();
-          else if (completed) setPage('report');
-          else if (hasHits) openConfirm('finish');
-          else if (writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId) }))) {
-            setSessionId(null);
-            setPage('journal');
-          }
+          else leaveTraining();
         }}>
         <Icon name={editing ? 'delete' : completed ? 'back' : 'close'} />
       </button>
