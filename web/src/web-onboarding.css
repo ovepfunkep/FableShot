@@ -1,8 +1,8 @@
 .web-onboard {
   width: min(100%, 550px);
-  min-height: 100dvh;
+  min-height: calc(100 * var(--app-vh));
   margin-inline: auto;
-  padding: calc(12px + env(safe-area-inset-top)) clamp(16px, 5vw, 28px) calc(18px + env(safe-area-inset-bottom));
+  padding: calc(12px + env(safe-area-inset-top)) clamp(16px, calc(5 * var(--app-vw)), 28px) calc(18px + env(safe-area-inset-bottom));
   display: grid;
   align-content: start;
   gap: 16px;
@@ -17,7 +17,7 @@
 .web-onboard-outline[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 .web-onboard-scene {
-  min-height: clamp(128px, 25dvh, 200px);
+  min-height: clamp(128px, calc(25 * var(--app-vh)), 200px);
   position: relative;
   overflow: hidden;
   display: grid;
@@ -28,7 +28,7 @@
 }
 .web-onboard-face {
   position: relative;
-  width: clamp(106px, 22dvh, 164px);
+  width: clamp(106px, calc(22 * var(--app-vh)), 164px);
   aspect-ratio: 1;
   border-radius: 50%;
   background: radial-gradient(circle, #f4ce44 0 10%, #6e6127 10% 10.6%, #f4ce44 10.6% 20%,
@@ -42,7 +42,7 @@
 .web-onboard-face i:nth-child(3) { top: 47%; left: 59%; }
 
 .web-onboard-copy { display: grid; gap: 6px; }
-.web-onboard-copy h1 { margin: 0; font-size: clamp(1.5rem, 6vw, 2.3rem); line-height: 1.12; text-wrap: balance; }
+.web-onboard-copy h1 { margin: 0; font-size: clamp(1.5rem, calc(6 * var(--app-vw)), 2.3rem); line-height: 1.12; text-wrap: balance; }
 .web-onboard-copy h1:focus { outline: none; }
 .web-onboard-copy p, .web-onboard-storage { margin: 0; color: var(--muted); line-height: 1.45; }
 .web-onboard-copy p { font-size: .9rem; }
@@ -54,7 +54,7 @@
 .web-onboard-example-label { min-width: 0; font-size: .78rem; font-weight: 700; color: var(--accent); }
 .web-onboard-step { font-size: .8rem; color: var(--muted); }
 .web-onboard-board { min-width: 0; }
-.web-onboard-board > .target-stage { height: clamp(220px, 40dvh, 380px); }
+.web-onboard-board > .target-stage { height: clamp(220px, calc(40 * var(--app-vh)), 380px); }
 .web-onboard-board .target-surface { box-shadow: inset 0 0 0 1px var(--edge); border-radius: 22px; background: var(--surface); }
 .web-onboard-board .zoom { top: 4px; right: 4px; }
 .web-onboard-shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }

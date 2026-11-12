@@ -27,7 +27,7 @@
 .progress-timeline-selected { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; font-size: .8rem; }
 .progress-timeline-selected > span { min-width: 0; }
 .progress-timeline-selected time, .progress-timeline-selected span small { display: block; }
-.progress-timeline-selected span small { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-top: 3px; }
+.progress-timeline-selected span small { max-width: calc(44 * var(--app-vw)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-top: 3px; }
 .progress-timeline-selected strong { flex: none; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 .progress-timeline-selected strong small { font-size: .75rem; font-weight: 400; color: var(--muted); }
 .progress-timeline :is(button, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -35,6 +35,7 @@
 .progress-filters-open { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); text-align: left; font-size: 13px; }
 .progress-filters-open > :last-child { color: var(--accent); }
 .progress-filters-open > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.progress-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .progress-filter-form { display: grid; gap: 12px; }
 .progress-filter-form > label, .progress-filter-dates label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
 .progress-filter-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

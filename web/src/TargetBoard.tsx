@@ -85,10 +85,11 @@ export function TargetPreview({ profileId }: { profileId: string }) {
 function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const hit = scorePoint(aim.point, spec);
+  const scale = Number(document.documentElement.style.getPropertyValue('--app-scale')) || 1;
   useLayoutEffect(() => {
     const ctx = canvas.current && canvasContext(canvas.current, 124, 112);
     if (!ctx) return;
-    const radius = aim.radius * 2.5;
+    const radius = aim.radius * 2.5 / scale;
     paintFace(ctx, { x: 62 - aim.point.x * radius, y: 56 - aim.point.y * radius }, radius, spec, true);
     circle(ctx, 62, 56, radius * shaftRadius(spec));
     ctx.lineWidth = 3;
@@ -97,9 +98,9 @@ function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
     ctx.lineWidth = 1.3;
     ctx.strokeStyle = '#fff';
     ctx.stroke();
-  }, [aim, spec]);
-  const left = clamp(aim.screen.x - 62, 8, Math.max(8, window.innerWidth - 132));
-  const top = Math.max(8, aim.screen.y - 176);
+  }, [aim, scale, spec]);
+  const left = clamp(aim.screen.x / scale - 62, 8, Math.max(8, window.innerWidth / scale - 132));
+  const top = Math.max(8, aim.screen.y / scale - 176);
   const color = zoneColor(hit.points);
   const foreground = hit.points >= 3 && hit.points <= 4 ? '#fff' : '#101510';
   const inner = hit.code === 'X' || hit.points > 0 && hit.points % 2 === 0;

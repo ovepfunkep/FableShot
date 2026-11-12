@@ -12,7 +12,7 @@
 .practice-timer-face { display: grid; justify-items: center; gap: 6px; padding: 14px 0; border-radius: 18px; background: var(--timer-surface, var(--raised)); color: var(--timer-tone, inherit); }
 .practice-timer-sheet {
   position: fixed; inset: auto 0 0; margin: 0 auto; width: min(100%, 550px); max-width: none;
-  max-height: calc(100dvh - 12px); padding: 0; border: 0; overflow: auto;
+  max-height: calc(calc(100 * var(--app-vh)) - 12px); padding: 0; border: 0; overflow: auto;
   border-radius: 28px 28px 0 0; background: var(--surface); color: inherit;
 }
 .practice-timer-sheet::backdrop, .practice-timer-confirm::backdrop { background: rgb(0 0 0 / 42%); }

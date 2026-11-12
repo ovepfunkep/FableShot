@@ -16,6 +16,8 @@ export const TIMELINE_METRICS = [
   { key: 'average', feature: 'average', label: 'Средний балл', unit: '/ 10' },
   { key: 'rms', feature: 'grouping', label: 'Кучность RMS', unit: 'мм' },
   { key: 'tenShare', feature: 'zone_trend', label: 'Доля десяток', unit: '%' },
+  { key: 'xShare', feature: 'zone_trend', label: 'Доля X', unit: '%' },
+  { key: 'missShare', feature: 'zone_trend', label: 'Доля промахов', unit: '%' },
   { key: 'cg3', feature: 'general_score', label: 'Общие очки CG3', unit: '%' },
 ] as const;
 export type TimelineMetric = typeof TIMELINE_METRICS[number]['key'];
@@ -89,9 +91,13 @@ function measurements(series: readonly Series[]): Pick<TimelinePoint, 'values' |
   const geometry = measured && measured.rmsMm !== null ? { rmsMm: measured.rmsMm, shiftMm: measured.shiftMm, known: measured.known } : null;
   const ends = series.map((item, index) => ({ id: item.id, number: index + 1, plannedCount: item.plannedCount ?? Math.max(3, item.shots.length), closed: true, shots: item.shots }));
   const composite = calculateCompositeScore(ends, ends.length, profile ? Math.max(...profile.zones.map(zone => zone.points)) : null, verifiedTarget);
+  const share = (matches: (shot: Series['shots'][number]) => boolean) =>
+    shots.length ? 100 * shots.filter(matches).length / shots.length : null;
+  const xKnown = shots.some(shot => shot.code === 'X') || (verifiedTarget && profile.zones.some(zone => zone.code === 'X'));
   return { arrows: shots.length, geometry, values: {
     average: shots.length ? shots.reduce((sum, shot) => sum + shot.points, 0) / shots.length : null,
-    rms: geometry?.rmsMm ?? null, tenShare: shots.length ? 100 * shots.filter(shot => shot.points === 10).length / shots.length : null,
+    rms: geometry?.rmsMm ?? null, tenShare: share(shot => shot.points === 10),
+    xShare: xKnown ? share(shot => shot.code === 'X') : null, missShare: share(shot => shot.points === 0),
     cg3: composite.availability === 'available' ? composite.total ?? null : null,
   } };
 }
@@ -149,7 +155,7 @@ export function timelineViewport(points: readonly TimelinePoint[], requestedEnd?
 }
 export function timelineCeiling(points: readonly TimelinePoint[], metric: TimelineMetric): number {
   if (metric === 'average') return 10;
-  if (metric === 'tenShare') return 100;
+  if (metric === 'tenShare' || metric === 'xShare' || metric === 'missShare') return 100;
   if (metric === 'cg3') return 105;
   return Math.max(10, Math.ceil(points.reduce((maximum, point) => Math.max(maximum, point.values.rms ?? 0), 0) / 10) * 10);
 }

@@ -3,9 +3,11 @@ package app.fableshot.android.webpilot;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.view.HapticFeedbackConstants;
 import android.view.WindowManager;
 import androidx.activity.OnBackPressedCallback;
@@ -23,7 +25,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidUpdatesPlugin.class);
         registerPlugin(PracticeTimerSoundPlugin.class);
         registerPlugin(TrainingWindowPlugin.class);
+        registerPlugin(AppScalePlugin.class);
         super.onCreate(savedInstanceState);
+        if (getBridge() != null) getBridge().getWebView().getSettings().setTextZoom(100);
         showTrainingWhenLocked(this, false);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             private boolean awaitingResponse;
@@ -99,6 +103,28 @@ public class MainActivity extends BridgeActivity {
                     call.reject("Не удалось открыть загрузку APK.", "DOWNLOAD_UNAVAILABLE", error);
                 }
             });
+        }
+    }
+
+    @CapacitorPlugin(name = "AppScale")
+    public static class AppScalePlugin extends Plugin {
+        @PluginMethod
+        public void apply(PluginCall call) {
+            boolean followSystem = Boolean.TRUE.equals(call.getBoolean("followSystem"));
+            getActivity().runOnUiThread(() -> {
+                Configuration config = getActivity().getResources().getConfiguration();
+                int density = config.densityDpi;
+                int stableDensity = DisplayMetrics.DENSITY_DEVICE_STABLE;
+                int textZoom = followSystem && config.fontScale > 0f ? Math.round(config.fontScale * 100) : 100;
+                getBridge().getWebView().getSettings().setTextZoom(textZoom);
+                double layoutZoom = followSystem || density <= 0 || stableDensity <= 0 ? 1 : (double) stableDensity / density;
+                call.resolve(new JSObject().put("layoutZoom", layoutZoom));
+            });
+        }
+
+        @Override
+        protected void handleOnConfigurationChanged(Configuration config) {
+            notifyListeners("configurationChanged", new JSObject());
         }
     }
 

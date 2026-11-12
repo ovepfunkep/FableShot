@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { pendingWebReleases } from './web-releases.ts';
 
 const repository = 'ovepfunkep/FableShot';
 const downloadRoot = `https://github.com/${repository}/releases/download/`;
@@ -9,15 +10,15 @@ const bridge = registerPlugin<{
   openDownload(options: { url: string }): Promise<void>;
 }>('AndroidUpdates');
 
-type Update = { version: string; code: number; notes: string; url: string };
+export type AndroidUpdate = { version: string; code: number; notes: string; url: string };
 type Release = { tag_name?: unknown; draft?: unknown; prerelease?: unknown; body?: unknown; assets?: unknown };
 
-export function readAndroidUpdate(value: unknown, installed: number): Update | null {
+export function readAndroidUpdate(value: unknown, installed: number): AndroidUpdate | null {
   if (!value || typeof value !== 'object') return null;
   const release = value as Release;
   if (release.draft !== false || release.prerelease !== false || typeof release.tag_name !== 'string' ||
       !/^v\d+\.\d+\.\d+$/.test(release.tag_name) || !Array.isArray(release.assets)) return null;
-  let latest: Update | null = null;
+  let latest: AndroidUpdate | null = null;
   for (const asset of release.assets) {
     if (!asset || typeof asset.name !== 'string' || asset.state !== 'uploaded') continue;
     const match = /^FableShot-android-([1-9]\d*)\.apk$/.exec(asset.name);
@@ -30,13 +31,34 @@ export function readAndroidUpdate(value: unknown, installed: number): Update | n
   return latest;
 }
 
+export async function fetchAndroidUpdateHistory(version: string, signal: AbortSignal): Promise<unknown> {
+  const url = `https://api.github.com/repos/${repository}/contents/web/src/web-release-history.json?ref=v${version}`;
+  const response = await fetch(url, { headers: { Accept: 'application/vnd.github.raw+json' }, signal });
+  if (!response.ok) throw new Error('История обновлений недоступна.');
+  return response.json();
+}
+
+export function androidUpdateNotes(installed: number, update: AndroidUpdate, history?: unknown) {
+  const changes = new Map(pendingWebReleases(installed, update.code).map(release => [release.code, release.highlights]));
+  if (Array.isArray(history)) {
+    for (const entry of history) {
+      if (!entry || !Number.isSafeInteger(entry.code) || entry.code <= installed || entry.code > update.code ||
+        !Array.isArray(entry.highlights) || !entry.highlights.length ||
+        !entry.highlights.every((text: unknown) => typeof text === 'string' && text.trim().length > 0)) continue;
+      changes.set(entry.code, entry.highlights);
+    }
+  }
+  const highlights = [...new Set([...changes].sort(([left], [right]) => right - left).flatMap(([, items]) => items))];
+  return { highlights, fallback: !changes.has(update.code) && !Array.isArray(history) ? update.notes : '' };
+}
+
 export function useAndroidUpdates(homeActive: boolean) {
   const [installed, setInstalled] = useState<number | null>(null);
-  const [update, setUpdate] = useState<Update | null>(null);
+  const [update, setUpdate] = useState<AndroidUpdate | null>(null);
   const [status, setStatus] = useState('');
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState(0);
-  const pending = useRef<Promise<Update | null> | null>(null);
+  const pending = useRef<Promise<AndroidUpdate | null> | null>(null);
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== 'android' || !Capacitor.isPluginAvailable('AndroidUpdates')) return;
@@ -88,6 +110,6 @@ export function useAndroidUpdates(homeActive: boolean) {
     catch { return false; }
   }
 
-  return { available: installed !== null, update, status, checking, check: () => void check(true), download,
+  return { available: installed !== null, installed, update, status, checking, check: () => void check(true), download,
     announce: !!update && update.code !== dismissed, dismiss: () => setDismissed(update?.code ?? 0) };
 }

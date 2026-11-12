@@ -345,6 +345,7 @@ function mappedSettings(preferences: NativeArchiveRow, theme: ThemePreferences, 
     ['hide_current_scores_v1', 'hideScores'], ['average_hundredths_v1', 'averageHundredths'],
     ['animationsEnabled', 'animations'], ['hapticsEnabled', 'haptics'], ['keepScreenAwake', 'keepAwake'],
     ['training_on_lock_screen_v1', 'trainingOnLockScreen'], ['show_achievements_v1', 'showAchievementNotices'],
+    ['use_system_scale_v1', 'useSystemScale'],
   ] as const) read(source, 'boolean', value => {
     if (typeof value !== 'boolean') return false;
     result.training[target] = value;

@@ -3,6 +3,16 @@ import type { ReportSnapshot } from './report-export.ts';
 export type ReportFormat = 'png' | 'pdf';
 export type PreparedReport = { files: File[]; previews: string[] };
 
+export async function loadReportFonts() {
+  async function font(weight: string) {
+    const response = await fetch(new URL(`fonts/manrope-pdf-${weight}.ttf`, document.baseURI));
+    if (!response.ok) throw new Error('Не удалось загрузить шрифт PDF.');
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  const [regular, bold] = await Promise.all([font('regular'), font('bold')]);
+  return { regular, bold };
+}
+
 /** Owned by one statistics screen. Closing its sheet keeps the immutable files. */
 export function createReportShareSession(snapshot: ReportSnapshot) {
   const name = `FableShot-${/^\d{4}-\d{2}-\d{2}/.exec(snapshot.startedAt)?.[0] ?? 'training'}`;
@@ -23,13 +33,7 @@ export function createReportShareSession(snapshot: ReportSnapshot) {
       files = pages.map((bytes, index) => new File([new Uint8Array(bytes)], `${name}-${index + 1}.png`, { type: 'image/png' }));
     } else {
       const { createReportPdf } = await import('./report-pdf.ts');
-      async function font(weight: string) {
-        const response = await fetch(new URL(`fonts/manrope-pdf-${weight}.ttf`, document.baseURI));
-        if (!response.ok) throw new Error('Не удалось загрузить шрифт PDF.');
-        return new Uint8Array(await response.arrayBuffer());
-      }
-      const [regular, bold] = await Promise.all([font('regular'), font('bold')]);
-      const bytes = await createReportPdf(snapshot, { regular, bold });
+      const bytes = await createReportPdf(snapshot, await loadReportFonts());
       files = [new File([new Uint8Array(bytes)], `${name}.pdf`, { type: 'application/pdf' })];
     }
     if (disposed) throw new DOMException('Экран статистики закрыт.', 'AbortError');

@@ -19,6 +19,7 @@ const paths = {
   back: 'M19 12H5m6-6-6 6 6 6',
   undo: 'M9 6l-5 5 5 5M4 11h10a5 5 0 0 1 5 5v2',
   delete: 'M4 6h16M9 6V3h6v3m3 0-1 15H7L6 6m4 4v7m4-7v7',
+  download: 'M12 3v12m-5-5 5 5 5-5M4 15v6h16v-6',
   stats: 'M3 3v18h18M6 16l5-6 4 3 6-8',
   left: 'm14 6-6 6 6 6',
   right: 'm10 6 6 6-6 6',
@@ -66,13 +67,14 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
 }
 
 export function TrainingFooter({ shots, previousVolume, selected, entering, mainText, mainEnabled, mainRef,
-  missEnabled, undoEnabled, onPick, onMain, onMiss, onUndo, timerBadge, arrowNumberChoice, status }: {
+  missEnabled, undoEnabled, onPick, onMain, onMiss, onUndo, timerBadge, arrowNumberChoice, status, arrowPanelRef }: {
   shots: readonly Shot[]; previousVolume: number; selected: number | null; entering: number | null;
   mainText: string; mainEnabled: boolean; mainRef: Ref<HTMLButtonElement>; missEnabled: boolean; undoEnabled: boolean;
   onPick: (index: number) => void; onMain: () => void; onMiss: () => void; onUndo: () => void;
   timerBadge?: ReactNode;
   arrowNumberChoice?: ReactNode;
   status?: string;
+  arrowPanelRef?: Ref<HTMLDivElement>;
 }) {
   const { preferences } = useTrainingPreferences();
   const strip = useRef<HTMLDivElement>(null);
@@ -108,7 +110,7 @@ export function TrainingFooter({ shots, previousVolume, selected, entering, main
     </div>}
     <div className="training-hit-strip">
       <div className="training-timer-slot">{timerBadge}</div>
-      <div className="arrow-panel" data-testid="arrow-panel">
+      <div className="arrow-panel" data-testid="arrow-panel" ref={arrowPanelRef}>
         <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
           {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
             aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>

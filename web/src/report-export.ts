@@ -29,8 +29,13 @@ export function reportCsvCell(value: unknown): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-export function reportCsv(entry: DiaryEntry): Uint8Array {
+export function reportCsv(entry: DiaryEntry | readonly DiaryEntry[]): Uint8Array {
   const rows = [REPORT_CSV_COLUMNS.map(reportCsvCell).join(';')];
+  for (const session of 'id' in entry ? [entry] : entry) appendCsvRows(session, rows);
+  return new TextEncoder().encode(`\uFEFF${rows.join('\r\n')}\r\n`);
+}
+
+function appendCsvRows(entry: DiaryEntry, rows: string[]) {
   const date = new Date(entry.startedAt);
   const knownDate = Number.isFinite(date.getTime());
   const localDate = knownDate ? [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-') : null;
@@ -74,7 +79,6 @@ export function reportCsv(entry: DiaryEntry): Uint8Array {
     });
     });
   });
-  return new TextEncoder().encode(`\uFEFF${rows.join('\r\n')}\r\n`);
 }
 
 export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null, hundredths: boolean,

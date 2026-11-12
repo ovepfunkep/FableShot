@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Android rechecks when Home becomes active and opens release notes or the APK only on request', async ({ page }) => {
-  const url = 'https://github.com/ovepfunkep/FableShot/releases/download/v0.27.0/FableShot-android-40.apk';
+  const url = 'https://github.com/ovepfunkep/FableShot/releases/download/v0.30.0/FableShot-android-45.apk';
   await page.addInitScript(() => {
     Object.assign(window, {
       androidBridge: {},
@@ -10,27 +10,43 @@ test('Android rechecks when Home becomes active and opens release notes or the A
           { name: 'installedVersion', rtype: 'promise' }, { name: 'openDownload', rtype: 'promise' },
         ] }],
         nativePromise: async (_plugin: string, method: string, data: { url?: string }) => {
-          if (method === 'installedVersion') return { production: true, code: 33 };
+          if (method === 'installedVersion') return { production: true, code: 35 };
           sessionStorage.setItem('opened-apk', data.url ?? '');
         },
       },
     });
   });
   let checks = 0;
+  let historyRequests = 0;
   await page.route('https://api.github.com/repos/ovepfunkep/FableShot/releases/latest', async route => {
     checks++;
     await route.fulfill({ json: {
-      tag_name: 'v0.27.0', draft: false, prerelease: false, body: 'Новый отчёт',
-      assets: [{ name: 'FableShot-android-40.apk', state: 'uploaded', browser_download_url: url }],
+      tag_name: 'v0.30.0', draft: false, prerelease: false, body: 'Текст одного релиза',
+      assets: [{ name: 'FableShot-android-45.apk', state: 'uploaded', browser_download_url: url }],
     } });
+  });
+  await page.route('https://api.github.com/repos/ovepfunkep/FableShot/contents/web/src/web-release-history.json?ref=v0.30.0', async route => {
+    historyRequests++;
+    await route.fulfill({ json: [
+      { code: 45, highlights: ['Новый отчёт'] },
+      { code: 44, highlights: ['Возможность из пропущенного выпуска'] },
+      { code: 35, highlights: ['Изменение уже установленной версии'] },
+    ] });
   });
   await page.goto('./');
   const card = page.getByTestId('android-update');
   await expect(card).toContainText('Доступно обновление!');
   await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
   expect(checks).toBe(1);
+  expect(historyRequests).toBe(0);
   await card.getByRole('button', { name: 'Что нового?' }).click();
-  await expect(page.getByRole('dialog', { name: 'Что нового в FableShot 0.27.0' })).toContainText('Новый отчёт');
+  const details = page.getByRole('dialog', { name: 'Что нового в FableShot 0.30.0' });
+  await expect(details).toContainText('Новый отчёт');
+  await expect(details).toContainText('Возможность из пропущенного выпуска');
+  await expect(details).toContainText('Таймер различает серию и отдых');
+  await expect(details).not.toContainText('Изменение уже установленной версии');
+  await expect(details).not.toContainText('Текст одного релиза');
+  expect(historyRequests).toBe(1);
   await page.keyboard.press('Escape');
   await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('opened-apk'))).toBeNull();

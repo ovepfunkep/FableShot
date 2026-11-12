@@ -18,8 +18,9 @@ type StagePickerProps = {
   seriesId: number;
   onChoose: (seriesId: number) => void;
   onClose: () => void;
-  onNewRound: () => void;
-  onDelete: (id: number) => void;
+  onNewRound?: () => boolean;
+  onDelete: (id: number) => boolean;
+  keepOneShot?: boolean;
 };
 
 type Entry = {
@@ -67,7 +68,7 @@ function stageEntries(kind: PickerKind, practice: Practice, roundId: number, ser
   }));
 }
 
-export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClose, onNewRound, onDelete }: StagePickerProps) {
+export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClose, onNewRound, onDelete, keepOneShot }: StagePickerProps) {
   const { preferences } = useTrainingPreferences();
   const titleId = useId();
   const confirmTitleId = useId();
@@ -79,6 +80,7 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
   const entries = stageEntries(kind, practice, roundId, seriesId);
   const canStartRound = (currentSeries(practice)?.round.series ?? []).some(series => series.shots.length > 0);
   const roundNumber = practice.rounds.findIndex(round => round.id === roundId) + 1;
+  const totalShots = keepOneShot ? practice.rounds.reduce((sum, round) => sum + roundShots(round).length, 0) : 0;
 
   useLayoutEffect(() => openModal(sheet.current), []);
   useLayoutEffect(() => openModal(confirm.current), [confirmation]);
@@ -97,9 +99,9 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
 
   function finishConfirmation() {
     if (!confirmation) return;
-    if (confirmation.type === 'new-round') onNewRound();
-    else onDelete(confirmation.entry.id);
-    onClose();
+    const saved = confirmation.type === 'new-round' ? onNewRound?.() : onDelete(confirmation.entry.id);
+    if (saved) onClose();
+    else setConfirmation(null);
   }
 
   const confirmEntry = confirmation?.type === 'delete' ? confirmation.entry : null;
@@ -132,7 +134,7 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
               <button type="button" className={isRound ? 'stage-picker__select' : 'report-series stage-picker__series-select'}
                 data-testid={`training-select-${kind}-${entry.number}`}
                 aria-label={label} aria-pressed={entry.selected}
-                onClick={() => { onChoose(entry.seriesId); onClose(); }}>
+                onClick={() => onChoose(entry.seriesId)}>
                 {!isRound ? <SeriesResult number={entry.number} shots={entry.shots}
                   summary={preferences.hideScores ? '' : `${result.points}/${result.maximum} · ${average}`}
                   totalTestId={`training-series-result-${entry.number}`} showHits={!preferences.hideScores} /> : <><span className="stage-picker__headline">
@@ -151,13 +153,15 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
               </button>
               <button type="button" className="stage-picker__trash" aria-label={deleteLabel}
                 data-testid={`remove-${kind}-${entry.number}`}
+                disabled={keepOneShot && entry.shots.length === totalShots}
+                title={keepOneShot && entry.shots.length === totalShots ? 'В тренировке должно остаться попадание' : undefined}
                 onClick={() => setConfirmation({ type: 'delete', entry })}>
                 <span className="stage-picker__bin" aria-hidden="true" />
               </button>
             </li>;
           })}
         </ul>
-        {isRound && practice.savedAt === null && <div className="stage-picker__footer">
+        {isRound && onNewRound && practice.savedAt === null && <div className="stage-picker__footer">
           <button type="button" className="primary stage-picker__new" data-testid="start-new-round"
             disabled={!canStartRound} onClick={() => setConfirmation({ type: 'new-round' })}>
             Начать новый раунд <span aria-hidden="true">+</span>

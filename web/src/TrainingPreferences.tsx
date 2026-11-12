@@ -5,6 +5,7 @@ import type { TrainingPreferences } from './preferences.ts';
 import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
 import { setTrainingWindowActive } from './native-training-window.ts';
+import { supportsAppScale, useNativeAppScale } from './native-app-scale.ts';
 import './training-preferences.css';
 
 type PreferencesState = { preferences: TrainingPreferences; error: string; readable: boolean; update: (value: TrainingPreferences) => boolean };
@@ -19,6 +20,7 @@ export function TrainingPreferencesProvider({ children }: { children: ReactNode 
   const [state, setState] = useState(initialPreferences);
   const preferences = state.value ?? DEFAULT_PREFERENCES;
   useWebTheme(preferences);
+  useNativeAppScale(preferences.useSystemScale === true);
   useLayoutEffect(() => {
     document.documentElement.dataset.motion = preferences.animations ? 'on' : 'off';
   }, [preferences.animations]);
@@ -43,6 +45,7 @@ const switches = [
   { key: 'haptics', title: 'Вибрация', tag: 'setting-haptics', hint: 'Короткий отклик после записи выстрела и по окончании таймера. Доступность зависит от устройства.' },
   { key: 'keepAwake', title: 'Не гасить экран', tag: 'setting-keep-awake', hint: 'Поддерживает экран включённым во время активной тренировки. Энергосбережение и ручная блокировка управляются телефоном.' },
   { key: 'trainingOnLockScreen', title: 'Тренировка на экране блокировки', tag: 'setting-training-lock-screen', hint: 'После ручной блокировки можно вернуться к активной тренировке без отпечатка. Остальные приложения остаются защищены блокировкой телефона. Работает только в Android-приложении.' },
+  { key: 'useSystemScale', title: 'Системный масштаб', tag: 'setting-system-scale', hint: 'Учитывает размер текста и интерфейса Android. При большом масштабе на экране помещается меньше данных.' },
 ] as const;
 
 export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof switches)[number]['key'][] } = {}) {
@@ -50,15 +53,19 @@ export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof s
   const [help, setHelp] = useState<(typeof switches)[number] | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => { if (help) dialog.current?.showModal(); }, [help]);
-  return <section className="training-preferences" aria-label="Отображение тренировки">
+  return <section className="training-preferences" aria-label="Параметры отображения">
     {switches.filter(item => (!keys || keys.includes(item.key)) &&
-      (item.key !== 'trainingOnLockScreen' || Capacitor.getPlatform() === 'android')).map(item => <div key={item.key} className="preference-row">
-      <span className="preference-title">{item.title}
-        <span className="preference-help-anchor">{'\u00a0'}<button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button></span>
-      </span>
-      <button type="button" role="switch" className="preference-switch" aria-label={item.title} aria-checked={preferences[item.key] ?? true}
-        data-testid={item.tag} disabled={!!error} onClick={() => update({ ...preferences, [item.key]: !(preferences[item.key] ?? true) })}><span /></button>
-    </div>)}
+      (item.key !== 'trainingOnLockScreen' || Capacitor.getPlatform() === 'android') &&
+      (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale()))).map(item => {
+      const checked = preferences[item.key] ?? (item.key !== 'useSystemScale');
+      return <div key={item.key} className="preference-row">
+        <span className="preference-title">{item.title}
+          <span className="preference-help-anchor">{'\u00a0'}<button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button></span>
+        </span>
+        <button type="button" role="switch" className="preference-switch" aria-label={item.title} aria-checked={checked}
+          data-testid={item.tag} disabled={!!error} onClick={() => update({ ...preferences, [item.key]: !checked })}><span /></button>
+      </div>;
+    })}
     {error && <p className="preferences-error" role="alert">{error}</p>}
     {help && <dialog ref={dialog} className="preferences-help-dialog" aria-label={help.title}
       onCancel={event => { event.preventDefault(); setHelp(null); }} onClick={event => { if (event.target === event.currentTarget) setHelp(null); }}>

@@ -1,7 +1,31 @@
-import { useState } from 'react';
-import type { useAndroidUpdates } from './android-updates.ts';
+import { useEffect, useState } from 'react';
+import { androidUpdateNotes, fetchAndroidUpdateHistory } from './android-updates.ts';
+import type { AndroidUpdate, useAndroidUpdates } from './android-updates.ts';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import './about-screen.css';
+
+function AndroidUpdateDetails({ installed, update, onClose }: { installed: number; update: AndroidUpdate; onClose: () => void }) {
+  const [history, setHistory] = useState<unknown>(undefined);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const request = new AbortController();
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(8000)]);
+    void fetchAndroidUpdateHistory(update.version, signal)
+      .then(value => { if (!request.signal.aborted) setHistory(value); })
+      .catch(() => { /* The built-in history and release summary are still available. */ })
+      .finally(() => { if (!request.signal.aborted) setLoading(false); });
+    return () => request.abort();
+  }, [update.version]);
+  const { highlights, fallback } = androidUpdateNotes(installed, update, history);
+  return <BottomSheet title={`Что нового в FableShot ${update.version}`} onClose={onClose}>
+    {highlights.length > 0 && <ul className="web-release-highlights">{highlights.map(text => <li key={text}>{text}</li>)}</ul>}
+    {loading && <p role="status" className="android-update-notes">Загружаю список изменений…</p>}
+    {!loading && fallback && <p className="android-update-notes">{fallback}</p>}
+    {!loading && !highlights.length && !fallback && <p className="android-update-notes">
+      {Array.isArray(history) ? 'За этот период нет крупных изменений.' : 'Список изменений пока недоступен.'}
+    </p>}
+  </BottomSheet>;
+}
 
 export function AndroidUpdateCard({ updates, manual = false }: { updates: ReturnType<typeof useAndroidUpdates>; manual?: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -15,9 +39,8 @@ export function AndroidUpdateCard({ updates, manual = false }: { updates: Return
         <button type="button" onClick={async () => setDownloadError(!await updates.download())}>Скачать APK</button>
         {!manual && <button type="button" className="android-update-dismiss" onClick={updates.dismiss}>Позже</button>}
       </div>
-      {detailsOpen && <BottomSheet title={`Что нового в FableShot ${updates.update.version}`} onClose={() => setDetailsOpen(false)}>
-        <p className="android-update-notes">{updates.update.notes || 'Для этой версии список изменений пока недоступен.'}</p>
-      </BottomSheet>}
+      {detailsOpen && updates.installed !== null && <AndroidUpdateDetails key={updates.update.code}
+        installed={updates.installed} update={updates.update} onClose={() => setDetailsOpen(false)} />}
     </>}
     {manual && <button type="button" className="technique-condition-link" disabled={updates.checking} onClick={updates.check}>Проверить обновления</button>}
     {manual && updates.status && <small role="status">{updates.status}</small>}

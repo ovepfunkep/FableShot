@@ -11,13 +11,13 @@
 .reflection-memo, .reflection-edit { min-height: 44px; padding: 6px 0; border: 0; background: none; color: var(--accent); font-size: 14px; line-height: 20px; text-align: left; overflow-wrap: anywhere; }
 .reflection-content { margin: 0; font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reflection-rating { font-size: 12px; line-height: 18px; color: var(--muted); }
-.reflection-dialog { width: min(420px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 28px; background: var(--surface); color: inherit; overflow: auto; }
+.reflection-dialog { width: min(420px, calc(100% - 32px)); max-height: calc(calc(100 * var(--app-vh)) - 32px); padding: 0; border: 0; border-radius: 28px; background: var(--surface); color: inherit; overflow: auto; }
 .reflection-dialog::backdrop { background: #0008; }
 .reflection-form { display: flex; flex-direction: column; gap: 20px; padding: 24px; }
 .reflection-form h2 { margin: 0; font-size: 22px; line-height: 28px; }
 .reflection-field { position: relative; display: block; padding: 14px 12px 8px; border: 1px solid var(--edge); border-radius: 4px; min-width: 0; }
 .reflection-field > span { position: absolute; top: -9px; left: 8px; padding: 0 4px; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 18px; }
-.reflection-field textarea { display: block; width: 100%; min-height: 72px; max-height: 32dvh; padding: 0; border: 0; outline: 0; background: none; color: inherit; font: inherit; font-size: 16px; line-height: 24px; resize: vertical; user-select: text; }
+.reflection-field textarea { display: block; width: 100%; min-height: 72px; max-height: calc(32 * var(--app-vh)); padding: 0; border: 0; outline: 0; background: none; color: inherit; font: inherit; font-size: 16px; line-height: 24px; resize: vertical; user-select: text; }
 .reflection-field:focus-within { border-color: var(--accent); }
 .reflection-ratings { display: flex; flex-wrap: wrap; gap: 8px; }
 .reflection-ratings button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 8px; background: none; font-size: 13px; line-height: 20px; }

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { currentSeries, roundShots } from './practice.ts';
+import { currentSeries, findSeries, roundShots } from './practice.ts';
+import { StagePicker } from './StagePicker.tsx';
 import type { Practice } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { getTargetProfile, summarize } from './target.ts';
@@ -60,7 +61,7 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage }: {
   practice: Practice;
   entries: readonly DiaryEntry[];
   entryId: string | null;
@@ -79,6 +80,8 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onAchievement: (id: 'APP04') => void;
   onOpenRecordSession: (id: string) => void;
   onPause: () => void;
+  onRepeat?: () => void;
+  onDeleteStage: (kind: 'round' | 'series', id: number) => boolean;
 }) {
   const { preferences, update } = useTrainingPreferences();
   const [exportOpen, setExportOpen] = useState(false);
@@ -88,6 +91,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   const deleted = !!entry?.deletedAt;
   const [trashOpen, setTrashOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [structure, setStructure] = useState<'rounds' | number | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [renameError, setRenameError] = useState(false);
   const menu = useRef<HTMLDialogElement>(null);
@@ -104,7 +108,8 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   for (const round of practice.rounds) for (const series of round.series) {
     if (series.shots.length) uniqueConditions.set(JSON.stringify(series.conditions), series.conditions);
   }
-  const currentConditions = currentSeries(practice)?.series.conditions;
+  const current = currentSeries(practice);
+  const currentConditions = current?.series.conditions;
   if (!uniqueConditions.size && currentConditions) uniqueConditions.set(JSON.stringify(currentConditions), currentConditions);
   const canResume = !!entry && !!(practice.savedAt || entry.paused) && !deleted;
 
@@ -171,11 +176,27 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         <button type="button" data-testid="report-conditions-open" disabled={!uniqueConditions.size}
           onClick={() => { setMenuOpen(false); setConditionsOpen(true); }}>Условия тренировки</button>
         {(!deleted || !!entry.notes?.length) && <button type="button" onClick={() => { setMenuOpen(false); onNotes({}); }}>Заметки тренировки</button>}
+        {onRepeat && <button type="button" data-testid="session-repeat" onClick={() => { setMenuOpen(false); onRepeat(); }}>Повторить тренировку</button>}
+        {!deleted && hasShots && <button type="button" data-testid="session-rounds"
+          onClick={() => { setMenuOpen(false); setStructure('rounds'); }}>Раунды и серии</button>}
         {!deleted && <button type="button" className="report-menu-delete" disabled={!canResume}
           title={canResume ? undefined : 'Сначала заверши или приостанови тренировку'}
           onClick={() => { setMenuOpen(false); setTrashOpen(true); }}>Удалить тренировку</button>}
       </div>
     </dialog>}
+    {structure !== null && current && <StagePicker key={structure} kind={structure === 'rounds' ? 'round' : 'series'}
+      practice={practice} roundId={structure === 'rounds' ? current.round.id : structure} seriesId={-1} keepOneShot={practice.savedAt !== null}
+      onClose={() => setStructure(structure === 'rounds' ? null : 'rounds')}
+      onChoose={id => {
+        if (structure === 'rounds') {
+          const chosen = findSeries(practice, id);
+          if (chosen) setStructure(chosen.round.id);
+        } else {
+          setStructure(null);
+          onSelectSeries(id);
+        }
+      }}
+      onDelete={id => onDeleteStage(structure === 'rounds' ? 'round' : 'series', id)} />}
     {renameOpen && <dialog ref={rename} className="confirm report-rename" aria-labelledby="report-rename-title"
       onCancel={event => { event.preventDefault(); setRenameDraft(null); }}
       onClick={event => { if (event.target === event.currentTarget) setRenameDraft(null); }}>

@@ -67,7 +67,7 @@ function ArrowComparison({ group }: { group: NumberedArrowGroup }) {
   </>;
 }
 
-export function NumberedArrowAnalysis({ series }: { series: readonly NumberedArrowSeries[] }) {
+export function NumberedArrowAnalysis({ series, showEmpty = false }: { series: readonly NumberedArrowSeries[]; showEmpty?: boolean }) {
   const { preferences } = useTrainingPreferences();
   const [requestedKey, setRequestedKey] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
@@ -75,7 +75,7 @@ export function NumberedArrowAnalysis({ series }: { series: readonly NumberedArr
   const enabled = statisticVisible(preferences, 'numbered_arrows');
   const groups = useMemo(() => enabled ? buildNumberedArrowAnalysis(series) : [], [series, enabled]);
   const selected = groups.find(group => group.key === requestedKey) ?? groups[0];
-  if (!selected) return null;
+  if (!selected) return showEmpty ? <p className="numbered-arrow-empty">У этого набора пока нет попаданий с номерами стрел.</p> : null;
 
   return <section className="numbered-arrow-analysis" aria-labelledby={titleId} data-testid="numbered-arrow-analysis">
     <header>

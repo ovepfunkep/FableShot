@@ -15,14 +15,14 @@ export async function shareReport(files: readonly File[]): Promise<'shared' | 'd
     }
     if (Capacitor.isNativePlatform()) {
       const payload = await Promise.all(files.map(async file => documentExportPayload({
-        name: file.name, mimeType: file.type as 'application/pdf' | 'image/png', bytes: new Uint8Array(await file.arrayBuffer()),
+        name: file.name, mimeType: file.type as 'application/pdf' | 'image/png' | 'text/csv', bytes: new Uint8Array(await file.arrayBuffer()),
       })));
       const result = await bridge.shareDocuments({ files: payload });
       if (!result.opened) throw new Error('Не удалось открыть меню отправки.');
       return 'shared';
     }
     if (files.length === 1) {
-      await exportDocument({ name: files[0].name, mimeType: files[0].type as 'application/pdf' | 'image/png', bytes: new Uint8Array(await files[0].arrayBuffer()) });
+      await exportDocument({ name: files[0].name, mimeType: files[0].type as 'application/pdf' | 'image/png' | 'text/csv', bytes: new Uint8Array(await files[0].arrayBuffer()) });
     } else {
       // One explicit download avoids browser blocking the remaining PNG pages.
       const { zipSync } = await import('fflate');

@@ -4,6 +4,10 @@ import { BOW_CATEGORIES, MAX_NUMBERED_ARROWS, bowCategoryName, editEquipment, eq
 import type { EquipmentArrows, EquipmentBow, EquipmentEdit, EquipmentItem, EquipmentKind, EquipmentKit, EquipmentLibrary, EquipmentSnapshot } from './equipment.ts';
 import { EquipmentDetailFields, readEquipmentDetails } from './EquipmentPicker.tsx';
 import { Icon } from './TrainingChrome.tsx';
+import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
+import { statisticVisible } from './statistics-visibility.ts';
+import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import type { DiaryEntry } from './persistence.ts';
 import './equipment-catalog.css';
 
 type Kind = EquipmentKind;
@@ -63,9 +67,12 @@ function CatalogValues({ kind, item, library }: { kind: Kind; item: EquipmentIte
     {item.notes && <p className="equipment-catalog-notes">{item.notes}</p>}</>;
 }
 
-export function EquipmentCatalog({ onBack, onSelect }: {
+export function EquipmentCatalog({ onBack, onSelect, history = [] }: {
   onBack?: () => void; onSelect?: (equipment: EquipmentSnapshot) => void;
+  history?: readonly DiaryEntry[];
 }) {
+  const { preferences } = useTrainingPreferences();
+  const [arrowHistory, setArrowHistory] = useState<{ id: string; name: string } | null>(null);
   const [state, setState] = useState(readLibrary);
   const [kind, setKind] = useState<Kind>('bows');
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -149,6 +156,9 @@ export function EquipmentCatalog({ onBack, onSelect }: {
             <CatalogValues kind={kind} item={item} library={library} />
             {!archived && !available && <p className="equipment-catalog-notes">В комплекте есть архивное снаряжение.</p>}
             <footer className="equipment-catalog-actions">
+              {kind === 'arrows' && statisticVisible(preferences, 'numbered_arrows') &&
+                <button type="button" className="icon-button" aria-label={`Статистика стрел · ${item.name}`}
+                  aria-haspopup="dialog" onClick={() => setArrowHistory({ id: item.id, name: item.name })}><Icon name="stats" /></button>}
               {!item.archived && <button type="button" className="icon-button equipment-catalog-star" aria-label={item.favorite ? `Убрать ${item.name} из избранного` : `Добавить ${item.name} в избранное`}
                 aria-pressed={!!item.favorite} data-testid={`equipment-catalog-favorite-${item.id}`} onClick={() => persist(itemDraft(kind, { ...item, favorite: !item.favorite }))}>
                 <CatalogIcon kind="favorite" filled={!!item.favorite} />
@@ -164,6 +174,10 @@ export function EquipmentCatalog({ onBack, onSelect }: {
       </div>
       {values.length > visible && <button type="button" className="equipment-catalog-more" onClick={() => setVisible(count => count + 40)}>Показать ещё ({values.length - visible})</button>}
     </>}
+    {arrowHistory && <BottomSheet title={arrowHistory.name} onClose={() => setArrowHistory(null)} tag="equipment-arrow-history">
+      <NumberedArrowAnalysis showEmpty series={history.flatMap(entry => entry.practice.rounds.flatMap(round => round.series
+        .filter(series => series.conditions.equipment?.arrows.id === arrowHistory.id)))} />
+    </BottomSheet>}
     {draft && library && <BottomSheet title={editorTitle} onClose={dismiss} tag="equipment-catalog-editor">
       <form className="equipment-catalog-form" onSubmit={event => { event.preventDefault(); save(event.currentTarget); }}>
         <label>Название<input autoFocus maxLength={100} value={draft.value.name} data-testid="equipment-catalog-name" onChange={event => setDraft({ ...draft, value: { ...draft.value, name: event.target.value } } as Draft)} /></label>

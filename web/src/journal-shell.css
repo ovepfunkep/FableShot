@@ -3,7 +3,7 @@
   flex-direction: column;
   width: min(100%, 550px);
   height: 100vh;
-  height: 100dvh;
+  height: calc(100 * var(--app-vh));
   margin: auto;
   padding: env(safe-area-inset-top) 0 0;
 }
@@ -44,7 +44,7 @@
   border-radius: 12px;
   background: transparent;
   color: var(--muted);
-  font-size: clamp(9px, 3vw, 12px);
+  font-size: clamp(9px, calc(3 * var(--app-vw)), 12px);
   font-weight: 650;
   white-space: nowrap;
 }
@@ -81,7 +81,7 @@
 }
 
 .journal-home-eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.journal-home-hero h2 { margin: 0; font-size: clamp(20px, 5.4vw, 26px); line-height: 1.2; }
+.journal-home-hero h2 { margin: 0; font-size: clamp(20px, calc(5.4 * var(--app-vw)), 26px); line-height: 1.2; }
 .journal-home-conditions { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 8px 12px; margin: 2px 0 4px; }
 .journal-home-conditions > div { display: flex; align-items: center; gap: 8px; min-width: 0; color: #cbd7c7; }
 .journal-home-conditions > div:last-child:nth-child(3) { grid-column: 1 / -1; }
@@ -138,7 +138,7 @@
   border-radius: 10px;
   background: var(--raised);
   color: inherit;
-  font-size: clamp(10px, 3.2vw, 14px);
+  font-size: clamp(10px, calc(3.2 * var(--app-vw)), 14px);
   font-variant-numeric: tabular-nums;
 }
 

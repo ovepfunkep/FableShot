@@ -13,6 +13,7 @@ export type TrainingPreferences = {
   haptics: boolean;
   keepAwake: boolean;
   trainingOnLockScreen?: boolean;
+  useSystemScale?: boolean;
   rankCategory?: 'male' | 'female';
   disabledStatistics?: StatisticFeature[];
   displayName?: string;
@@ -35,6 +36,7 @@ export function valid(value: unknown): value is TrainingPreferences {
   const record = value as Record<string, unknown>;
   return Object.keys(DEFAULT_PREFERENCES).every(key => typeof record[key] === 'boolean') &&
     (record.rankCategory === undefined || record.rankCategory === 'male' || record.rankCategory === 'female') &&
+    (record.useSystemScale === undefined || typeof record.useSystemScale === 'boolean') &&
     (record.disabledStatistics === undefined || isDisabledStatistics(record.disabledStatistics)) &&
     (record.displayName === undefined || typeof record.displayName === 'string' && record.displayName.length <= 40) &&
     (record.rankAssignments === undefined || isRankAssignments(record.rankAssignments)) &&

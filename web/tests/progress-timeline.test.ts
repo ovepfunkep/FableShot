@@ -26,6 +26,7 @@ const close = (actual: number | null, expected: number) => assert.ok(actual !== 
 test('timeline calculates scored average, ten share including X, and physical RMS per saved training', () => {
   const [group] = buildProgressTimeline([entry()]), [point] = group.points;
   close(point.values.average, 29 / 3); close(point.values.tenShare, 200 / 3);
+  close(point.values.xShare, 100 / 3); assert.equal(point.values.missShare, 0);
   close(point.values.rms, Math.sqrt(.02 / 3) * 200);
   assert.equal(point.arrows, 3); assert.equal(point.sessionId, 'session');
   assert.ok(group.label.includes('18 м')); assert.ok(group.label.includes('40 см')); assert.ok(group.label.includes('Классический'));
@@ -113,8 +114,8 @@ test('same-day training points have distinct positions and deterministic history
 
 test('statistics switches remove their own metrics and the progress switch hides every series', () => {
   const [group] = buildProgressTimeline([entry()]);
-  assert.deepEqual(availableTimelineMetrics(group, DEFAULT_PREFERENCES), ['average', 'rms', 'tenShare', 'cg3']);
-  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'general_score'] }), ['tenShare']);
+  assert.deepEqual(availableTimelineMetrics(group, DEFAULT_PREFERENCES), ['average', 'rms', 'tenShare', 'xShare', 'missShare', 'cg3']);
+  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'general_score'] }), ['tenShare', 'xShare', 'missShare']);
   assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['zone_trend'] }), ['average', 'rms', 'cg3']);
   assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['progress_trend'] }), []);
   assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'zone_trend', 'general_score'] }), []);

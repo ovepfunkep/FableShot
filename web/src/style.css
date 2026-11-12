@@ -6,6 +6,10 @@
 }
 
 :root {
+  /* CSS zoom scales absolute lengths but leaves viewport units based on the WebView. */
+  zoom: var(--app-scale, 1);
+  --app-vh: calc(1dvh / var(--app-scale, 1));
+  --app-vw: calc(1vw / var(--app-scale, 1));
   font-family: Manrope, system-ui, sans-serif;
   color-scheme: dark;
   background: #101610;
@@ -32,7 +36,7 @@ button, canvas { user-select: none; -webkit-user-select: none; }
   display: flex;
   flex-direction: column;
   width: min(100%, 550px);
-  height: 100dvh;
+  height: calc(100 * var(--app-vh));
   min-height: 440px;
   margin: auto;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
@@ -121,7 +125,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .arrow-slot.compact:has(.arrow-physical-number) .arrow-score { transform: translateY(4px); }
 .arrow-slot.compact .arrow-physical-number { top: 2px; right: 0; left: 0; font-size: 7px; }
 .physical-arrow-edit { min-height: 36px; padding: 0 12px; margin-right: 8px; border: 1px solid var(--edge); border-radius: 99px; background: var(--surface); color: var(--accent); font-size: 13px; font-weight: 700; }
-.physical-arrow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: min(456px, 60dvh); overflow: auto; overscroll-behavior: contain; padding: 2px; }
+.physical-arrow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: min(456px, calc(60 * var(--app-vh))); overflow: auto; overscroll-behavior: contain; padding: 2px; }
 .physical-arrow-option { min-height: 52px; border: 1px solid var(--edge); border-radius: 99px; background: var(--surface); font-size: 16px; font-weight: 700; }
 .physical-arrow-option[aria-pressed=true] { background: var(--accent); color: var(--on-accent); }
 .arrow-fade { position: absolute; inset-block: 0; width: 14px; pointer-events: none; }

@@ -14,7 +14,7 @@ const sections = [
   ] },
   { title: 'Графики', items: [
     ['mean_trend', 'Средний балл по сериям'], ['distribution', 'Распределение попаданий'],
-    ['zone_trend', 'Доля десяток'], ['progress_trend', 'Динамика прогресса'], ['geometry_trend', 'Кучность и точность по занятиям'],
+    ['zone_trend', 'Доля десяток, X и промахов'], ['progress_trend', 'Динамика прогресса'], ['geometry_trend', 'Кучность и точность по занятиям'],
   ] },
 ] as const;
 

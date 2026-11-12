@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
+import { StrictMode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
 import { useAndroidUpdates } from './android-updates.ts';
 import { createRoot } from 'react-dom/client';
@@ -9,6 +9,7 @@ import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.t
 import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
 import { TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
+import { supportsAppScale } from './native-app-scale.ts';
 import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
 import { TechniqueSettingsProvider } from './TechniqueSettings.tsx';
@@ -112,7 +113,8 @@ function App() {
   const [reportBack, setReportBack] = useState<'journal' | 'training' | 'profile' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
   const [ranksBack, setRanksBack] = useState<'records' | 'profile'>('records');
   const [reportTrail, setReportTrail] = useState<string[]>([]);
-  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training'>('training');
+  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report'>('training');
+  const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
   const [setupMemo, setSetupMemo] = useState<TechniqueSelection | null>(null);
   const [historyFilters, setHistoryFilters] = useState(DEFAULT_HISTORY_FILTERS);
   const [notesScope, setNotesScope] = useState<DiaryNoteScope | null>(null);
@@ -129,6 +131,9 @@ function App() {
   const [confirm, setConfirm] = useState<'finish' | 'delete' | 'discard'>('finish');
   const confirmDialog = useRef<HTMLDialogElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
+  const arrowPanel = useRef<HTMLDivElement>(null);
+  const [tenFeedback, setTenFeedback] = useState<{ count: number } | null>(null);
+  const playedTenFeedback = useRef<typeof tenFeedback>(null);
   const pulse = useRef<Animation | null>(null);
   const [offline, setOffline] = useState<'pending' | 'ready' | 'error'>('pending');
   const [timerOpen, setTimerOpen] = useState(false);
@@ -264,18 +269,19 @@ function App() {
     .sort(compareDiaryDate), [entries]);
   const initial = useMemo(emptyPractice, []);
   const practice = entry?.practice ?? initial;
-  const setup = !entry && page === 'conditions';
+  const setup = page === 'conditions' && (!entry || repeatSetup !== null);
   const suggested = state.diary?.lastSetup ?? trainingSetup((ongoing ?? paused ?? recent[0])?.practice ?? initial);
-  let newConditions = suggested.conditions;
+  const setupDefaults = repeatSetup ?? suggested;
+  let newConditions = setupDefaults.conditions;
   let needsHomeEquipment = false;
-  if (!ongoing && suggested.conditions.equipment && ((page === 'journal' && tab === 'home') || setup)) {
+  if (!ongoing && newConditions.equipment && ((page === 'journal' && tab === 'home') || setup)) {
     try {
-      const currentKit = equipmentSnapshot(loadEquipment(), suggested.conditions.equipment.id);
-      newConditions = { ...suggested.conditions, equipment: currentKit };
+      const currentKit = equipmentSnapshot(loadEquipment(), newConditions.equipment.id);
+      newConditions = { ...newConditions, equipment: currentKit };
       needsHomeEquipment = !currentKit;
     } catch {
       // Conditions can still open so the equipment picker can show its read error.
-      newConditions = { ...suggested.conditions, equipment: null };
+      newConditions = { ...newConditions, equipment: null };
       needsHomeEquipment = true;
     }
   }
@@ -321,6 +327,7 @@ function App() {
       return tournament ? linkTournamentSession(draft, tournament, id) : draft;
     })) return false;
     setSetupMemo(null);
+    setRepeatSetup(null);
     selectEntry(item, 'training');
     return true;
   }
@@ -427,6 +434,23 @@ function App() {
   useEffect(() => {
     if (!suggestRound) pulse.current?.cancel();
   }, [suggestRound]);
+  useLayoutEffect(() => {
+    if (!tenFeedback || playedTenFeedback.current === tenFeedback) return;
+    playedTenFeedback.current = tenFeedback;
+    if (!preferences.animations || preferences.hideScores || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const { count } = tenFeedback;
+    const effects: Animation[] = [];
+    for (let index = 1; index <= count; index++) {
+      const score = arrowPanel.current?.querySelector(`[data-testid="shot-${index}"] .arrow-score`);
+      const glow = count === 3 ? '0 0 12px #ffd882, 0 0 3px #fff' : '0 0 8px #fff';
+      if (score?.animate) effects.push(score.animate([
+        { transform: 'scale(1)', textShadow: 'none' },
+        { transform: 'scale(1.15)', textShadow: glow, offset: .35 },
+        { transform: 'scale(1)', textShadow: 'none' },
+      ], { duration: count === 3 ? 1000 : 650, easing: 'ease-out' }));
+    }
+    return () => { for (const effect of effects) effect.cancel(); };
+  }, [tenFeedback, page, sessionId, series.id, preferences.animations, preferences.hideScores]);
 
   function mark(shot: Shot) {
     if (pendingShot) return;
@@ -439,6 +463,8 @@ function App() {
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
       const recorded = stored && findSeries(stored, series.id)?.series.shots[shots.length] === shot;
       if (recorded && preferences.haptics) performTrainingHaptic();
+      if (recorded && shot.points === 10 && shots.length < 3 && shots.every(previous => previous.points === 10) &&
+        preferences.animations && !preferences.hideScores) setTenFeedback({ count: shots.length + 1 });
       if (recorded && numbering) {
         setPostHitReady(false);
         setNumberSaveError(false);
@@ -621,6 +647,7 @@ function App() {
   }
   function leaveConditions() {
     setSetupMemo(null);
+    setRepeatSetup(null);
     setPage(conditionsBack);
   }
   useAppBack(showingOnboarding || page !== 'journal' || tab !== 'home', () => {
@@ -683,7 +710,7 @@ function App() {
     {tab === 'history' && <JournalHistory entries={entries} filters={historyFilters} onFilters={setHistoryFilters} onOpen={openSaved}
       tournaments={tournaments} onTournaments={() => { setTournamentsBack('journal'); setPage('tournaments'); }} />}
     {tab === 'progress' && <JournalProgress entries={recent} />}
-    {tab === 'equipment' && <EquipmentCatalog />}
+    {tab === 'equipment' && <EquipmentCatalog history={recent} />}
     {releaseNotes}
     {notice}
   </JournalShell>;
@@ -734,7 +761,10 @@ function App() {
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
-    appearance={<WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />}
+    appearance={<>
+      <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
+      {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
+    </>}
     motion={<div className="settings-panel">
       <TrainingPreferenceControls keys={['animations', 'haptics']} />
       <div className="preference-row"><span className="preference-title">Показывать достижения</span>
@@ -784,8 +814,8 @@ function App() {
 
   if (page === 'conditions') return <>
     {offlineLabel}
-    <ConditionsScreen initial={setup ? newConditions : active.series.conditions} rule={setup ? suggested.rule : practice.roundRule} editableRule={!hasHits}
-      initialNumbering={setup ? suggested.numberedArrows : practice.numberedArrows ?? null}
+    <ConditionsScreen initial={setup ? newConditions : active.series.conditions} rule={setup ? setupDefaults.rule : practice.roundRule} editableRule={setup || !hasHits}
+      initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
       onBack={leaveConditions} onApply={(conditions, rule, numberedArrows, tournament) => {
@@ -811,6 +841,13 @@ function App() {
     {offlineLabel}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
       onPause={pauseEntry}
+      onRepeat={!ongoing && entry && !entry.deletedAt ? () => {
+        setSetupMemo(null);
+        setRepeatSetup(trainingSetup(entry.practice));
+        setConditionsBack('report');
+        setPage('conditions');
+      } : undefined}
+      onDeleteStage={(kind, id) => update(previous => kind === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id))}
       onOpenRecordSession={id => openRecordReport(id, 'report')}
       onAchievement={id => recordServiceAchievement(id, sessionId ?? undefined)}
       grants={grants.filter(grant => grant.sessionId === sessionId)}
@@ -886,7 +923,7 @@ function App() {
     <TrainingFooter key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} mainText={mainText}
       mainEnabled={!!entry && !pendingShot && (seriesEditor ? dirty : editing !== null || completed || past || shots.length > 0 || roundFull)}
-      mainRef={primary} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}
+      mainRef={primary} arrowPanelRef={arrowPanel} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}
       timerBadge={!seriesEditor && !completed && <PracticeTimerBadge state={timer.state} onOpen={openTimer} />}
       status={seriesEditor ? editing ? `${editing.shot.points} очков` : 'Выбери стрелу' : undefined}
       arrowNumberChoice={editing && (arrowCount > 0 || editing.shot.physicalArrowNumber !== undefined) && <button type="button"
@@ -900,12 +937,15 @@ function App() {
       onChoose={chooseArrowNumber} onClose={closeNumberPicker} />}
     {picker && <StagePicker kind={picker} practice={practice} roundId={round.id} seriesId={series.id}
       onChoose={showSeries} onClose={() => setPicker(null)}
-      onNewRound={() => { if (update(startRound)) { setSelection(null); setPicker(null); } }}
+      onNewRound={() => {
+        const saved = update(startRound);
+        if (saved) setSelection(null);
+        return saved;
+      }}
       onDelete={id => {
-        if (update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id))) {
-          setPicker(null);
-          if (!diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
-        }
+        const saved = update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id));
+        if (saved && !diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
+        return saved;
       }} />}
     {timerWindow}
     {techniqueWindow}

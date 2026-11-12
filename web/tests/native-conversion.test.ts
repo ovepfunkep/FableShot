@@ -431,12 +431,13 @@ test('supported Android settings become typed patches without filling absent val
     technique_focus: { type: 'boolean', value: false }, technique_reflection: { type: 'boolean', value: true },
     series_timer_seconds_v1: { type: 'int', value: 90 }, rest_timer_seconds_v1: { type: 'int', value: 30 },
     training_on_lock_screen_v1: { type: 'boolean', value: false },
+    use_system_scale_v1: { type: 'boolean', value: true },
     onboardingCompletedVersion: { type: 'int', value: 1 },
   };
   const before = JSON.stringify(inspection), result = buildNativeConversion(inspection);
   assert.deepEqual(result.settings.training, { animations: false, haptics: true, keepAwake: false, hideScores: true,
     averageHundredths: true, displayName: 'Лучник', rankCategory: 'female', shootingBaseMinutes: 930,
-    disabledStatistics: ['average', 'geometry_trend'], trainingOnLockScreen: false, onboardingSeen: true });
+    disabledStatistics: ['average', 'geometry_trend'], trainingOnLockScreen: false, useSystemScale: true, onboardingSeen: true });
   assert.deepEqual(result.settings.technique, { techniqueFocus: false, techniqueReflection: true });
   assert.deepEqual(result.settings.timer, { seriesSeconds: 90, restSeconds: 30 });
   assert.equal(validPreferences({ ...DEFAULT_PREFERENCES, ...result.settings.training }), true);

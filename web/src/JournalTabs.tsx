@@ -6,6 +6,7 @@ import { exerciseRank } from './exercise-rank.ts';
 import { RankTag } from './SportRanks.tsx';
 import { ProgressFiltersSheet, ProgressTimeline } from './ProgressTimeline.tsx';
 import { GeometryTrend } from './GeometryTrend.tsx';
+import { ProgressExport } from './ProgressExport.tsx';
 import { buildProgressTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries } from './progress-timeline.ts';
 import type { ProgressFilters } from './progress-timeline.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
@@ -171,6 +172,7 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
   const { preferences } = useTrainingPreferences();
   const [filters, setFilters] = useState<ProgressFilters>(DEFAULT_PROGRESS_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const showAverage = statisticVisible(preferences, 'average');
   const showVolume = statisticVisible(preferences, 'volume');
   const filtered = useMemo(() => filterProgressEntries(entries, filters), [entries, filters]);
@@ -185,10 +187,15 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
   const hasResults = entries.some(entry => !entry.deletedAt && entry.practice.savedAt !== null && entry.practice.rounds.some(round => round.series.some(series => series.shots.length)));
   const activeFilters = filters.period !== 0 || filters.sessionIds !== null || filters.conditionKey !== null;
   const period = filters.period === 0 ? 'Всё время' : filters.period === -1 ? `${filters.from} — ${filters.to}` : `${filters.period} дней`;
+  const exportIds = exportOpen ? new Set(filtered.map(entry => entry.id)) : null;
 
   return <section className="journal-tab-content" aria-label="Прогресс тренировок" data-testid="progress-screen">
-    {hasResults && <button type="button" className="progress-filters-open" data-testid="analytics-filters" aria-label="Критерии прогресса"
-      onClick={() => setFilterOpen(true)}><span>{period}</span><span>{activeFilters ? 'Фильтры включены' : 'Критерии'}</span></button>}
+    {hasResults && <div className="progress-actions">
+      <button type="button" className="progress-filters-open" data-testid="analytics-filters" aria-label="Критерии прогресса"
+        onClick={() => setFilterOpen(true)}><span>{period}</span><span>{activeFilters ? 'Фильтры включены' : 'Критерии'}</span></button>
+      {sessions.length > 0 && <button type="button" className="icon-button" aria-label="Экспорт отчёта по выборке"
+        onClick={() => setExportOpen(true)}><Icon name="download" /></button>}
+    </div>}
     {sessions.length === 0 ? <EmptyState icon="progress" title={activeFilters && hasResults ? 'По этим критериям результатов нет' : 'Пока нет результатов'}>
       {activeFilters && hasResults ? <button className="text-action" type="button" onClick={() => setFilters(DEFAULT_PROGRESS_FILTERS)}>Сбросить фильтры</button>
         : 'Здесь появятся баллы и объём завершённых тренировок.'}
@@ -203,5 +210,7 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
     </>}
     {filterOpen && <ProgressFiltersSheet entries={entries} value={filters} onClose={() => setFilterOpen(false)}
       onApply={next => { setFilters(next); setFilterOpen(false); }} />}
+    {exportIds && <ProgressExport entries={entries.filter(entry => exportIds.has(entry.id))}
+      period={period} onClose={() => setExportOpen(false)} />}
   </section>;
 }
