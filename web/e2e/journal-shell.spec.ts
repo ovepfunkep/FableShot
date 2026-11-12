@@ -72,16 +72,31 @@ test('home starts new sessions, keeps earlier results and connects all four tabs
   await entries.last().click();
   await expect(page.getByTestId('report-round-total-1')).toContainText('10/10');
   await expect(page.getByTestId('report-conditions')).toHaveCount(0);
+  await page.getByTestId('report-menu-open').click();
   await page.getByTestId('report-conditions-open').click();
   await expect(page.getByTestId('report-conditions').getByLabel('Дистанция: 30 м')).toBeVisible();
 });
 
-test('history trash preserves the report and restores the same training', async ({ page }) => {
+test('training actions rename a session, preserve the report in trash and restore it', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
   await page.getByTestId('target').click();
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
+  const menu = page.getByTestId('report-menu-open');
+  await menu.click();
+  await page.getByRole('button', { name: 'Редактировать название' }).click();
+  const rename = page.getByRole('dialog', { name: 'Редактировать название' });
+  await rename.getByRole('textbox', { name: 'Название тренировки' }).fill('  Клубный вечер  ');
+  await rename.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByRole('heading', { name: 'Клубный вечер' })).toBeVisible();
+  await menu.click();
+  await page.getByRole('button', { name: 'Редактировать название' }).click();
+  await expect(rename.getByRole('textbox', { name: 'Название тренировки' })).toHaveValue('Клубный вечер');
+  await rename.getByRole('textbox', { name: 'Название тренировки' }).fill('Не сохранять');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Клубный вечер' })).toBeVisible();
+  await menu.click();
   await page.getByRole('button', { name: 'Удалить тренировку', exact: true }).click();
   await page.getByRole('button', { name: 'В корзину', exact: true }).click();
   await page.getByTestId('nav-history').click();
@@ -91,6 +106,7 @@ test('history trash preserves the report and restores the same training', async 
   await page.getByRole('checkbox', { name: 'Корзина' }).check();
   await page.keyboard.press('Escape');
   await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toContainText('Клубный вечер');
   await expect(cards.first()).toHaveClass(/is-deleted/);
   await cards.first().click();
   await expect(page.getByTestId('report-round-total-1')).toContainText('10/10');
@@ -116,6 +132,7 @@ test('training notes retain historical condition labels and new notes use traini
   }, { practice, notes });
   await page.goto('./');
   await openHistoryEntry(page, 'legacy-note');
+  await page.getByTestId('report-menu-open').click();
   await page.getByRole('button', { name: 'Заметки тренировки' }).click();
   const historical = page.getByTestId('note-item').filter({ hasText: 'Стрельба в дождь' });
   await expect(historical).toContainText('Условия: 30 м');

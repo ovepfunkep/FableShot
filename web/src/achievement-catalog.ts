@@ -1,3 +1,5 @@
+import { RANK_LABELS, STAGE_RANK_FORMATS, STAGE_RANK_LABELS } from './sport-ranks.ts';
+
 export const ACHIEVEMENT_RARITY_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] as const;
 export type AchievementRarity = typeof ACHIEVEMENT_RARITY_ORDER[number];
 
@@ -18,7 +20,7 @@ export const ACHIEVEMENT_BOW_LABELS = {
   longbow: 'Лонгбоу',
 } as const;
 export type AchievementBowScope = keyof typeof ACHIEVEMENT_BOW_LABELS;
-export type AchievementScope = 'global' | AchievementBowScope;
+export type AchievementScope = 'global' | AchievementBowScope | `stage-v1:${string}`;
 
 export type AchievementDefinition = Readonly<{
   id: string;
@@ -33,7 +35,33 @@ export type AchievementDefinition = Readonly<{
   priority: number;
 }>;
 
-// Android's active runtime catalog, in the same order as AchievementCatalog.kt.
+const stageRankNames = [
+  ["Пробник с характером", "Короткая версия. Качество уже серьёзное"],
+  ["Три — уже аргумент", "Мишень хотела возразить, но аргументы остались в ней"],
+  ["Серия, держи марку", "Первый — это теперь про качество"],
+  ["Кандидат без собеседования", "Резюме короткое. Попадания убедительные"],
+  ["Мастер короткого метра", "На полный фильм пока не заявляем. Этот эпизод хорош"],
+  ["Коротко, на мировом", "Мировой темп поместился в одну серию. Удостоверение всё ещё отдельно"],
+  ["Это был не трейлер", "Минимум тридцать стрел. Титры заслужены"],
+  ["Повторить без монтажа", "Удачные кадры не выбирали. Засчитали весь раунд"],
+  ["Первый, но не случайный", "Качество пережило весь раунд"],
+  ["Кандидат без сокращений", "Каждая стрела в приложении к резюме"],
+  ["Мастер полной версии", "На этот раз хороший эпизод длился весь раунд"],
+  ["Мир подождёт, я достреляю", "Мировой средний. Все стрелы на месте"],
+] as const;
+
+export const STAGE_RANK_RULES: readonly AchievementDefinition[] = stageRankNames.map(([title, flavor], index) => {
+  const series = index < 6;
+  const tier = index % 6;
+  return {
+    id: `${series ? 'SNR' : 'RNR'}0${tier + 1}`, title, flavor,
+    description: `Впервые завершите ${series ? 'полную серию от 3 стрел' : 'полный раунд от 30 стрел'} со средним уровня ${STAGE_RANK_LABELS[tier]} или выше.`,
+    family: series ? 'rank.first-series' : 'rank.first-round',
+    rarity: ACHIEVEMENT_RARITY_ORDER[tier], target: 1, categorySpecific: true, performanceFormat: false, priority: tier + 1,
+  };
+});
+
+// Android's original runtime catalog, followed by React rules.
 export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START01", title: "Начало пути",
@@ -469,6 +497,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     family: "archive", rarity: 'Uncommon', target: 1, priority: 8,
     categorySpecific: false, performanceFormat: false,
   },
+  ...STAGE_RANK_RULES,
 ];
 
 const definitionsById = new Map(ACHIEVEMENT_CATALOG.map(rule => [rule.id, rule]));
@@ -480,9 +509,33 @@ export function getAchievementDefinition(id: string): AchievementDefinition | un
 }
 
 export function achievementScopesFor(rule: AchievementDefinition): readonly AchievementScope[] {
+  if (isStageRankRule(rule.id)) {
+    const label = STAGE_RANK_LABELS[rule.priority - 1];
+    return STAGE_RANK_FORMATS.filter(format => !(format.bow === 'barebow' && format.distance === 18 && format.arrows === 30) &&
+      format.thresholds[RANK_LABELS.indexOf(label)] != null)
+      .map(format => format.scope as AchievementScope);
+  }
   if (!rule.categorySpecific) return ['global'];
   if (rule.id.startsWith('RANK') || rule.id === 'PROGRESS06') return rankScopes;
   return bowScopes;
+}
+
+export function isStageRankRule(id: string): boolean {
+  return /^(SNR|RNR)0[1-6]$/.test(id);
+}
+
+export function achievementScopeBow(scope: AchievementScope): 'global' | AchievementBowScope {
+  const format = STAGE_RANK_FORMATS.find(item => item.scope === scope);
+  return format?.bow ?? (scope as 'global' | AchievementBowScope);
+}
+
+export function achievementScopeLabel(scope: string): string {
+  if (scope === 'global') return 'Общее';
+  const format = STAGE_RANK_FORMATS.find(item => item.scope === scope);
+  if (!format) return ACHIEVEMENT_BOW_LABELS[scope as AchievementBowScope] ?? scope;
+  const bowClass = { recurve: 'КЛ', compound: 'БЛ', barebow: 'КЛб' }[format.bow];
+  const target = format.target === 'wa-outdoor-six-v1' ? ' · 6 зон' : '';
+  return `${bowClass}(${format.category === 'male' ? 'М' : 'Ж'}) · ${format.distance} м / ${format.diameter / 10} см${target} · формат ${format.arrows} стрел`;
 }
 
 const compoundFormatRarity = ['Common', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] as const;

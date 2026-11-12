@@ -60,6 +60,7 @@ test('target changes open a new series with new conditions while earlier hits ke
   await expect(page.getByTestId('target')).toHaveAttribute('data-target-profile', 'wa-indoor-outer-v1');
   await expect(page.getByTestId('series-score')).toHaveText('10/10');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await page.getByTestId('report-menu-open').click();
   await page.getByTestId('report-conditions-open').click();
   await expect(page.getByTestId('report-conditions').getByLabel('Дистанция: 18 м')).toBeVisible();
   await expect(page.getByTestId('report-conditions').getByLabel('Дистанция: 30 м')).toBeVisible();

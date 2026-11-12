@@ -18,6 +18,9 @@ import { summarize } from './target.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import './journal-tabs.css';
+import { Icon } from './TrainingChrome.tsx';
+import { tournamentLinks, tournamentTitle } from './tournaments.ts';
+import type { Tournament } from './tournaments.ts';
 
 type JournalEntry = DiaryEntry;
 type IconName = 'target' | 'distance' | 'bow' | 'arrow' | 'progress' | 'kit' | 'next' | 'history';
@@ -50,8 +53,9 @@ function EmptyState({ icon, title, children }: { icon: IconName; title: string; 
   </div>;
 }
 
-function HistoryCard({ entry, hundredths, onOpen }: {
+function HistoryCard({ entry, hundredths, onOpen, tournament }: {
   entry: JournalEntry; hundredths: boolean; onOpen: () => void;
+  tournament?: { tournament: Tournament; start: Tournament['starts'][number] };
 }) {
   const { preferences } = useTrainingPreferences();
   const showResult = statisticVisible(preferences, 'result');
@@ -69,8 +73,10 @@ function HistoryCard({ entry, hundredths, onOpen }: {
   const rank = statisticVisible(preferences, 'norms') ? exerciseRank(practice, preferences.rankCategory ?? null) : null;
   const progress = statisticVisible(preferences, 'progress_score') ? compactProgress(practice) : null;
 
-  return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}>
+  return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}${tournament ? ' is-tournament' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}>
     <span className="journal-tab-card-title"><strong>{entry.title || (entry.paused ? 'Приостановленная тренировка' : draft ? 'Черновик тренировки' : 'Тренировка')}</strong><TabIcon name="next" /></span>
+    {tournament && <span className="history-tournament-badge"><Icon name="trophy" />Турнир · {tournamentTitle(tournament.tournament)}
+      {tournament.start.place !== null && ` · ${tournament.start.place} место`}</span>}
     {maximum > 0 && (showResult || showAverage || progress) && <span className="journal-tab-card-result">
       {showResult && <span aria-label={`${points} из ${maximum} очков`}><strong>{number.format(points)}</strong><span> / {number.format(maximum)}</span></span>}
       {showAverage && <span className="journal-tab-icon-value" aria-label={`Средний балл ${formatAverage(average, hundredths)}`}>
@@ -94,12 +100,14 @@ function HistoryCard({ entry, hundredths, onOpen }: {
   </button>;
 }
 
-export function JournalHistory({ entries, filters, onFilters, onOpen }: {
+export function JournalHistory({ entries, filters, onFilters, onOpen, tournaments, onTournaments }: {
   entries: readonly JournalEntry[]; filters: HistoryFilters; onFilters: (filters: HistoryFilters) => void; onOpen: (id: string) => void;
+  tournaments: readonly Tournament[]; onTournaments: () => void;
 }) {
   const { preferences } = useTrainingPreferences();
   const [filterOpen, setFilterOpen] = useState(false);
-  const filtered = filterDiary(entries, filters);
+  const links = useMemo(() => tournamentLinks(tournaments), [tournaments]);
+  const filtered = filterDiary(entries, filters).filter(entry => !filters.tournament || (filters.tournament === 'linked') === links.has(entry.id));
   const distances = [...new Set(entries.flatMap(entry => entry.practice.rounds.flatMap(round => round.series.map(series => series.conditions.distanceMeters))))].sort((a, b) => a - b);
   const groups = new Map<string, { title: string; entries: { entry: JournalEntry; date: Date }[] }>();
   for (const entry of filtered) {
@@ -120,6 +128,13 @@ export function JournalHistory({ entries, filters, onFilters, onOpen }: {
       </button>
       {filters.deleted && <span className="history-trash-label">Корзина</span>}
     </div>
+    <div className="history-tournament-actions">
+      <button type="button" onClick={onTournaments}><Icon name="trophy" />Турниры</button>
+      {(links.size > 0 || filters.tournament) && <select aria-label="Тип записи" value={filters.tournament ?? ''} onChange={event => {
+        const selected = event.currentTarget.value;
+        onFilters({ ...filters, tournament: selected === 'linked' || selected === 'ordinary' ? selected : undefined });
+      }}><option value="">Все записи</option><option value="ordinary">Только тренировки</option><option value="linked">Только турниры</option></select>}
+    </div>
     {groups.size === 0 && <EmptyState icon="history" title={filters.deleted ? 'Корзина пуста' : entries.length ? 'Тренировки не найдены' : 'История пока пуста'}>
       {filters.deleted ? 'Здесь появятся удалённые тренировки.' : entries.length ? 'Попробуй изменить фильтры.' : 'Начни тренировку на главной — она появится здесь.'}
     </EmptyState>}
@@ -130,7 +145,7 @@ export function JournalHistory({ entries, filters, onFilters, onOpen }: {
           {Number.isFinite(date.getTime())
             ? <time className="journal-tab-day" dateTime={entry.startedAt} aria-label={shortDate.format(date)}>{date.getDate()}</time>
             : <span className="journal-tab-day" aria-label="Без даты">—</span>}
-          <HistoryCard entry={entry} hundredths={preferences.averageHundredths} onOpen={() => onOpen(entry.id)} />
+          <HistoryCard entry={entry} hundredths={preferences.averageHundredths} tournament={links.get(entry.id)} onOpen={() => onOpen(entry.id)} />
         </li>)}
       </ol>
     </section>)}

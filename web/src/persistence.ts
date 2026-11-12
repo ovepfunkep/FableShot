@@ -1,5 +1,7 @@
 import { appStorage } from './app-storage.ts';
 import { isImportSource, isLocalDate } from './import-source.ts';
+import { isTournamentList } from './tournaments.ts';
+import type { Tournament } from './tournaments.ts';
 import type { ImportSource } from './import-source.ts';
 import { isTrainingTime } from './training-time.ts';
 import type { TrainingTime } from './training-time.ts';
@@ -31,7 +33,7 @@ export type NativeArchiveReference = { sha256: string; bytes: number };
 export const NATIVE_ARCHIVE_BYTE_LIMIT = 64 * 1024 * 1024;
 export type TrainingSetup = { conditions: Conditions; rule: RoundRule; numberedArrows: boolean | null };
 export type Diary = { version: 1; entries: DiaryEntry[]; achievementLedger?: AchievementLedger; nativeArchive?: NativeArchiveReference;
-  notes?: DiaryNote[]; lastSetup?: TrainingSetup };
+  notes?: DiaryNote[]; lastSetup?: TrainingSetup; tournaments?: Tournament[] };
 
 type LegacyPractice = {
   shots: Shot[];
@@ -173,7 +175,7 @@ export function savePractice(value: Practice): void {
 
 export function isDiary(value: unknown): value is Diary {
   if (!value || typeof value !== 'object') return false;
-  const { version, entries, achievementLedger, nativeArchive, notes, lastSetup } = value as Partial<Diary>;
+  const { version, entries, achievementLedger, nativeArchive, notes, lastSetup, tournaments } = value as Partial<Diary>;
   if (version !== 1 || !Array.isArray(entries) || achievementLedger !== undefined && !isAchievementLedger(achievementLedger)) return false;
   if (lastSetup !== undefined && (!lastSetup || !isConditions(lastSetup.conditions) || !isRoundRule(lastSetup.rule) ||
     (lastSetup.numberedArrows !== null && typeof lastSetup.numberedArrows !== 'boolean'))) return false;
@@ -208,7 +210,7 @@ export function isDiary(value: unknown): value is Diary {
     ids.add(entry.id);
     if (entry.practice.savedAt === null && !entry.paused && !entry.deletedAt && ++open > 1) return false;
   }
-  return true;
+  return tournaments === undefined || isTournamentList(tournaments, ids);
 }
 
 export function loadDiary(legacyDate = new Date().toISOString()): Diary {

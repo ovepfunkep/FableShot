@@ -8,6 +8,27 @@ async function targetBounds(page: Page) {
   return bounds;
 }
 
+test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const panel = page.getByTestId('arrow-panel');
+  const height = (await panel.boundingBox())!.height;
+  const miss = page.getByRole('button', { name: 'Отметить промах' });
+  await expect(panel.locator('.arrow-page-3')).toHaveCount(1);
+  for (let count = 1; count <= 13; count++) {
+    await miss.click();
+    if (count === 3) await expect(panel.locator('.arrow-page-3')).toHaveCount(1);
+    if (count === 4) await expect(panel.locator('.arrow-page-6')).toHaveCount(1);
+    if (count === 7) await expect(panel.locator('.arrow-page-12')).toHaveCount(1);
+    expect((await panel.boundingBox())!.height).toBe(height);
+  }
+  await expect(panel.locator('.arrow-page-12')).toHaveCount(2);
+  await expect(page.getByTestId('shot-13')).toBeInViewport();
+  await page.getByTestId('next-end').click();
+  await expect(panel.locator('.arrow-page-12')).toHaveCount(1);
+  expect((await panel.boundingBox())!.height).toBe(height);
+});
+
 test('saved series opens without network under the project path', async ({ page, context }) => {
   await page.goto('./');
   await openTraining(page);

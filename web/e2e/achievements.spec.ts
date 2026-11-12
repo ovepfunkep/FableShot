@@ -1,7 +1,50 @@
 import { expect, test } from '@playwright/test';
 import { appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
 import { openHistoryEntry, openTraining } from './journal-navigation.ts';
+
+test('the first completed barebow series awards a rank-pace group and keeps its evidence in statistics', async ({ page }) => {
+  await page.addInitScript(defaults => {
+    if (localStorage.getItem('app.fableshot.practice-diary.v1')) return;
+    localStorage.setItem('app.fableshot.training-preferences.v1', JSON.stringify({
+      version: 1, preferences: { ...defaults, rankCategory: 'male', onboardingSeen: true },
+    }));
+    localStorage.setItem('app.fableshot.equipment.v1', JSON.stringify({
+      bows: [{ id: 'bow', name: 'Лук', category: 'barebow' }],
+      arrows: [{ id: 'arrows', name: 'Стрелы', diameterMm: 6 }],
+      kits: [{ id: 'kit', name: 'Основной', bowId: 'bow', arrowsId: 'arrows' }],
+    }));
+  }, DEFAULT_PREFERENCES);
+  await page.goto('./');
+  await page.clock.install();
+  await page.getByTestId('home-change-conditions').click();
+  await page.getByTestId('conditions-equipment').click();
+  await page.getByTestId('equipment-select-kit').click();
+  await page.getByTestId('start-training').click();
+  const stageAwards = () => page.evaluate(() => {
+    const diary = JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!);
+    return diary.achievementLedger.grants.filter((grant: { stageRank?: unknown }) => grant.stageRank);
+  });
+  for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
+  expect(await stageAwards()).toHaveLength(0);
+  await page.getByRole('button', { name: 'Следующая серия', exact: true }).click();
+  await expect.poll(async () => (await stageAwards()).length).toBe(6);
+  const notice = page.getByTestId('achievement-notice');
+  await expect(notice).toContainText('Коротко, на мировом');
+  await expect(notice).toContainText('+5');
+  await page.clock.fastForward(12_001);
+  await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
+  await page.getByTestId('training-confirm').click();
+  const achievements = page.getByTestId('session-achievements');
+  await achievements.getByRole('button', { name: /Коротко, на мировом/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Достижения тренировки' })).toContainText('порог 553 из 600');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await openHistoryEntry(page);
+  await expect(achievements).toContainText('Коротко, на мировом');
+  expect(await stageAwards()).toHaveLength(6);
+});
 
 test('deleting and restoring achievement evidence updates its status without a second award', async ({ page }) => {
   const epoch = 'validity-epoch';
@@ -14,6 +57,7 @@ test('deleting and restoring achievement evidence updates its status without a s
   }, diary);
   await page.goto('./');
   await openHistoryEntry(page, 'evidence');
+  await page.getByTestId('report-menu-open').click();
   await page.getByRole('button', { name: 'Удалить тренировку', exact: true }).click();
   await page.getByRole('button', { name: 'В корзину', exact: true }).click();
   await page.getByTestId('open-profile').click();

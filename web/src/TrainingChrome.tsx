@@ -65,9 +65,9 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
   </section>;
 }
 
-export function TrainingFooter({ shots, slots, selected, entering, mainText, mainEnabled, mainRef,
+export function TrainingFooter({ shots, previousVolume, selected, entering, mainText, mainEnabled, mainRef,
   missEnabled, undoEnabled, onPick, onMain, onMiss, onUndo, timerBadge, arrowNumberChoice, status }: {
-  shots: readonly Shot[]; slots: number; selected: number | null; entering: number | null;
+  shots: readonly Shot[]; previousVolume: number; selected: number | null; entering: number | null;
   mainText: string; mainEnabled: boolean; mainRef: Ref<HTMLButtonElement>; missEnabled: boolean; undoEnabled: boolean;
   onPick: (index: number) => void; onMain: () => void; onMiss: () => void; onUndo: () => void;
   timerBadge?: ReactNode;
@@ -75,9 +75,13 @@ export function TrainingFooter({ shots, slots, selected, entering, mainText, mai
   status?: string;
 }) {
   const { preferences } = useTrainingPreferences();
-  const strip = useRef<HTMLOListElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ left: false, right: false });
-  const scrollable = slots > 6;
+  const volume = Math.max(shots.length, previousVolume);
+  const capacity = volume > 6 ? 12 : volume > 3 ? 6 : 3;
+  const pageCount = Math.max(1, Math.ceil(shots.length / capacity));
+  const scrollable = pageCount > 1;
+  const focusedPage = Math.floor((selected ?? Math.max(0, shots.length - 1)) / capacity);
 
   function updateFade() {
     const list = strip.current;
@@ -90,44 +94,47 @@ export function TrainingFooter({ shots, slots, selected, entering, mainText, mai
   useLayoutEffect(() => {
     const list = strip.current;
     if (!list) return;
-    if (scrollable) {
-      const slot = list.children[Math.max(0, shots.length - 1)] as HTMLElement | undefined;
-      if (slot) list.scrollLeft = Math.max(0, slot.offsetLeft + slot.offsetWidth - list.clientWidth);
-    } else list.scrollLeft = 0;
-    updateFade();
-    const observer = new ResizeObserver(updateFade);
+    const align = () => { list.scrollLeft = focusedPage * list.clientWidth; updateFade(); };
+    align();
+    const observer = new ResizeObserver(align);
     observer.observe(list);
     return () => observer.disconnect();
-  }, [scrollable, slots, shots.length]);
+  }, [focusedPage, pageCount, capacity]);
 
   return <footer className="training-controls">
-    <div className="training-tools">
-      {timerBadge}
+    {(status || arrowNumberChoice) && <div className="training-tools">
       {status && <span className="series-editor-status">{status}</span>}
       {arrowNumberChoice}
+    </div>}
+    <div className="training-hit-strip">
+      <div className="training-timer-slot">{timerBadge}</div>
+      <div className="arrow-panel" data-testid="arrow-panel">
+        <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
+          {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
+            aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>
+            {Array.from({ length: capacity }, (_, slot) => {
+              const index = page * capacity + slot;
+              const shot = shots[index];
+              const active = index === selected || index === entering;
+              const compact = capacity > 3;
+              const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
+              const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
+              return <li key={index}>
+                <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
+                  style={{ background, color }} data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
+                  aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
+                  {!compact && <span className="arrow-number" aria-hidden="true">{index + 1}</span>}
+                  <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
+                  {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
+                </button>
+              </li>;
+            })}
+          </ol>)}
+        </div>
+        {scrollable && fade.left && <span className="arrow-fade fade-left" aria-hidden="true" />}
+        {scrollable && fade.right && <span className="arrow-fade fade-right" aria-hidden="true" />}
+      </div>
       <button type="button" className="icon-button" aria-label="Отменить" disabled={!undoEnabled} onClick={onUndo}><Icon name="undo" /></button>
-    </div>
-    <div className="arrow-panel" data-testid="arrow-panel">
-      <ol ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} aria-label="Стрелы серии" onScroll={updateFade}>
-        {Array.from({ length: slots }, (_, index) => {
-          const shot = shots[index];
-          const active = index === selected || index === entering;
-          const compact = slots > 3;
-          const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
-          const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
-          return <li key={index}>
-            <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
-              style={{ background, color }} data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
-              aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
-              {!compact && <span className="arrow-number" aria-hidden="true">{index + 1}</span>}
-              <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
-              {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
-            </button>
-          </li>;
-        })}
-      </ol>
-      {scrollable && fade.left && <span className="arrow-fade fade-left" aria-hidden="true" />}
-      {scrollable && fade.right && <span className="arrow-fade fade-right" aria-hidden="true" />}
     </div>
     <div className="training-actions">
       <button type="button" className="miss" aria-label="Отметить промах" disabled={!missEnabled} onClick={onMiss}>M</button>

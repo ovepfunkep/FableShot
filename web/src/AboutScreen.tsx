@@ -1,6 +1,8 @@
 import { WebReleaseVersion } from './WebReleaseNotes.tsx';
 import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
 import type { useAndroidUpdates } from './android-updates.ts';
+import { SettingsAction } from './SettingsScreen.tsx';
+import { Icon } from './TrainingChrome.tsx';
 import './about-screen.css';
 
 const thanks = [
@@ -11,15 +13,18 @@ const thanks = [
 
 export function AboutScreen({ onReleaseNotes, updates }: { onReleaseNotes: () => void; updates: ReturnType<typeof useAndroidUpdates> }) {
   return <section className="about-screen" aria-label="О FableShot">
-    <WebReleaseVersion onOpen={onReleaseNotes} />
+    <div className="about-brand">
+      <img src={`${import.meta.env.BASE_URL}icons/fableshot-192.png`} width="46" height="46" alt="" />
+      <WebReleaseVersion onOpen={onReleaseNotes} />
+    </div>
     <AndroidUpdateCard updates={updates} manual />
-    <div className="about-links">
-      <a className="technique-condition-link" href="https://github.com/ovepfunkep/FableShot" target="_blank" rel="noreferrer">GitHub</a>
-      <a className="technique-condition-link" href="https://t.me/IncludeIntelligence" target="_blank" rel="noreferrer">Telegram</a>
-      <a className="technique-condition-link" href="https://boosty.to/ivantyabin/donate?forPost=send" target="_blank" rel="noreferrer">Поддержать на Boosty</a>
+    <div className="settings-actions">
+      <SettingsAction icon="code" href="https://github.com/ovepfunkep/FableShot">GitHub</SettingsAction>
+      <SettingsAction icon="send" href="https://t.me/IncludeIntelligence">Telegram</SettingsAction>
+      <SettingsAction icon="heart" href="https://boosty.to/ivantyabin/donate?forPost=send">Поддержать на Boosty</SettingsAction>
     </div>
     <details className="about-credits">
-      <summary>Благодарности</summary>
+      <summary><span className="settings-glyph"><Icon name="trophy" /></span><span>Благодарности</span><Icon name="right" /></summary>
       <div className="about-credits-list">
         <h2>Благодарю</h2>
         {thanks.map(line => <p key={line}>{line}</p>)}

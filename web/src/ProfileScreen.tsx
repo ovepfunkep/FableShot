@@ -13,11 +13,13 @@ import { ProfileAchievements } from './AchievementGallery.tsx';
 import type { AchievementGrant } from './achievement-ledger.ts';
 import './profile-screen.css';
 
-export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements, onAchievement, onPublication, onRecords, onNotebook }: { entries: readonly DiaryEntry[];
+export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements, onAchievement, onPublication, onRecords, onNotebook, onTournaments, tournamentCount }: { entries: readonly DiaryEntry[];
   grants: readonly AchievementGrant[]; onBack: () => void; onRanks: () => void; onAchievements: () => void;
   onAchievement?: (id: 'APP08') => void; onPublication?: (publication: TechniquePublication) => void;
   onRecords: () => void;
   onNotebook: () => void;
+  onTournaments: () => void;
+  tournamentCount: number;
 }) {
   const { preferences, update, error } = useTrainingPreferences();
   const [panel, setPanel] = useState<'name' | 'time' | 'technique' | null>(null);
@@ -68,6 +70,9 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
       {statisticVisible(preferences, 'records') && <button type="button" className="primary profile-primary"
         data-testid="profile-personal-records" onClick={onRecords}><Icon name="stats" />Мои рекорды</button>}
       <ProfileAchievements grants={grants} showEarned={showEarned} onOpen={onAchievements} />
+      <button type="button" className="profile-panel profile-metric" onClick={onTournaments}>
+        <Icon name="trophy" /><div><strong>{tournamentCount}</strong><span>Турниры</span></div><Icon name="right" />
+      </button>
       <button type="button" className="profile-panel profile-notebook" data-testid="profile-notebook" onClick={onNotebook}>
         <Icon name="notes" />Заметки<Icon name="right" />
       </button>

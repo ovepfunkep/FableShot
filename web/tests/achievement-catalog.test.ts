@@ -12,7 +12,7 @@ function rule(id: string) {
 }
 
 test('catalog preserves active runtime IDs, ordering, count targets and the source rule text', () => {
-  assert.equal(ACHIEVEMENT_CATALOG.length, 62);
+  assert.equal(ACHIEVEMENT_CATALOG.length, 74);
   assert.equal(new Set(ACHIEVEMENT_CATALOG.map(item => item.id)).size, ACHIEVEMENT_CATALOG.length);
   assert.deepEqual(ACHIEVEMENT_CATALOG.slice(0, 9).map(item => item.id),
     ['START01', 'START05', 'START06', 'START07', 'START08', 'START09', 'START10', 'START02', 'START03']);

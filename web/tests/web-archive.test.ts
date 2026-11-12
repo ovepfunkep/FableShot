@@ -7,6 +7,9 @@ import { archiveSourceToken, createWebArchive, inspectWebArchive, lastRecovery, 
 import { appendShot, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
 import { DEFAULT_TARGET, markTargetPoint } from '../src/target.ts';
+import { emptyTournamentStart, saveTournament } from '../src/tournaments.ts';
+import type { Tournament } from '../src/tournaments.ts';
+import { RANK_REVISION } from '../src/sport-ranks.ts';
 
 function records(count: number): DataRecords {
   const result = Object.fromEntries(DATA_KEYS.map(key => [key, null])) as DataRecords;
@@ -17,6 +20,24 @@ function records(count: number): DataRecords {
   result['app.fableshot.training-preferences.v1'] = JSON.stringify({ version: 1, preferences: DEFAULT_PREFERENCES });
   return result;
 }
+
+test('archive preserves tournament starts and links without creating or modifying training', async () => {
+  const original = records(1);
+  const diary = JSON.parse(original[DATA_KEYS[0]]!);
+  const start = { ...emptyTournamentStart(), category: 'Баребоу', result: '480', place: 2, sessionIds: ['training-0'] };
+  const event: Tournament = { id: 'club-cup', title: 'Кубок', from: '2026-11-11', to: '2026-11-12',
+    venue: '', note: '', protocol: 'https://example.com/protocol', starts: [start, { ...emptyTournamentStart(), result: 'DNF' }],
+    completed: true, attachments: [{ id: 'protocol', name: 'Протокол.png', type: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK9sAAAAASUVORK5CYII=' }] };
+  const saved = saveTournament(diary, event);
+  assert.equal(saved.entries, diary.entries);
+  assert.throws(() => saveTournament(saved, { ...event, id: 'another' }), /одному старту/);
+  assert.throws(() => saveTournament(diary, { ...event, protocol: 'javascript:alert(1)' }));
+  original[DATA_KEYS[0]] = JSON.stringify(saved);
+  const restored = await inspectWebArchive(await createWebArchive(original, 'test'));
+  assert.deepEqual(restored.records, original);
+  assert.equal(restored.summary.trainings, 1);
+});
 
 test('archives keep directional misses distinct from the M button and retain shaft scoring at the boundary', async () => {
   const boundary = markTargetPoint({ x: 1.015, y: 0 }, DEFAULT_TARGET);
@@ -93,6 +114,25 @@ test('replacement backs up before one active write; fresh writers preserve other
   active.setItem('app.fableshot.training-preferences.v1', JSON.stringify({ version: 1, preferences: { ...DEFAULT_PREFERENCES, haptics: true } }));
   assert.equal(decodeStoredData(destination.getItem(ACTIVE_DATA_KEY)!).records[DATA_KEYS[0]], next[DATA_KEYS[0]]);
   assert.throws(() => stale.setItem(DATA_KEYS[0], original[DATA_KEYS[0]]!), /другом окне/);
+});
+
+test('restoring a rank-stage receipt preserves the original evidence without replaying its banner', async () => {
+  const backup = records(1);
+  const diary = JSON.parse(backup[DATA_KEYS[0]]!);
+  const grant = { id: 'SNR06', scope: 'stage-v1:barebow-18-60-male:wa-indoor-outer-v1', sessionId: 'training-0',
+    earnedAt: '2026-11-11T10:00:00Z', stageRank: { roundId: 1, seriesIds: [2], revision: RANK_REVISION,
+      points: 30, arrows: 3, exerciseArrows: 60, threshold: 553, target: 'wa-indoor-outer-v1',
+      bow: 'barebow', distance: 18, diameter: 400 } };
+  diary.achievementLedger = { epoch: 'stage-epoch', grants: [grant] };
+  backup[DATA_KEYS[0]] = JSON.stringify(diary);
+  const preview = await inspectWebArchive(await createWebArchive(backup, 'test'));
+  assert.deepEqual(preview.records, backup);
+  const original = records(0);
+  const destination = source(original);
+  replaceArchiveRecords(preview.records, { records: original, token: archiveSourceToken(destination) }, destination);
+  const restored = JSON.parse(createAppStorage(() => destination).getItem(DATA_KEYS[0])!);
+  assert.deepEqual(restored.achievementLedger.grants, [{ ...grant, notifiedAt: grant.earnedAt }]);
+  assert.deepEqual(restored.entries, diary.entries);
 });
 
 test('backup/activation quota failures and stale preview leave the old diary active', () => {

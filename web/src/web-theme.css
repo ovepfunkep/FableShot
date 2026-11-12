@@ -123,13 +123,16 @@ html[data-theme-appearance] :is(.condition-sheet, .equipment-sheet, .practice-ti
 .web-theme-styles { display: grid; gap: 8px; }
 .web-theme-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .web-theme-style, .web-theme-mode { position: relative; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); font-size: 13px; font-weight: 700; cursor: pointer; }
-.web-theme-style { min-height: 54px; }
+.web-theme-style { min-height: 66px; padding-inline: 14px; border-radius: var(--card-radius); font-size: 1rem; }
+.web-theme-style-name { flex: 1; }
+.web-theme-selected { flex: none; color: var(--accent); visibility: hidden; }
+.web-theme-style:has(:checked) .web-theme-selected { visibility: visible; }
 .web-theme-mode { justify-content: center; text-align: center; }
 .web-theme-style:has(:checked), .web-theme-mode:has(:checked) { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
 .web-theme-style:has(:focus-visible), .web-theme-mode:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .web-theme-settings fieldset:disabled label { opacity: .55; cursor: default; }
 .web-theme-settings input { width: 100%; height: 100%; margin: 0; position: absolute; inset: 0; opacity: 0; cursor: inherit; }
-.web-theme-swatch { width: 42px; height: 30px; border-radius: 9px; flex: none; border: 1px solid #0002; }
+.web-theme-swatch { display: grid; place-items: center; width: 56px; height: 40px; border-radius: 10px; flex: none; color: #172419; }
 .web-theme-swatch[data-swatch="sport"] { background: #c6f43d; }
 .web-theme-swatch[data-swatch="pop"] { background: #c2a0ff; border-radius: 14px; }
 .web-theme-swatch[data-swatch="minimal"] { background: #4d86f7; }

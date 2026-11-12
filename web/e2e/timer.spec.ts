@@ -19,6 +19,51 @@ async function setDurations(page: Page, series = '5', rest = '3') {
   await page.getByTestId('timer-save-durations').click();
 }
 
+test('start schedules distinct sounds and pausing cancels the pending signal', async ({ page }) => {
+  await page.addInitScript(() => {
+    class AudioProbe {
+      state = 'running';
+      currentTime = 0;
+      destination = {};
+      createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+      createOscillator() {
+        return {
+          frequency: { value: 0 }, connect() {}, disconnect() {},
+          start() {
+            const root = document.documentElement;
+            root.dataset.sounds = [root.dataset.sounds, this.frequency.value].filter(Boolean).join(',');
+          },
+          stop(at?: number) {
+            if (at === undefined) document.documentElement.dataset.cancelledSound = 'yes';
+          },
+        };
+      }
+      async close() {}
+    }
+    Object.defineProperty(window, 'AudioContext', { value: AudioProbe });
+  });
+  await freezeClock(page);
+  await page.goto('./');
+  await openTraining(page);
+  await openTimer(page);
+  await setDurations(page, '2', '1');
+  const root = page.locator('html');
+  const face = page.locator('.practice-timer-face');
+  await expect(root).not.toHaveAttribute('data-sounds', /./);
+  await page.getByTestId('timer-toggle').click();
+  await expect(face).toHaveAttribute('data-timer-tone', 'series');
+  await expect(root).toHaveAttribute('data-sounds', '880');
+  await page.getByTestId('timer-toggle').click();
+  await expect(root).toHaveAttribute('data-cancelled-sound', 'yes');
+  await page.getByTestId('timer-reset').click();
+  await page.getByTestId('timer-phase-Rest').click();
+  await page.getByTestId('timer-toggle').click();
+  await expect(face).toHaveAttribute('data-timer-tone', 'rest');
+  await expect(root).toHaveAttribute('data-sounds', '880,540,680');
+  await page.clock.runFor(1300);
+  await expect(face).toHaveAttribute('data-timer-tone', 'finished');
+});
+
 test('vibration is opt-in and fires once per new shot and timer completion', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'vibrate', { value: () => {

@@ -2,12 +2,14 @@ import { useId, useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
 import { ACHIEVEMENT_BOW_LABELS, ACHIEVEMENT_CATALOG, ACHIEVEMENT_RARITY_LABELS, ACHIEVEMENT_RARITY_ORDER,
-  achievementRarityFor, achievementScopesFor, achievementTierOrder, getAchievementDefinition } from './achievement-catalog.ts';
-import type { AchievementDefinition, AchievementRarity, AchievementScope } from './achievement-catalog.ts';
+  achievementRarityFor, achievementScopeBow, achievementScopeLabel, achievementScopesFor, achievementTierOrder, getAchievementDefinition } from './achievement-catalog.ts';
+import type { AchievementBowScope, AchievementDefinition, AchievementRarity, AchievementScope } from './achievement-catalog.ts';
 import { groupAchievementGrants } from './achievement-ledger.ts';
+import type { AchievementGrant } from './achievement-ledger.ts';
+import { stageRankBasisLabel } from './stage-rank-achievements.ts';
 import './achievement-gallery.css';
 
-export type AchievementGalleryGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; valid?: boolean };
+export type AchievementGalleryGrant = AchievementGrant;
 export type AchievementGalleryProgress = { id: string; scope: string; progress: number };
 export type AchievementGalleryProps = {
   grants: readonly AchievementGalleryGrant[];
@@ -16,7 +18,7 @@ export type AchievementGalleryProps = {
   onBack: () => void;
 };
 
-type ScopeFilter = AchievementScope | 'all';
+type ScopeFilter = AchievementBowScope | 'global' | 'all';
 type Status = {
   rule: AchievementDefinition;
   scope: AchievementScope;
@@ -76,7 +78,7 @@ function familiesFor(grants: readonly AchievementGalleryGrant[], progress: reado
   }
   const groups = new Map<string, Status[]>();
   for (const rule of ACHIEVEMENT_CATALOG) for (const scope of achievementScopesFor(rule)) {
-    if (selected === 'all' ? !activeScopes.has(scope) : selected !== scope) continue;
+    if (selected === 'all' ? !activeScopes.has(scope) : selected !== achievementScopeBow(scope)) continue;
     const key = evidenceKey(rule.id, scope);
     const grant = received.get(key);
     if (available && !available.has(rule.id) && !grant) continue;
@@ -147,7 +149,7 @@ function FamilyCard({ family, earnedOnly, onOpen }: { family: Family; earnedOnly
   return <button type="button" className="achievement-card" data-earned={!!main.grant} data-rarity={main.rarity}
     data-testid={`achievement-${main.rule.id}`} data-scope={scope} aria-labelledby={`${id}-name ${id}-scope`} aria-haspopup="dialog" onClick={onOpen}>
     <span className="achievement-card-meta">
-      <small id={`${id}-scope`}>{scope === 'global' ? 'Общее' : scopeLabels[scope]}</small>
+      <small id={`${id}-scope`}>{achievementScopeLabel(scope)}</small>
       {earned.length > 1 && <small className="achievement-earned-count">Получено ступеней: {earned.length}</small>}
     </span>
     <StatusHeading status={main} id={`${id}-name`} />
@@ -169,7 +171,7 @@ function FamilyDetails({ family, onClose }: { family: Family; onClose: () => voi
   const levels = [...family.earned, ...(family.next ? [family.next] : []), ...family.locked];
   return <BottomSheet title={family.main.rule.title} onClose={onClose} tag="achievement-details">
     <div className="achievement-details">
-      <p className="achievement-detail-scope">{family.scope === 'global' ? 'Общее достижение' : scopeLabels[family.scope]}</p>
+      <p className="achievement-detail-scope">{family.scope === 'global' ? 'Общее достижение' : achievementScopeLabel(family.scope)}</p>
       {levels.map(status => {
         const isNext = status === family.next;
         return <article className="achievement-detail" data-testid={`achievement-detail-${status.rule.id}`} data-state={status.grant ? 'earned' : isNext ? 'next' : 'locked'} key={status.rule.id}>
@@ -177,6 +179,7 @@ function FamilyDetails({ family, onClose }: { family: Family; onClose: () => voi
           {status.grant ? <Received grant={status.grant} precise /> : isNext ? <NextState status={status} /> : <LockedState />}
           <p className="achievement-flavor">{status.rule.flavor}</p>
           <p className="achievement-requirement">{status.rule.description}</p>
+          {status.grant?.stageRank && <small>{stageRankBasisLabel(status.grant.stageRank)}</small>}
           {isNext && <Progress status={status} />}
         </article>;
       })}
@@ -200,7 +203,7 @@ export function ProfileAchievements({ grants, showEarned, onOpen }: {
       return <button type="button" className="profile-achievement-row" key={group.key} aria-haspopup="dialog"
         onClick={() => setOpened(family)}>
         <StatusHeading status={family.main} />
-        {family.scope !== 'global' && <small>{scopeLabels[family.scope]}</small>}
+        {family.scope !== 'global' && <small>{achievementScopeLabel(family.scope)}</small>}
         {group.additional.length > 0 && <small>+{group.additional.length}</small>}
       </button>;
     })}

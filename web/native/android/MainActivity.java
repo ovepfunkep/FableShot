@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DocumentExportPlugin.class);
         registerPlugin(AndroidUpdatesPlugin.class);
+        registerPlugin(PracticeTimerSoundPlugin.class);
         registerPlugin(TrainingWindowPlugin.class);
         super.onCreate(savedInstanceState);
         showTrainingWhenLocked(this, false);

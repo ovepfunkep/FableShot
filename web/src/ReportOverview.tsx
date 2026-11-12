@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { currentSeries, roundShots } from './practice.ts';
 import type { Practice } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
@@ -60,7 +60,7 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, grants, onAchievement, onOpenRecordSession, onPause }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause }: {
   practice: Practice;
   entries: readonly DiaryEntry[];
   entryId: string | null;
@@ -74,6 +74,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onRankReference: () => void;
   onTrash: (deleted: boolean) => boolean;
   onNotes: (scope: DiaryNoteScope) => void;
+  onRename: (title: string) => boolean;
   grants: readonly AchievementGrant[];
   onAchievement: (id: 'APP04') => void;
   onOpenRecordSession: (id: string) => void;
@@ -86,6 +87,14 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   const entry = entries.find(entry => entry.id === entryId);
   const deleted = !!entry?.deletedAt;
   const [trashOpen, setTrashOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState(false);
+  const menu = useRef<HTMLDialogElement>(null);
+  const rename = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => { if (menuOpen && !menu.current?.open) menu.current?.showModal(); }, [menuOpen]);
+  const renameOpen = renameDraft !== null;
+  useLayoutEffect(() => { if (renameOpen && !rename.current?.open) rename.current?.showModal(); }, [renameOpen]);
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const summary = (shots: readonly Shot[]) => result(shots, preferences.averageHundredths, visible('result'), visible('average'));
   const technique = practice.techniqueUses?.at(-1)?.selection;
@@ -110,18 +119,16 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         {hasShots && entry && <button type="button" className="icon-button" aria-label="Поделиться тренировкой" data-testid="report-share" onClick={() => setExportOpen(true)}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="6" cy="12" r="3" /><circle cx="18" cy="5" r="3" /><circle cx="18" cy="19" r="3" /><path d="m9 10 6-4M9 14l6 4" /></svg>
         </button>}
-        {!!uniqueConditions.size && <button type="button" className="icon-button" aria-label="Условия тренировки" data-testid="report-conditions-open"
-          onClick={() => setConditionsOpen(true)}><Icon name="notes" /></button>}
+        {entry && <button type="button" className="icon-button" aria-label="Действия с тренировкой" aria-haspopup="dialog" aria-expanded={menuOpen}
+          data-testid="report-menu-open" onClick={() => setMenuOpen(true)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            {[5, 12, 19].map(y => <circle key={y} cx="12" cy={y} r="1.65" />)}
+          </svg>
+        </button>}
       </div>
     </header>
     <div className="report-body" data-testid="report-screen">
-      <div className="report-title-row">
-        <h2 className="report-title">{entry?.title || 'Тренировка'}</h2>
-        {canResume && <button type="button" className="icon-button" aria-label="Удалить тренировку" onClick={() => setTrashOpen(true)}><Icon name="delete" /></button>}
-      </div>
-      {entry && (!deleted || !!entry.notes?.length) && <button type="button" className="report-notes-link" onClick={() => onNotes({})}>
-        <Icon name="notes" /> Заметки тренировки
-      </button>}
+      <h2 className="report-title">{entry?.title || 'Тренировка'}</h2>
       {entry?.trainingTime && visible('training_time') && <ReportDuration time={entry.trainingTime} />}
       {practice.savedAt === null && (!!focus.length || !!technique?.versionId) && <button type="button" className="report-focus" data-testid="report-technique-focus" onClick={onTechnique}>
         <span aria-hidden="true">☷</span><span>{focus.length ? focus.join(' · ') : technique?.title}</span>
@@ -154,6 +161,39 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         onCategory={rankCategory => update({ ...preferences, rankCategory })} onOpenReference={onRankReference} />}
       <TrainingReportMetrics practice={practice} entries={entries} />
     </div>
+    {menuOpen && entry && <dialog ref={menu} className="report-menu" aria-label="Действия с тренировкой"
+      onCancel={event => { event.preventDefault(); setMenuOpen(false); }}
+      onClick={event => { if (event.target === event.currentTarget) setMenuOpen(false); }}>
+      <div className="report-menu-items">
+        {!deleted && <button type="button" onClick={() => {
+          setMenuOpen(false); setRenameError(false); setRenameDraft(entry.title ?? '');
+        }}>Редактировать название</button>}
+        <button type="button" data-testid="report-conditions-open" disabled={!uniqueConditions.size}
+          onClick={() => { setMenuOpen(false); setConditionsOpen(true); }}>Условия тренировки</button>
+        {(!deleted || !!entry.notes?.length) && <button type="button" onClick={() => { setMenuOpen(false); onNotes({}); }}>Заметки тренировки</button>}
+        {!deleted && <button type="button" className="report-menu-delete" disabled={!canResume}
+          title={canResume ? undefined : 'Сначала заверши или приостанови тренировку'}
+          onClick={() => { setMenuOpen(false); setTrashOpen(true); }}>Удалить тренировку</button>}
+      </div>
+    </dialog>}
+    {renameOpen && <dialog ref={rename} className="confirm report-rename" aria-labelledby="report-rename-title"
+      onCancel={event => { event.preventDefault(); setRenameDraft(null); }}
+      onClick={event => { if (event.target === event.currentTarget) setRenameDraft(null); }}>
+      <form onSubmit={event => {
+        event.preventDefault();
+        if (onRename(renameDraft)) setRenameDraft(null);
+        else setRenameError(true);
+      }}>
+        <h2 id="report-rename-title">Редактировать название</h2>
+        <input autoFocus type="text" aria-label="Название тренировки" placeholder="Тренировка" maxLength={5000} value={renameDraft}
+          onChange={event => { setRenameDraft(event.currentTarget.value); setRenameError(false); }} />
+        {renameError && <p role="alert">Не удалось сохранить название. Попробуй ещё раз.</p>}
+        <div className="confirm-actions">
+          <button type="button" onClick={() => setRenameDraft(null)}>Отмена</button>
+          <button type="submit" className="primary">Сохранить</button>
+        </div>
+      </form>
+    </dialog>}
     {hasShots && entry && <ReportExport entry={{ ...entry, practice }} grants={grants} open={exportOpen} onClose={() => setExportOpen(false)} onAchievement={onAchievement} />}
     {conditionsOpen && <BottomSheet title="Условия тренировки" onClose={() => setConditionsOpen(false)}>
       <div className="report-conditions" data-testid="report-conditions">

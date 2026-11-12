@@ -1,6 +1,7 @@
-import { achievementScopesFor, getAchievementDefinition } from './achievement-catalog.ts';
+import { achievementScopesFor, getAchievementDefinition, isStageRankRule } from './achievement-catalog.ts';
 import { evaluateAchievementEvidence } from './achievement-evidence.ts';
 import { evaluateAchievementRecords } from './achievement-records.ts';
+import { confirmsStageRank } from './stage-rank-achievements.ts';
 import type { Diary } from './persistence.ts';
 
 const serviceRules = new Set(['APP01', 'APP04', 'APP08', 'MIND03', 'MIND04', 'MIND08']);
@@ -20,6 +21,7 @@ export function achievementValidity(diary: Diary): Map<string, boolean> {
     [entry.id, new Set(evaluateAchievementRecords(entry, diary.entries).map(item => `${item.id}:${item.scope}`))]));
   const evidence = new Map(evaluateAchievementEvidence(eligible, entry => entry.achievementEnrollment?.rankCategory ?? null)
     .map(item => [`${item.id}:${item.scope}`, item.progress]));
+  const eligibleById = new Map(eligible.map(entry => [entry.id, entry]));
 
   for (const grant of ledger.grants) {
     const key = `${grant.id}:${grant.scope}`;
@@ -29,6 +31,10 @@ export function achievementValidity(diary: Diary): Map<string, boolean> {
       validity.set(key, storedValid);
     } else if (!achievementScopesFor(definition).some(scope => scope === grant.scope)) {
       validity.set(key, false);
+    } else if (isStageRankRule(grant.id)) {
+      const entry = grant.sessionId ? eligibleById.get(grant.sessionId) : undefined;
+      validity.set(key, !!entry && !!grant.stageRank &&
+        confirmsStageRank(entry.practice, grant.id.startsWith('SNR') ? 'series' : 'round', grant.stageRank));
     } else if (recordRules.has(grant.id)) {
       validity.set(key, grant.sessionId !== undefined && recordEvidence.get(grant.sessionId)?.has(key) === true);
     } else {

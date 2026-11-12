@@ -1,6 +1,6 @@
 import type { Diary, DiaryEntry } from './persistence.ts';
 
-export type HistoryFilters = { query: string; from: string; to: string; distance: string; bow: string; deleted: boolean };
+export type HistoryFilters = { query: string; from: string; to: string; distance: string; bow: string; deleted: boolean; tournament?: 'linked' | 'ordinary' };
 export const DEFAULT_HISTORY_FILTERS: HistoryFilters = { query: '', from: '', to: '', distance: '', bow: '', deleted: false };
 const localDateFormat = new Intl.DateTimeFormat('sv-SE');
 
@@ -29,6 +29,15 @@ export function filterDiary(entries: readonly DiaryEntry[], filters: HistoryFilt
       .some(text => text.toLocaleLowerCase('ru-RU').includes(query))) return false;
     return true;
   }).sort(compareDiaryDate);
+}
+
+export function renameDiaryEntry(diary: Diary, id: string, title: string): Diary {
+  const entry = diary.entries.find(item => item.id === id);
+  if (!entry || entry.deletedAt) throw new Error('Тренировка недоступна для редактирования.');
+  const name = title.trim();
+  if (name.length > 5000) throw new Error('Название слишком длинное.');
+  if ((entry.title ?? '') === name) return diary;
+  return { ...diary, entries: diary.entries.map(item => item.id === id ? { ...item, title: name || undefined } : item) };
 }
 
 export function setDiaryDeleted(diary: Diary, id: string, deleted: boolean, now = new Date().toISOString()): Diary {

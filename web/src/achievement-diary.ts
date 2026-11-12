@@ -2,6 +2,7 @@ import { evaluateAchievementEvidence } from './achievement-evidence.ts';
 import { earnAchievements } from './achievement-ledger.ts';
 import { getAchievementDefinition } from './achievement-catalog.ts';
 import { evaluateAchievementRecords } from './achievement-records.ts';
+import { observeStageRanks, STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-achievements.ts';
 import type { AchievementGrant } from './achievement-ledger.ts';
 import type { Diary, DiaryEntry } from './persistence.ts';
 import type { RankCategory } from './sport-ranks.ts';
@@ -46,8 +47,21 @@ export function awardTrainingChange(previous: Diary, proposed: Diary, id: string
   if (!before || !entry || !ledger || !entry.achievementEnrollment || entry.achievementEnrollment.epoch !== ledger.epoch ||
     entry.source || entry.deletedAt || before.practice.savedAt !== null) return unchanged;
   const complete = entry.practice.savedAt !== null;
-  if (!complete && arrowCount(entry) <= arrowCount(before) && lastSeriesId(entry) === lastSeriesId(before)) return unchanged;
-  const updated = complete ? { ...entry, achievementEnrollment: { ...entry.achievementEnrollment, rankCategory: category } } : entry;
+  const enrollment = entry.achievementEnrollment;
+  const stage = enrollment.stageRankVersion === STAGE_RANK_ENROLLMENT_VERSION && !entry.nativeArchiveSession &&
+    before.practice !== entry.practice && !entry.practice.rounds.some(round => round.series.some(series => series.shots.some(shot => shot.imported)))
+    ? observeStageRanks(before.practice, entry.practice, category, enrollment.stageRankCategories) : null;
+  const stageEvidence = stage?.observations ?? [];
+  const categories = stage?.categories;
+  const updateCategories = categories !== undefined && categories !== enrollment.stageRankCategories;
+  const updated = complete || updateCategories ? { ...entry, achievementEnrollment: { ...enrollment,
+    ...(complete ? { rankCategory: category } : {}), ...(updateCategories ? { stageRankCategories: categories } : {}) } } : entry;
+  const entries = updated === entry ? proposed.entries : proposed.entries.map(item => item.id === id ? updated : item);
+  if (!complete && arrowCount(entry) <= arrowCount(before) && lastSeriesId(entry) === lastSeriesId(before)) {
+    if (!stageEvidence.length && !updateCategories) return unchanged;
+    const earned = earnAchievements(ledger, stageEvidence, now, id);
+    return { diary: { ...proposed, achievementLedger: earned.ledger, entries }, added: earned.added };
+  }
   function evidenceFor(diary: Diary, current: DiaryEntry) {
     const eligible = eligibleForAchievements(diary).map(item => item.id === id ? current : item);
     const evidence = evaluateAchievementEvidence(complete ? eligible : [current], item => item.achievementEnrollment?.rankCategory ?? null);
@@ -63,7 +77,6 @@ export function awardTrainingChange(previous: Diary, proposed: Diary, id: string
     (prior.get(`${item.id}:${item.scope}`) ?? 0) < (getAchievementDefinition(item.id)?.target ?? Infinity));
   // New rules must not turn previously recorded results into newly earned awards.
   const records = complete ? evaluateAchievementRecords(updated, previous.entries, category) : [];
-  const earned = earnAchievements(ledger, [...evidence, ...records], now, id);
-  return { diary: { ...proposed, achievementLedger: earned.ledger, entries: updated === entry ? proposed.entries :
-    proposed.entries.map(item => item.id === id ? updated : item) }, added: earned.added };
+  const earned = earnAchievements(ledger, [...evidence, ...records, ...stageEvidence], now, id);
+  return { diary: { ...proposed, achievementLedger: earned.ledger, entries }, added: earned.added };
 }

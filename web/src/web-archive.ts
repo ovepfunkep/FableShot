@@ -168,6 +168,13 @@ export function replaceArchiveRecords(records: DataRecords, expected: { records:
     Object.values(expected.records).some(value => value !== null && typeof value !== 'string')) throw new Error('Неверный снимок текущих данных.');
   if (archiveSourceToken(source) !== expected.token) throw new Error('Данные изменились после предпросмотра. Открой архив заново.');
   const state: StoredData = { version: 1, epoch: crypto.randomUUID(), records: structuredClone(records) };
+  // Restoring a receipt preserves the award and its evidence without replaying a live celebration.
+  const diary = state.records[DIARY_KEY] ? JSON.parse(state.records[DIARY_KEY]) as Diary : null;
+  const grants = diary?.achievementLedger?.grants;
+  if (diary && grants?.some(grant => grant.stageRank && !grant.notifiedAt)) {
+    for (const grant of grants) if (grant.stageRank && !grant.notifiedAt) grant.notifiedAt = grant.earnedAt;
+    state.records[DIARY_KEY] = JSON.stringify(diary);
+  }
   const previous = { version: 1, savedAt: new Date().toISOString(), records: structuredClone(expected.records), originalSource: expected.token };
   // Failure of either write leaves the old active data intact. No old keys are deleted.
   source.setItem(RECOVERY_DATA_KEY, JSON.stringify(previous));

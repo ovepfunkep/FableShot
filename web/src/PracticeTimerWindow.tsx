@@ -6,6 +6,8 @@ import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './practice-timer.css';
 
 const phaseTitle = (phase: TimerPhase) => phase === 'Series' ? 'Серия' : 'Отдых';
+const timerTone = (state: TimerState) => state.status === 'Finished' ? 'finished'
+  : state.status === 'Idle' ? undefined : state.phase === 'Series' ? 'series' : 'rest';
 
 function TimerIcon() {
   return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -44,7 +46,7 @@ function SlidingClock({ seconds, testIds = false }: { seconds: number; testIds?:
 
 export function PracticeTimerBadge({ state, onOpen }: { state: TimerState; onOpen: () => void }) {
   const seconds = displaySeconds(state);
-  return <button type="button" className={`practice-timer-badge${state.status === 'Running' ? ' is-running' : ''}`}
+  return <button type="button" className="practice-timer-badge" data-timer-tone={timerTone(state)}
     data-testid="practice-timer-open" aria-label={`Таймер: ${phaseTitle(state.phase)}, ${timerClock(seconds)}`} onClick={onOpen}>
     <TimerIcon />
     {state.status !== 'Idle' && <SlidingClock seconds={seconds} />}
@@ -129,13 +131,15 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
             {phaseTitle(phase)}
           </button>)}
         </div>
-        <SlidingClock seconds={displaySeconds(state)} testIds />
-        <p className="practice-timer-status" data-testid="timer-status">{status}</p>
+        <div className="practice-timer-face" data-timer-tone={timerTone(state)}>
+          <SlidingClock seconds={displaySeconds(state)} testIds />
+          <p className="practice-timer-status" data-testid="timer-status">{status}</p>
+        </div>
         <div className="practice-timer-actions">
           <button type="button" className="primary" data-testid="timer-toggle" disabled={saving} onClick={onToggle}>{action}</button>
           <button type="button" className="timer-reset" data-testid="timer-reset" disabled={saving} onClick={onReset}>Сброс</button>
         </div>
-        <p className="practice-timer-note">Отсчёт в фоне продолжается. Серии переключаешь сам.</p>
+        <p className="practice-timer-note">Один длинный сигнал — конец серии. Два коротких — конец отдыха.</p>
         <hr />
         <h3>Длительности</h3>
         <div className="practice-timer-durations">

@@ -6,6 +6,7 @@ import type { DataRecords } from './app-storage.ts';
 import { exportDocument } from './document-export.ts';
 import { DIARY_KEY, loadDiary } from './persistence.ts';
 import { Icon } from './TrainingChrome.tsx';
+import { SettingsAction } from './SettingsScreen.tsx';
 import { archiveDigest, captureArchiveState, createWebArchive, inspectWebArchive, lastRecovery, MAX_ARCHIVE_BYTES, preserveArchiveSource, replaceArchiveRecords } from './web-archive.ts';
 import type { ArchiveSummary, WebArchivePreview } from './web-archive.ts';
 import type { NativeConversion } from './native-conversion.ts';
@@ -152,13 +153,13 @@ export function ArchiveScreen({ onBack, onAchievement }: { onBack: () => void; o
       <button type="button" className="archive-action" data-testid="account-reset-finish" onClick={() => window.location.reload()}>На главную</button>
     </div>
   </main>;
-  return <main className="conditions-page" data-testid="archive-screen">
+  return <main className="conditions-page settings-page" data-testid="archive-screen">
     <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Архив дневника</h1></header>
     <div className="conditions-content archive-content">
       <p className="archive-caption">Тренировки, снаряжение, памятки и настройки — в одном файле. Проверка архива не меняет текущий дневник.</p>
-      <button type="button" className="archive-action" disabled={busy} data-testid="archive-save" onClick={() => void saveBackup()}>Сохранить архив</button>
+      <SettingsAction icon="archive" disabled={busy} data-testid="archive-save" onClick={() => void saveBackup()}>Сохранить архив</SettingsAction>
       <input ref={picker} type="file" hidden accept=".fableshot,.zip,application/zip,application/octet-stream" data-testid="archive-file" onChange={event => void select(event)} />
-      <button type="button" className="archive-action" disabled={busy} onClick={() => void chooseArchive()}>Выбрать и проверить архив</button>
+      <button type="button" className="archive-action primary" disabled={busy} onClick={() => void chooseArchive()}>Выбрать и проверить архив</button>
       {hasOriginal && <button type="button" className="archive-action" data-testid="native-archive-original" disabled={busy} onClick={() => void action(async () => {
         const reference = loadDiary().nativeArchive;
         if (!reference) return;
@@ -191,7 +192,7 @@ export function ArchiveScreen({ onBack, onAchievement }: { onBack: () => void; o
         <h2>Последняя локальная копия</h2><p>{new Date(recovery.savedAt).toLocaleString('ru-RU')}</p><Summary summary={recovery.summary} />
         <button type="button" className="archive-action" disabled={busy} data-testid="archive-recover" onClick={() => setConfirm('recovery')}>Восстановить копию</button>
       </section>}
-      <button type="button" className="archive-reset" disabled={busy} data-testid="account-reset" onClick={() => setConfirm('reset')}>Обнулить профиль</button>
+      <SettingsAction icon="delete" tone="danger" aria-haspopup="dialog" disabled={busy} data-testid="account-reset" onClick={() => setConfirm('reset')}>Обнулить профиль</SettingsAction>
     </div>
     {confirm && <BottomSheet title={confirm === 'reset' ? 'Обнулить профиль?' : 'Заменить текущий дневник?'} onClose={() => setConfirm(null)} tag="archive-confirm">
       <p>{confirm === 'reset' ? 'Тренировки, снаряжение, памятки и настройки будут сброшены. Сначала сохранится архив; локальная копия также останется для восстановления.'

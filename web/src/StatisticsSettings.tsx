@@ -5,10 +5,13 @@ export function StatisticsSettings() {
   const { preferences, update, error } = useTrainingPreferences();
   const disabled = preferences.disabledStatistics ?? [];
   return <div className="statistics-settings">
-    <button type="button" className="text-action" data-testid="statistics-enable-all" disabled={!!error || !disabled.length}
-      onClick={() => update({ ...preferences, disabledStatistics: [] })}>Показывать всё</button>
+    <div className="settings-statistics-heading">
+      <h2>Показатели и графики</h2>
+      <button type="button" className="text-action" data-testid="statistics-enable-all" disabled={!!error || !disabled.length}
+        onClick={() => update({ ...preferences, disabledStatistics: [] })}>Показывать всё</button>
+    </div>
     {STATISTIC_SECTIONS.map(section => <section className="statistics-settings-section" key={section.title}>
-      <h2>{section.title}</h2>
+      <h3>{section.title}</h3>
       {section.items.map(([key, label]) => {
         const visible = statisticVisible(preferences, key);
         return <div className="preference-row" key={key}>

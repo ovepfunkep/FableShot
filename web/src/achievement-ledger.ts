@@ -1,17 +1,35 @@
 import { achievementRarityFor, achievementScopesFor, achievementTierOrder, ACHIEVEMENT_RARITY_ORDER, getAchievementDefinition } from './achievement-catalog.ts';
 import type { RankCategory } from './sport-ranks.ts';
+import type { StageRankBasis } from './stage-rank-achievements.ts';
 
-export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null };
-export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; valid?: boolean; nativeSnapshot?: true };
+export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1;
+  stageRankCategories?: Record<string, RankCategory | null> };
+export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; valid?: boolean; nativeSnapshot?: true; stageRank?: StageRankBasis };
 export type AchievementLedger = { epoch: string; grants: AchievementGrant[]; publications?: { documentId: string; fingerprint: string }[] };
-export type AchievementObservation = { id: string; scope: string; progress: number };
+export type AchievementObservation = { id: string; scope: string; progress: number; stageRank?: StageRankBasis };
 
 const identity = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256;
 
 export function isAchievementEnrollment(value: unknown): value is AchievementEnrollment {
   if (!value || typeof value !== 'object') return false;
   const enrollment = value as Partial<AchievementEnrollment>;
-  return identity(enrollment.epoch) && (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female');
+  const categories = enrollment.stageRankCategories;
+  return identity(enrollment.epoch) && (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female') &&
+    (enrollment.stageRankVersion === undefined || enrollment.stageRankVersion === 1) &&
+    (categories === undefined || (enrollment.stageRankVersion === 1 && !!categories && typeof categories === 'object' &&
+      !Array.isArray(categories) && Object.entries(categories).every(([id, category]) =>
+        /^[1-9]\d*$/.test(id) && (category === null || category === 'male' || category === 'female'))));
+}
+
+function validStageRank(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const basis = value as StageRankBasis;
+  const positive = (item: unknown) => Number.isSafeInteger(item) && Number(item) > 0;
+  return [basis.roundId, basis.arrows, basis.exerciseArrows, basis.threshold, basis.distance, basis.diameter].every(positive) &&
+    Array.isArray(basis.seriesIds) && basis.seriesIds.length > 0 && basis.seriesIds.every(positive) &&
+    new Set(basis.seriesIds).size === basis.seriesIds.length && Number.isSafeInteger(basis.points) && basis.points >= 0 &&
+    basis.points <= basis.arrows * 10 && basis.threshold <= basis.exerciseArrows * 10 &&
+    [basis.revision, basis.target, basis.bow].every(identity);
 }
 
 export function isAchievementLedger(value: unknown): value is AchievementLedger {
@@ -35,7 +53,8 @@ export function isAchievementLedger(value: unknown): value is AchievementLedger 
       (grant.valid !== undefined && typeof grant.valid !== 'boolean') ||
       (grant.nativeSnapshot !== undefined && grant.nativeSnapshot !== true) ||
       (grant.notifiedAt !== undefined && (typeof grant.notifiedAt !== 'string' || !Number.isFinite(Date.parse(grant.notifiedAt)))) ||
-      (grant.sessionId !== undefined && !identity(grant.sessionId))) return false;
+      (grant.sessionId !== undefined && !identity(grant.sessionId)) ||
+      (grant.stageRank !== undefined && (!identity(grant.sessionId) || !validStageRank(grant.stageRank)))) return false;
     const key = `${grant.id}:${grant.scope}`;
     if (keys.has(key)) return false;
     keys.add(key);
@@ -51,7 +70,8 @@ export function earnAchievements(ledger: AchievementLedger, observations: readon
     const key = `${observation.id}:${observation.scope}`;
     if (!rule || keys.has(key) || !Number.isFinite(observation.progress) || observation.progress < rule.target ||
       !achievementScopesFor(rule).some(scope => scope === observation.scope)) continue;
-    added.push({ id: observation.id, scope: observation.scope, earnedAt, ...(sessionId ? { sessionId } : {}) });
+    added.push({ id: observation.id, scope: observation.scope, earnedAt, ...(sessionId ? { sessionId } : {}),
+      ...(observation.stageRank ? { stageRank: observation.stageRank } : {}) });
     keys.add(key);
   }
   return { ledger: added.length ? { ...ledger, grants: [...ledger.grants, ...added] } : ledger, added };

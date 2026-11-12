@@ -3,6 +3,7 @@ import { performTrainingHaptic } from './native-training-window.ts';
 import { DEFAULT_TIMER_SETTINGS, displaySeconds, initialTimer, loadTimerSettings, resetTimer,
   saveTimerSettings, selectTimerPhase, tickTimer, toggleTimer } from './timer.ts';
 import type { TimerPhase, TimerSettings, TimerState } from './timer.ts';
+import { createTimerSound } from './timer-sound.ts';
 
 function readSettings(): TimerSettings | null {
   try { return loadTimerSettings(); }
@@ -14,6 +15,8 @@ export function usePracticeTimer(active: boolean, haptics = false) {
   const settingsRef = useRef(settings);
   const [state, setState] = useState(() => initialTimer(settings ?? DEFAULT_TIMER_SETTINGS));
   const live = useRef(state);
+  const [sound] = useState(createTimerSound);
+  useEffect(() => () => sound.dispose(), [sound]);
 
   const publish = useCallback((next: TimerState) => {
     live.current = next;
@@ -25,6 +28,7 @@ export function usePracticeTimer(active: boolean, haptics = false) {
 
   useEffect(() => {
     if (!active) {
+      sound.cancel();
       publish(resetTimer(live.current, settingsRef.current ?? DEFAULT_TIMER_SETTINGS));
       return;
     }
@@ -45,7 +49,7 @@ export function usePracticeTimer(active: boolean, haptics = false) {
       document.removeEventListener('visibilitychange', tick);
       window.removeEventListener('pageshow', tick);
     };
-  }, [active, haptics, publish]);
+  }, [active, haptics, publish, sound]);
 
   function prepare(): boolean {
     try {
@@ -63,6 +67,7 @@ export function usePracticeTimer(active: boolean, haptics = false) {
     if (live.current.status === 'Running' || live.current.status === 'Paused') return false;
     try {
       saveTimerSettings(next);
+      sound.cancel();
       settingsRef.current = next;
       setSettings(next);
       publish(resetTimer(live.current, next));
@@ -71,14 +76,20 @@ export function usePracticeTimer(active: boolean, haptics = false) {
   }
 
   function toggle() {
-    if (active && settingsRef.current) publish(toggleTimer(live.current, Date.now()));
+    if (!active || !settingsRef.current) return;
+    const next = toggleTimer(live.current, Date.now());
+    if (next.deadlineMillis !== null) sound.schedule(next.phase, next.deadlineMillis);
+    else if (next.status === 'Paused') sound.cancel();
+    publish(next);
   }
 
   function reset() {
+    sound.cancel();
     if (settingsRef.current) publish(resetTimer(live.current, settingsRef.current));
   }
 
   function select(phase: TimerPhase) {
+    sound.cancel();
     if (settingsRef.current) publish(selectTimerPhase(live.current, phase, settingsRef.current));
   }
 

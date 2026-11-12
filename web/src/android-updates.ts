@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const repository = 'ovepfunkep/FableShot';
 const downloadRoot = `https://github.com/${repository}/releases/download/`;
 const endpoint = `https://api.github.com/repos/${repository}/releases/latest`;
-const lastCheckKey = 'app.fableshot.android-update-check.v1';
-const day = 86_400_000;
 const bridge = registerPlugin<{
   installedVersion(): Promise<{ production: boolean; code: number }>;
   openDownload(options: { url: string }): Promise<void>;
@@ -32,14 +30,13 @@ export function readAndroidUpdate(value: unknown, installed: number): Update | n
   return latest;
 }
 
-export function useAndroidUpdates() {
+export function useAndroidUpdates(homeActive: boolean) {
   const [installed, setInstalled] = useState<number | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
   const [status, setStatus] = useState('');
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState(0);
-  const running = useRef(false);
-  const lastAttempt = useRef(0);
+  const pending = useRef<Promise<Update | null> | null>(null);
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== 'android' || !Capacitor.isPluginAvailable('AndroidUpdates')) return;
@@ -49,50 +46,46 @@ export function useAndroidUpdates() {
   }, []);
 
   const check = useCallback(async (manual: boolean) => {
-    if (installed === null || running.current) return;
+    if (installed === null) return;
     if (navigator.onLine === false) {
       if (manual) setStatus('Для проверки обновлений нужен интернет.');
       return;
     }
-    let stored = 0;
-    try { stored = Number(localStorage.getItem(lastCheckKey)) || 0; } catch { /* Use the in-memory timestamp. */ }
-    const now = Date.now(), last = Math.max(lastAttempt.current, stored);
-    if (!manual && now >= last && now - last < day) return;
-    running.current = true;
-    lastAttempt.current = now;
-    try { localStorage.setItem(lastCheckKey, String(now)); } catch { /* Storage is optional for the check. */ }
     if (manual) { setChecking(true); setStatus('Проверяю обновления…'); setDismissed(0); }
-    try {
-      const response = await fetch(endpoint, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
+    const request = pending.current ??= (async () => {
+      const response = await fetch(endpoint, { cache: 'no-cache', headers: { Accept: 'application/vnd.github+json' },
+        signal: AbortSignal.timeout(8000) });
       if (!response.ok && response.status !== 404) throw new Error('GitHub недоступен');
       const next = response.status === 404 ? null : readAndroidUpdate(await response.json(), installed);
       setUpdate(next);
+      return next;
+    })().finally(() => { pending.current = null; });
+    try {
+      const next = await request;
       if (manual) setStatus(next ? '' : 'Обновлений для Android пока нет.');
     } catch {
       if (manual) setStatus('Не удалось проверить обновления. Попробуй позже.');
     } finally {
-      running.current = false;
       if (manual) setChecking(false);
     }
   }, [installed]);
 
   useEffect(() => {
-    if (installed === null) return;
-    const automatic = () => { void check(false); };
-    const timer = window.setTimeout(automatic, 1200);
-    const onVisible = () => { if (document.visibilityState === 'visible') automatic(); };
+    if (installed === null || !homeActive) return;
+    const automatic = () => { if (document.visibilityState === 'visible') void check(false); };
+    automatic();
     window.addEventListener('online', automatic);
-    document.addEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', automatic);
     return () => {
-      window.clearTimeout(timer); window.removeEventListener('online', automatic);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', automatic);
+      document.removeEventListener('visibilitychange', automatic);
     };
-  }, [check, installed]);
+  }, [check, homeActive, installed]);
 
   async function download() {
-    if (!update) return;
-    try { await bridge.openDownload({ url: update.url }); }
-    catch { setStatus('Не удалось открыть загрузку APK.'); }
+    if (!update) return false;
+    try { await bridge.openDownload({ url: update.url }); return true; }
+    catch { return false; }
   }
 
   return { available: installed !== null, update, status, checking, check: () => void check(true), download,

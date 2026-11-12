@@ -1,11 +1,15 @@
 .practice-timer-badge {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-width: 40px; max-width: 108px; height: 40px; padding: 0 10px; border: 0;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: 44px; height: 54px; padding: 0; border: 0;
   border-radius: 999px; background: transparent; color: var(--muted);
 }
 .practice-timer-badge svg { flex: none; }
-.practice-timer-badge.is-running svg { color: var(--accent); }
-.practice-timer-badge .timer-clock { font-size: 12px; line-height: 18px; color: #f2f6ee; }
+.practice-timer-badge .timer-clock { font-size: 11px; line-height: 14px; }
+[data-timer-tone="series"] { --timer-tone: var(--accent); --timer-surface: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+[data-timer-tone="rest"] { --timer-tone: light-dark(#125d7e, #8cd4f2); --timer-surface: color-mix(in srgb, var(--timer-tone) 12%, var(--surface)); }
+[data-timer-tone="finished"] { --timer-tone: light-dark(#9a2f24, #ff9e91); --timer-surface: color-mix(in srgb, var(--timer-tone) 14%, var(--surface)); }
+.practice-timer-badge[data-timer-tone] { color: var(--timer-tone); }
+.practice-timer-face { display: grid; justify-items: center; gap: 6px; padding: 14px 0; border-radius: 18px; background: var(--timer-surface, var(--raised)); color: var(--timer-tone, inherit); }
 .practice-timer-sheet {
   position: fixed; inset: auto 0 0; margin: 0 auto; width: min(100%, 550px); max-width: none;
   max-height: calc(100dvh - 12px); padding: 0; border: 0; overflow: auto;
@@ -24,7 +28,7 @@
 .timer-clock-cell { display: inline-flex; justify-content: center; width: .64em; height: 1.15em; overflow: hidden; line-height: 1.15; }
 .timer-clock-cell > span { display: inline-block; }
 .timer-clock-cell.timer-clock-colon { width: .28em; }
-.practice-timer-content > .timer-clock { width: 100%; font-size: 57px; line-height: 64px; font-weight: 400; }
+.practice-timer-face > .timer-clock { width: 100%; font-size: 57px; line-height: 64px; font-weight: 400; }
 .practice-timer-status { margin: 0; align-self: center; font-size: 14px; line-height: 20px; }
 .practice-timer-actions { display: flex; gap: 12px; }
 .practice-timer-actions .primary { flex: 1; }

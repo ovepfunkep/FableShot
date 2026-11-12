@@ -95,7 +95,7 @@ try {
 $nativeSource = Join-Path $webRoot 'native/android'
 $nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.Replace('.', '/'))
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
-foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java')) {
+foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java')) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
     $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")
@@ -126,6 +126,9 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'android/app/src/main/res/drawable-n
 $manifestPath = Join-Path $shell 'app/src/main/AndroidManifest.xml'
 $manifest = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifest.Replace('@mipmap/ic_launcher_round', '@drawable/fableshot_icon').Replace('@mipmap/ic_launcher', '@drawable/fableshot_icon').Replace('android:allowBackup="true"', 'android:allowBackup="false"')
+if ($manifest -notmatch 'android.permission.WAKE_LOCK') {
+    $manifest = $manifest.Replace('</manifest>', "    <uses-permission android:name=`"android.permission.WAKE_LOCK`" />`n</manifest>")
+}
 [IO.File]::WriteAllText($manifestPath, $manifest, $utf8)
 
 Push-Location -LiteralPath $shell

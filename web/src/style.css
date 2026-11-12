@@ -88,23 +88,25 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 
 .training-controls { flex: none; padding: 4px 16px; background: #18231b; }
 .training-tools { display: flex; align-items: center; justify-content: flex-end; min-height: 40px; }
-.training-tools > .practice-timer-badge { margin-right: auto; }
-.training-tools .icon-button { width: 40px; height: 40px; }
+.training-hit-strip { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; align-items: center; height: 66px; }
+.training-timer-slot { display: grid; place-items: center; }
+.training-hit-strip > .icon-button { width: 44px; height: 44px; }
 .arrow-panel { position: relative; }
 .arrow-list {
-  position: relative; display: flex; align-items: center; gap: 6px;
-  height: 52px; margin: 0; padding: 0; list-style: none;
+  display: flex; height: 66px; overflow: hidden;
 }
-.arrow-list li { flex: 1 1 0; min-width: 0; display: grid; place-items: center; }
-.arrow-list-scroll { overflow-x: auto; scrollbar-width: none; gap: 4px; }
-.arrow-list-scroll li { flex: 0 0 48px; }
+.arrow-list-scroll { overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory; overscroll-behavior-inline: contain; }
+.arrow-page { flex: 0 0 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; align-content: center; list-style: none; margin: 0; padding: 0; scroll-snap-align: start; }
+.arrow-page-12 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.arrow-page li { min-width: 0; display: grid; place-items: center; }
 .arrow-slot {
   position: relative; display: grid; place-items: center; overflow: hidden;
-  width: 100%; height: 52px; padding: 0; border: 1px solid #657368; border-radius: 999px;
+  width: 100%; height: 44px; padding: 0; border: 1px solid #657368; border-radius: 999px;
   background: var(--surface); font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .arrow-slot:disabled { opacity: 1; }
-.arrow-slot.compact { width: 36px; height: 36px; font-size: 14px; }
+.arrow-slot.compact { width: 100%; height: 30px; font-size: 13px; }
+.arrow-page-12 .arrow-slot.compact { max-width: 38px; }
 .arrow-entered { border-color: #c6d0c6; }
 .arrow-entering { border: 2px solid #d5ddd5; animation: arrow-entering 850ms ease-in-out infinite alternate; }
 .arrow-slot[aria-pressed="true"] {
@@ -116,8 +118,8 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .arrow-number { position: absolute; left: 0; font-size: 48px; line-height: 1; font-weight: 800; opacity: .12; }
 .arrow-score { position: relative; }
 .arrow-physical-number { position: absolute; top: 3px; right: 10px; font-size: 10px; font-weight: 800; line-height: 1; }
-.arrow-slot.compact:has(.arrow-physical-number) .arrow-score { transform: translateY(5px); }
-.arrow-slot.compact .arrow-physical-number { right: 0; left: 0; font-size: 8px; }
+.arrow-slot.compact:has(.arrow-physical-number) .arrow-score { transform: translateY(4px); }
+.arrow-slot.compact .arrow-physical-number { top: 2px; right: 0; left: 0; font-size: 7px; }
 .physical-arrow-edit { min-height: 36px; padding: 0 12px; margin-right: 8px; border: 1px solid var(--edge); border-radius: 99px; background: var(--surface); color: var(--accent); font-size: 13px; font-weight: 700; }
 .physical-arrow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: min(456px, 60dvh); overflow: auto; overscroll-behavior: contain; padding: 2px; }
 .physical-arrow-option { min-height: 52px; border: 1px solid var(--edge); border-radius: 99px; background: var(--surface); font-size: 16px; font-weight: 700; }

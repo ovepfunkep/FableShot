@@ -1,10 +1,40 @@
-.about-screen, .about-links { display: grid; gap: 12px; }
-.about-links .technique-condition-link { display: flex; align-items: center; text-decoration: none; min-height: 44px; }
-.about-credits { padding: 12px 16px; background: var(--surface); border: 1px solid var(--edge); border-radius: var(--card-radius); }
-.about-credits summary { cursor: pointer; line-height: 32px; font-weight: 700; }
+.about-screen { display: grid; gap: 16px; }
+.about-brand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--card-radius);
+  background: var(--surface);
+}
+.about-brand img { border-radius: 12px; }
+.about-brand .web-release-version { border: 0; background: transparent; }
+.about-brand .web-release-version > :first-child { color: var(--text); font-weight: 700; }
+.about-brand .web-release-version > :nth-child(2) { color: var(--accent); }
+.about-credits { padding: 0 13px; background: var(--surface); border: 1px solid var(--edge); border-radius: var(--card-radius); }
+.about-credits summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding-block: 8px;
+  cursor: pointer;
+  font-size: .9375rem;
+  font-weight: 700;
+}
+.about-credits summary::-webkit-details-marker { display: none; }
+.about-credits summary > svg { width: 18px; height: 18px; color: var(--muted); }
+.about-credits[open] summary > svg { transform: rotate(90deg); }
 .about-credits-list { display: grid; gap: 18px; padding: 20px 0; text-align: center; }
 .about-credits-list h2 { margin: 0; color: var(--accent); font-size: 1.2rem; }
 .about-credits-list p { max-width: 30ch; margin: 0 auto; line-height: 1.5; }
 .about-copyright { color: var(--muted); text-align: center; font-size: .8125rem; }
-.android-update { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--edge); border-radius: var(--card-radius); background: var(--surface); }
-.android-update-notes { margin: 0; max-height: 9rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: .875rem; }
+.android-update { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; padding: 4px 12px; border: 1px solid var(--edge); border-radius: var(--card-radius); background: var(--surface); }
+.android-update-actions { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.android-update-actions button { padding: 0; min-height: 44px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: .875rem; cursor: pointer; }
+.android-update-actions .android-update-dismiss { color: var(--muted); }
+.android-update > small { flex-basis: 100%; padding-bottom: 6px; }
+.android-update-notes { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }

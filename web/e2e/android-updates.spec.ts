@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('Android finds an update on launch, keeps the daily limit, and opens the APK only on request', async ({ page }) => {
+test('Android rechecks when Home becomes active and opens release notes or the APK only on request', async ({ page }) => {
   const url = 'https://github.com/ovepfunkep/FableShot/releases/download/v0.27.0/FableShot-android-40.apk';
   await page.addInitScript(() => {
     Object.assign(window, {
@@ -25,20 +25,36 @@ test('Android finds an update on launch, keeps the daily limit, and opens the AP
     } });
   });
   await page.goto('./');
-  await expect(page.getByTestId('android-update')).toContainText('Новый отчёт');
+  const card = page.getByTestId('android-update');
+  await expect(card).toContainText('Доступно обновление!');
+  await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
   expect(checks).toBe(1);
+  await card.getByRole('button', { name: 'Что нового?' }).click();
+  await expect(page.getByRole('dialog', { name: 'Что нового в FableShot 0.27.0' })).toContainText('Новый отчёт');
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('opened-apk'))).toBeNull();
   await page.getByRole('button', { name: 'Скачать APK' }).click();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('opened-apk'))).toBe(url);
-  await page.reload();
+  await card.getByRole('button', { name: 'Позже' }).click();
+  await page.getByTestId('nav-history').click();
+  const activate = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await activate();
+  expect(checks).toBe(1);
+  await page.getByTestId('nav-home').click();
+  await expect.poll(() => checks).toBe(2);
+  await expect(card).toHaveCount(0);
+  await activate();
+  await expect.poll(() => checks).toBe(3);
+
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-about').click();
   const manual = page.getByRole('button', { name: 'Проверить обновления' });
   await expect(manual).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect(page.getByTestId('android-update')).not.toContainText('Новый отчёт');
-  expect(checks).toBe(1);
+  expect(checks).toBe(3);
   await manual.click();
-  await expect(page.getByTestId('android-update')).toContainText('Новый отчёт');
-  expect(checks).toBe(2);
+  await expect.poll(() => checks).toBe(4);
+  await expect(card).toContainText('Доступно обновление!');
+  await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
 });

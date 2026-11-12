@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { awardPublication, awardServiceAction, awardTrainingChange, eligibleForAchievements } from '../src/achievement-diary.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+import { advanceSeries, completePractice, deleteSeries, replaceShot, startRound } from '../src/practice.ts';
+import type { Practice } from '../src/practice.ts';
+import { achievementValidity } from '../src/achievement-validity.ts';
+import { groupAchievementGrants } from '../src/achievement-ledger.ts';
 import { isDiary } from '../src/persistence.ts';
 import type { Diary, DiaryEntry } from '../src/persistence.ts';
 import type { Shot } from '../src/target.ts';
@@ -26,6 +30,82 @@ function training(id: string, rows: number[][], options: { active?: boolean; enr
 
 const diary = (entries: DiaryEntry[], currentEpoch = epoch): Diary => ({ version: 1, entries, achievementLedger: { epoch: currentEpoch, grants: [] } });
 const completed = (entry: DiaryEntry): DiaryEntry => ({ ...entry, practice: { ...entry.practice, savedAt: now } });
+
+function stageTraining(rows: number[][], bow = 'barebow', unit: Practice['roundRule']['unit'] = 'arrows', limit: number | null = 30): DiaryEntry {
+  const entry = training('stage', rows, { active: true, enrollment: epoch });
+  entry.achievementEnrollment!.stageRankVersion = 1;
+  entry.practice.roundRule = { unit, limit };
+  for (const round of entry.practice.rounds) for (const series of round.series) series.conditions.equipment!.bow.category = bow;
+  return entry;
+}
+
+function changeStage(before: Diary, change: (practice: Practice) => Practice, category: 'male' | 'female' | null = 'male') {
+  const [entry] = before.entries;
+  const result = awardTrainingChange(before, { ...before, entries: [{ ...entry, practice: change(entry.practice) }] }, entry.id, category, now);
+  assert.ok(isDiary(result.diary));
+  return { ...result, stages: result.added.filter(grant => grant.stageRank) };
+}
+
+test('rank series wait for closure and cascade once per bow, category and reference format', () => {
+  const entry = stageTraining([[10, 10, 10]]);
+  const initial = diary([entry]);
+  assert.deepEqual(changeStage(initial, practice => practice).stages, []);
+  const closed = changeStage(initial, advanceSeries);
+  assert.deepEqual(closed.stages.map(grant => grant.id), ['SNR01', 'SNR02', 'SNR03', 'SNR04', 'SNR05', 'SNR06']);
+  assert.equal(groupAchievementGrants(closed.stages)[0].additional.length, 5);
+  assert.match(closed.stages[0].scope, /barebow-18-60-male/);
+  assert.equal(closed.stages.at(-1)?.stageRank?.threshold, 553);
+  const second = stageTraining([[10, 10, 10]]);
+  const repeated = { ...closed.diary, entries: [{ ...second, id: 'second' }] };
+  assert.deepEqual(changeStage(repeated, advanceSeries).stages, []);
+  assert.match(changeStage(repeated, advanceSeries, 'female').stages[0].scope, /female/);
+  assert.deepEqual(changeStage(diary([stageTraining([[10, 10, 10]], 'recurve')]), advanceSeries).stages.map(grant => grant.id),
+    ['SNR01', 'SNR02', 'SNR03']);
+});
+
+test('a full round is distinct from its last series and respects each type of round boundary', () => {
+  const rows = Array.from({ length: 10 }, () => [10, 10, 10]);
+  for (const [unit, limit] of [['arrows', 30], ['series', 10], ['unlimited', null]] as const) {
+    const entry = stageTraining(rows, 'barebow', unit, limit);
+    const initial = diary([entry]);
+    if (unit === 'unlimited') assert.ok(changeStage(initial, advanceSeries).stages.every(grant => grant.id.startsWith('SNR')));
+    const result = changeStage(initial, practice => completePractice(practice, now));
+    assert.deepEqual(groupAchievementGrants(result.stages).map(group => [group.leading.id, group.additional.length]), [
+      ['SNR06', 5], ['RNR06', 5],
+    ]);
+  }
+  const short = stageTraining([...rows.slice(0, 9), [10, 10]]);
+  assert.deepEqual(changeStage(diary([short]), startRound).stages, []);
+  const mixed = stageTraining(rows);
+  mixed.practice.rounds[0].series[0].conditions = DEFAULT_CONDITIONS;
+  assert.ok(changeStage(diary([mixed]), startRound).stages.every(grant => grant.id.startsWith('SNR')));
+});
+
+test('older and incomplete samples do not earn, while an exact live correction keeps the closure category', () => {
+  const incomplete = stageTraining([[10, 10, 10]]);
+  incomplete.practice.rounds[0].series[0].plannedCount = 6;
+  assert.deepEqual(changeStage(diary([incomplete]), advanceSeries).stages, []);
+  const old = stageTraining([[10, 10, 10]]);
+  delete old.achievementEnrollment!.stageRankVersion;
+  assert.deepEqual(changeStage(diary([old]), advanceSeries).stages, []);
+  const imported = stageTraining([[10, 10, 10]]);
+  imported.practice.rounds[0].series[0].shots[0].imported = true;
+  assert.deepEqual(changeStage(diary([imported]), advanceSeries).stages, []);
+  const initial = diary([stageTraining([[10, 10, 0]])]);
+  const closed = changeStage(initial, advanceSeries);
+  assert.deepEqual(closed.stages.map(grant => grant.id), ['SNR01']);
+  const improved = changeStage(closed.diary, practice => replaceShot(practice, 2, 2, shot(7)), 'female');
+  assert.deepEqual(improved.stages.map(grant => grant.id), ['SNR02', 'SNR03', 'SNR04', 'SNR05']);
+  assert.ok(improved.stages.every(grant => grant.scope.endsWith('-male:wa-indoor-outer-v1')));
+  const best = changeStage(improved.diary, practice => replaceShot(practice, 2, 2, shot(8)));
+  assert.deepEqual(best.stages.map(grant => grant.id), ['SNR06']);
+  const key = `SNR06:${best.stages[0].scope}`;
+  assert.equal(achievementValidity(best.diary).get(key), true);
+  const removed = changeStage(best.diary, practice => deleteSeries(practice, 2));
+  assert.equal(achievementValidity(removed.diary).get(key), false);
+  const historical = { ...best.diary, entries: [completed(best.diary.entries[0])] };
+  assert.deepEqual(changeStage(historical, practice => replaceShot(practice, 2, 0, shot(9))).stages, []);
+});
 
 test('service actions create their own ledger without enrolling historical training', () => {
   const old = training('legacy', [[10, 10, 10]]);

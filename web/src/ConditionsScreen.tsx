@@ -8,6 +8,8 @@ import { getTargetProfile, acceptsDiameter, TARGET_PROFILES } from './target.ts'
 import { isConditions, isRoundRule, loadPresets, savePreset, removePreset } from './conditions.ts';
 import type { Conditions, RoundRule, TrainingPreset } from './conditions.ts';
 import { TrainingPreferenceControls } from './TrainingPreferences.tsx';
+import { tournamentTitle } from './tournaments.ts';
+import type { Tournament, TournamentChoice } from './tournaments.ts';
 import './conditions.css';
 
 export function BottomSheet({ title, onClose, children, tag }: {
@@ -82,11 +84,11 @@ function readPresets() {
   catch (error) { return { presets: [] as TrainingPreset[], error: error instanceof Error ? error.message : 'Не удалось прочитать избранное.' }; }
 }
 
-export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTimer, onTechnique, techniqueTitle }: {
+export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
-  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null) => boolean; onBack: () => void;
-  onTimer: () => void;
+  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => boolean; onBack: () => void;
+  tournaments?: readonly Tournament[];
   onTechnique: () => void; techniqueTitle: string;
 }) {
   const [distance, setDistance] = useState(String(initial.distanceMeters));
@@ -94,6 +96,14 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const [profileId, setProfileId] = useState(initial.targetProfileId);
   const [equipment, setEquipment] = useState(initial.equipment);
   const [numberedArrows, setNumberedArrows] = useState(initialNumbering);
+  const [tournamentKey, setTournamentKey] = useState('');
+  const tournamentOptions = (tournaments ?? []).filter(item => !item.completed).flatMap(item =>
+    item.starts.flatMap((start, index) => {
+      if (start.status === 'absent') return [];
+      const choice = { tournamentId: item.id, startId: start.id };
+      return [{ key: JSON.stringify(choice), choice, label: `${tournamentTitle(item)} · ${start.category || `Старт ${index + 1}`}` }];
+    }));
+  const tournamentChoice = tournamentOptions.find(option => option.key === tournamentKey)?.choice;
   const hasNumberedSet = equipment?.arrows.numberedCount !== undefined;
   const [roundUnit, setRoundUnit] = useState(rule.unit);
   const [roundLimit, setRoundLimit] = useState(String(rule.limit ?? 30));
@@ -187,13 +197,21 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
         <Icon name="notes" /><span><strong>Памятка и фокус</strong><small>{techniqueTitle}</small></span><Icon name="right" />
       </button>
-      <ConditionRow title={editableRule ? 'Раунд' : 'Параметры тренировки'} value={editableRule ? ruleText(nextRule) : 'Отображение · таймер'} icon="round" tag="conditions-options"
+      <ConditionRow title={editableRule ? 'Раунд' : 'Параметры тренировки'} value={editableRule ? ruleText(nextRule) : 'Отображение'} icon="round" tag="conditions-options"
         onClick={() => setSheet('round')} />
+      {tournamentOptions.length > 0 && <label className="conditions-tournament">
+        <Icon name="trophy" /><span>Турнир</span>
+        <select aria-label="Турнирный старт" value={tournamentKey} onChange={event => setTournamentKey(event.target.value)}>
+          <option value="">Обычная тренировка</option>
+          {tournamentOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+        </select>
+      </label>}
       {error && <p className="conditions-error" role="alert">{error}</p>}
     </div>
     <footer className="conditions-footer">
       <button type="button" className="primary" data-testid="start-training" disabled={!valid} onClick={() => {
-        if (!onApply(nextConditions, nextRule, numberedArrows)) setError('Не удалось применить условия. Повтори действие.');
+        if (tournamentKey && !tournamentChoice) { setError('Этот турнирный старт больше недоступен. Выбери другой.'); return; }
+        if (!onApply(nextConditions, nextRule, numberedArrows, tournamentChoice)) setError('Не удалось применить условия. Повтори действие.');
       }}>{editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
     </footer>
     {sheet === 'equipment' && <EquipmentPicker selected={equipment} onSelect={setEquipment} onClose={() => setSheet(null)} editSelected={editEquipment} />}
@@ -236,7 +254,6 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
           </div>}
           <TrainingPreferenceControls />
         </details>
-        <button type="button" className="text-action" data-testid="conditions-timer" onClick={() => { setSheet(null); onTimer(); }}>Таймер серии и отдыха</button>
         <button type="button" className="primary" data-testid="conditions-options-done" onClick={() => setSheet(null)}>Готово</button>
       </div>
     </BottomSheet>}

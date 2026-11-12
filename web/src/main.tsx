@@ -18,13 +18,16 @@ import { Icon, TrainingFooter, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
 import { JournalHistory, JournalProgress } from './JournalTabs.tsx';
+import { TournamentsScreen } from './TournamentsScreen.tsx';
+import { finishTournament, linkTournamentSession, saveTournament, unlinkTournamentSession } from './tournaments.ts';
+import type { TournamentChoice } from './tournaments.ts';
 import { EquipmentCatalog } from './EquipmentCatalog.tsx';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { WebReleaseNotes } from './WebReleaseNotes.tsx';
 import { AboutScreen } from './AboutScreen.tsx';
 import { WebOnboarding } from './WebOnboarding.tsx';
 import { WebThemeSettings } from './WebThemeSettings.tsx';
-import { SettingsScreen } from './SettingsScreen.tsx';
+import { SettingsAction, SettingsScreen } from './SettingsScreen.tsx';
 import type { SettingsSection } from './SettingsScreen.tsx';
 import { AchievementGallery } from './AchievementGallery.tsx';
 import { AchievementNotice } from './AchievementNotices.tsx';
@@ -39,10 +42,12 @@ import { ACHIEVEMENT_ACTION_RULE_IDS, awardPublication, awardServiceAction, awar
 import type { AchievementActionId } from './achievement-diary.ts';
 import { achievementValidity } from './achievement-validity.ts';
 import { ACHIEVEMENT_EVIDENCE_RULE_IDS, evaluateAchievementEvidence } from './achievement-evidence.ts';
+import { STAGE_RANK_RULES } from './achievement-catalog.ts';
+import { STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-achievements.ts';
 import { DiaryNotesSheet } from './DiaryNotesSheet.tsx';
 import { NotebookScreen } from './NotebookScreen.tsx';
 import type { DiaryNoteScope } from './diary-notes.ts';
-import { compareDiaryDate, DEFAULT_HISTORY_FILTERS, setDiaryDeleted } from './diary-history.ts';
+import { compareDiaryDate, DEFAULT_HISTORY_FILTERS, renameDiaryEntry, setDiaryDeleted } from './diary-history.ts';
 import { startTrainingTime, stopTrainingTime } from './training-time.ts';
 import { equipmentSnapshot, loadEquipment } from './equipment.ts';
 import { PhysicalArrowPicker } from './PhysicalArrowPicker.tsx';
@@ -81,13 +86,13 @@ function initialDiary(): { diary: Diary | null; error: string } {
 }
 
 function App() {
-  const androidUpdates = useAndroidUpdates();
   const { preferences, readable: preferencesReadable, update: updatePreferences } = useTrainingPreferences();
   const [state, setState] = useState(initialDiary);
   const diaryRef = useRef(state.diary);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tab, setTab] = useState<JournalTab>('home');
-  const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook'>('journal');
+  const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
+  const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
   const [myTargetsOpen, setMyTargetsOpen] = useState(false);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [onboardingRequested, setOnboardingRequested] = useState(false);
@@ -104,7 +109,7 @@ function App() {
       entry.personalRecords?.filter(record => record.notifiedAtMs === null &&
         record.recordedAtMs <= now && now - record.recordedAtMs <= 10_000) ?? []) ?? [];
   });
-  const [reportBack, setReportBack] = useState<'journal' | 'training' | 'profile' | 'records' | 'best-ranks' | 'notebook'>('journal');
+  const [reportBack, setReportBack] = useState<'journal' | 'training' | 'profile' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
   const [ranksBack, setRanksBack] = useState<'records' | 'profile'>('records');
   const [reportTrail, setReportTrail] = useState<string[]>([]);
   const [conditionsBack, setConditionsBack] = useState<'journal' | 'training'>('training');
@@ -251,6 +256,7 @@ function App() {
   }
 
   const entries = state.diary?.entries ?? [];
+  const tournaments = state.diary?.tournaments ?? [];
   const entry = entries.find(item => item.id === sessionId);
   const ongoing = entries.find(item => item.practice.savedAt === null && !item.paused && !item.deletedAt);
   const paused = entries.filter(item => item.paused && !item.deletedAt).sort(compareDiaryDate)[0];
@@ -296,7 +302,7 @@ function App() {
     setPage(next);
   }
 
-  function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows) {
+  function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice) {
     if (ongoing) { selectEntry(ongoing, 'training'); return true; }
     if (!conditions && paused) return resumeEntry(paused);
     const chosen = refreshConditions(conditions ?? suggested.conditions);
@@ -308,8 +314,12 @@ function App() {
     const baseline = freezeProgressBaseline(diaryRef.current?.entries ?? [], id, startedAt, chosen, startedAt);
     const achievementLedger = diaryRef.current?.achievementLedger ?? { epoch: crypto.randomUUID(), grants: [] };
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
-      achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null } };
-    if (!writeDiary(previous => ({ ...previous, achievementLedger, lastSetup: trainingSetup(next), entries: [...previous.entries, item] }))) return false;
+      achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
+        stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION } };
+    if (!writeDiary(previous => {
+      const draft = { ...previous, achievementLedger, lastSetup: trainingSetup(next), entries: [...previous.entries, item] };
+      return tournament ? linkTournamentSession(draft, tournament, id) : draft;
+    })) return false;
     setSetupMemo(null);
     selectEntry(item, 'training');
     return true;
@@ -406,9 +416,10 @@ function App() {
   const roundFull = isRoundFull(practice);
   const canAppend = !seriesEditor && !!entry && !past && !completed && !(practice.roundRule.unit === 'arrows' && roundFull);
   const canInput = !pendingShot && (editing !== null || canAppend);
-  const slotCount = Math.max(seriesEditor ? 1 : 3, shots.length + (canAppend ? 1 : 0));
-  const seriesIds = practice.rounds.flatMap(item => item.series.map(end => end.id));
+  const allSeries = practice.rounds.flatMap(item => item.series);
+  const seriesIds = allSeries.map(end => end.id);
   const position = seriesIds.indexOf(series.id);
+  const previousVolume = !seriesEditor && !past && !completed ? allSeries[position - 1]?.shots.length ?? 0 : 0;
   const hasHits = practice.rounds.some(item => item.series.some(end => end.shots.length));
   const mainText = editing || seriesEditor ? 'Сохранить' : completed ? 'К статистике' : past ? 'К текущей серии'
     : roundFull ? 'Следующий раунд' : 'Следующая серия';
@@ -489,7 +500,9 @@ function App() {
   function leaveTraining() {
     if (completed) setPage('report');
     else if (hasHits) openConfirm('finish');
-    else if (writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId) }))) {
+    else if (writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId),
+      ...(previous.tournaments && sessionId ? { tournaments: unlinkTournamentSession(previous.tournaments, sessionId) } : {}),
+    }))) {
       setSessionId(null);
       setTab('home');
       setPage('journal');
@@ -599,6 +612,7 @@ function App() {
   const firstOnboarding = page === 'journal' && tab === 'home' && state.diary !== null && entries.length === 0 &&
     preferencesReadable && !preferences.onboardingSeen && !onboardingDismissed;
   const showingOnboarding = firstOnboarding || onboardingRequested || tutorialRequested;
+  const androidUpdates = useAndroidUpdates(!showingOnboarding && page === 'journal' && tab === 'home');
   function leaveOnboarding() {
     if (preferencesReadable && !preferences.onboardingSeen) updatePreferences({ ...preferences, onboardingSeen: true });
     setOnboardingDismissed(true);
@@ -639,6 +653,7 @@ function App() {
       case 'notebook':
       case 'records': setPage('profile'); break;
       case 'profile': setPage('journal'); break;
+      case 'tournaments': setPage(tournamentsBack); break;
     }
   });
   if (showingOnboarding) {
@@ -665,7 +680,8 @@ function App() {
         if (ongoing) selectEntry(ongoing, 'conditions');
         else { setSessionId(null); setPage('conditions'); }
       }} />}
-    {tab === 'history' && <JournalHistory entries={entries} filters={historyFilters} onFilters={setHistoryFilters} onOpen={openSaved} />}
+    {tab === 'history' && <JournalHistory entries={entries} filters={historyFilters} onFilters={setHistoryFilters} onOpen={openSaved}
+      tournaments={tournaments} onTournaments={() => { setTournamentsBack('journal'); setPage('tournaments'); }} />}
     {tab === 'progress' && <JournalProgress entries={recent} />}
     {tab === 'equipment' && <EquipmentCatalog />}
     {releaseNotes}
@@ -674,7 +690,8 @@ function App() {
 
   if (page === 'achievements') return <AchievementGallery grants={grants}
     progress={state.diary ? evaluateAchievementEvidence(eligibleForAchievements(state.diary), entry => entry.achievementEnrollment?.rankCategory ?? null) : []}
-    availableRuleIds={[...ACHIEVEMENT_EVIDENCE_RULE_IDS, ...ACHIEVEMENT_ACTION_RULE_IDS, 'PROGRESS04', 'PROGRESS06', 'PROGRESS10']} onBack={() => setPage('profile')} />;
+    availableRuleIds={[...ACHIEVEMENT_EVIDENCE_RULE_IDS, ...ACHIEVEMENT_ACTION_RULE_IDS, ...STAGE_RANK_RULES.map(rule => rule.id),
+      'PROGRESS04', 'PROGRESS06', 'PROGRESS10']} onBack={() => setPage('profile')} />;
   if (page === 'records') return <>
     <PersonalRecordsScreen entries={recent} onBack={() => setPage('profile')} onOpen={id => openRecordReport(id, 'records')}
       onRanks={() => { setRanksBack('records'); setPage('best-ranks'); }} />
@@ -696,7 +713,18 @@ function App() {
     onSaveSession={(id, notes) => writeDiary(previous => ({
       ...previous, entries: previous.entries.map(item => item.id === id ? { ...item, notes } : item),
     }))} />;
+  if (page === 'tournaments') return <TournamentsScreen tournaments={tournaments} entries={entries}
+    onBack={() => setPage(tournamentsBack)} onSave={item => writeDiary(previous => saveTournament(previous, item))}
+    onFinish={id => writeDiary(previous => finishTournament(previous, id))}
+    onRemove={id => writeDiary(previous => ({ ...previous, tournaments: previous.tournaments?.filter(item => item.id !== id) }))}
+    onOpenSession={id => {
+      const selected = entries.find(item => item.id === id && !item.deletedAt);
+      if (!selected) return;
+      setReportTrail([]); setReportBack('tournaments'); selectEntry(selected, 'report');
+    }} />;
   if (page === 'profile') return <><ProfileScreen entries={recent} grants={grants} onAchievements={() => setPage('achievements')}
+    tournamentCount={tournaments.filter(item => item.starts.some(start => start.status === 'participated')).length}
+    onTournaments={() => { setTournamentsBack('profile'); setPage('tournaments'); }}
     onNotebook={() => setPage('notebook')}
     onRecords={() => setPage('records')}
     onAchievement={recordServiceAchievement} onPublication={publication => void recordPublication(publication)}
@@ -707,7 +735,7 @@ function App() {
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     appearance={<WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />}
-    motion={<>
+    motion={<div className="settings-panel">
       <TrainingPreferenceControls keys={['animations', 'haptics']} />
       <div className="preference-row"><span className="preference-title">Показывать достижения</span>
         <button type="button" role="switch" className="preference-switch" aria-label="Показывать достижения" aria-checked={preferences.showAchievementNotices !== false}
@@ -718,23 +746,25 @@ function App() {
               setRecordQueue([]);
             }
           }}><span /></button></div>
+    </div>}
+    training={<div className="settings-panel"><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores']} /></div>}
+    statistics={<>
+      <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths']} /></div>
+      <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>
+      <StatisticsSettings />
     </>}
-    training={<TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores']} />}
-    statistics={<><TrainingPreferenceControls keys={['averageHundredths']} /><StatisticsSettings />
-      <button type="button" className="technique-condition-link" onClick={() => setRankReference(true)}>Разрядная сетка</button></>}
     data={<>
-        <button type="button" className="technique-condition-link" data-testid="settings-archive" onClick={() => setPage('archive')}>Архив и восстановление</button>
-        <button type="button" className="technique-condition-link" data-testid="settings-mytargets" onClick={() => setMyTargetsOpen(true)}>Импорт MyTargets</button>
-        <button type="button" className="technique-condition-link" onClick={() => setAchievementResetOpen(true)} disabled={!state.diary?.achievementLedger}>Обнулить достижения</button>
+      <div className="settings-actions">
+        <SettingsAction icon="archive" data-testid="settings-archive" onClick={() => setPage('archive')}>Архив и восстановление</SettingsAction>
+        <SettingsAction icon="download" data-testid="settings-mytargets" aria-haspopup="dialog" onClick={() => setMyTargetsOpen(true)}>Импорт MyTargets</SettingsAction>
+      </div>
+      <SettingsAction icon="undo" tone="danger" aria-haspopup="dialog" onClick={() => setAchievementResetOpen(true)}
+        disabled={!state.diary?.achievementLedger}>Обнулить достижения</SettingsAction>
     </>}
-    help={<>
-      <button type="button" className="technique-condition-link" data-testid="settings-onboarding" onClick={() => setOnboardingRequested(true)}>
-        <Icon name="notes" /><span>Знакомство с FableShot</span><Icon name="right" />
-      </button>
-      <button type="button" className="technique-condition-link" data-testid="help-tutorial" onClick={() => setTutorialRequested(true)}>
-        <Icon name="help" /><span>Как отмечать попадания</span><Icon name="right" />
-      </button>
-    </>}
+    help={<div className="settings-actions">
+      <SettingsAction icon="book" data-testid="settings-onboarding" onClick={() => setOnboardingRequested(true)}>Знакомство с FableShot</SettingsAction>
+      <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialRequested(true)}>Как отмечать попадания</SettingsAction>
+    </div>}
     about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
     {rankWindow}
@@ -756,11 +786,11 @@ function App() {
     {offlineLabel}
     <ConditionsScreen initial={setup ? newConditions : active.series.conditions} rule={setup ? suggested.rule : practice.roundRule} editableRule={!hasHits}
       initialNumbering={setup ? suggested.numberedArrows : practice.numberedArrows ?? null}
-      onTimer={openTimer}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
-      onBack={leaveConditions} onApply={(conditions, rule, numberedArrows) => {
+      tournaments={setup ? tournaments : undefined}
+      onBack={leaveConditions} onApply={(conditions, rule, numberedArrows, tournament) => {
         if (setup) {
-          return startPractice(conditions, rule, numberedArrows);
+          return startPractice(conditions, rule, numberedArrows, tournament);
         }
         const success = update(previous => {
           const next = applyConditions(previous, conditions, hasHits ? undefined : rule, numberedArrows);
@@ -774,7 +804,6 @@ function App() {
         return success;
       }} />
     {error}
-    {timerWindow}
     {techniqueWindow}
   </>;
 
@@ -786,6 +815,7 @@ function App() {
       onAchievement={id => recordServiceAchievement(id, sessionId ?? undefined)}
       grants={grants.filter(grant => grant.sessionId === sessionId)}
       onNotes={setNotesScope}
+      onRename={title => !!entry && writeDiary(previous => renameDiaryEntry(previous, entry.id, title))}
       onTrash={deleted => {
         if (!entry) return false;
         return writeDiary(previous => setDiaryDeleted(previous, entry.id, deleted));
@@ -853,7 +883,7 @@ function App() {
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark} navigation={navigation}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}
-    <TrainingFooter shots={shots} slots={slotCount} selected={editing?.index ?? null}
+    <TrainingFooter key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} mainText={mainText}
       mainEnabled={!!entry && !pendingShot && (seriesEditor ? dirty : editing !== null || completed || past || shots.length > 0 || roundFull)}
       mainRef={primary} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}

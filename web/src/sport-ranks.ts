@@ -85,6 +85,14 @@ const supportedFormats = [
 
 const referenceRowsById = new Map(RANK_REFERENCE.map(row => [row.sourceRow, row]));
 
+export const STAGE_RANK_LABELS = ['III', 'II', 'I', 'КМС', 'МС', 'МСМК'] as const;
+export const STAGE_RANK_FORMATS = supportedFormats.flatMap(format =>
+  (['male', 'female'] as const).flatMap(category => format.targets.map(target => ({
+    scope: `stage-v1:${format.bow}-${format.distance}-${format.arrows}-${category}:${target}`,
+    bow: format.bow, distance: format.distance, arrows: format.arrows, diameter: format.diameter, category, target,
+    thresholds: referenceRowsById.get(format.sourceRow)![category],
+  }))));
+
 export function matchingRankExercises(conditions: Conditions, category: RankCategory): RankExercise[] {
   return supportedFormats.filter(format => format.bow === conditions.equipment?.bow.category &&
     format.distance === conditions.distanceMeters && format.diameter === conditions.targetDiameterMm &&

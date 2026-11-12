@@ -56,3 +56,6 @@
 .round-help { margin: 0; font-size: 14px; line-height: 1.7; }
 .preset-editor { display: grid; gap: 12px; }
 .saved-preset { display: flex; align-items: center; justify-content: space-between; }
+.conditions-tournament { display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 8px; padding-inline: 8px; color: var(--muted); font-size: 13px; }
+.conditions-tournament svg { width: 18px; height: 18px; color: light-dark(#795210, #e8c577); }
+.conditions-tournament select { min-width: 0; min-height: 44px; padding: 6px; border: 1px solid var(--edge); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }

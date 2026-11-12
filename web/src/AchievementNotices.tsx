@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
-import { ACHIEVEMENT_RARITY_LABELS, achievementRarityFor, getAchievementDefinition } from './achievement-catalog.ts';
+import { ACHIEVEMENT_RARITY_LABELS, achievementRarityFor, achievementScopeLabel, getAchievementDefinition } from './achievement-catalog.ts';
+import { stageRankBasisLabel } from './stage-rank-achievements.ts';
 import { groupAchievementGrants } from './achievement-ledger.ts';
 import type { AchievementGrant, AchievementGroup } from './achievement-ledger.ts';
 import './achievement-notices.css';
@@ -61,6 +62,7 @@ export function SessionAchievements({ grants }: { grants: readonly AchievementGr
     {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(null)}>
       <ul className="achievement-earned-list">{[expanded.leading, ...expanded.additional].map(grant => <li key={grant.id}>
         <GrantTitle grant={grant} /><p>{getAchievementDefinition(grant.id)?.description}</p>
+        {grant.stageRank && <small>{achievementScopeLabel(grant.scope)} · {stageRankBasisLabel(grant.stageRank)}</small>}
       </li>)}</ul>
     </BottomSheet>}
   </section>;
