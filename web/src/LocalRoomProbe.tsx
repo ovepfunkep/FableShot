@@ -57,7 +57,9 @@ function InvitationQr({ invitation }: { invitation: string }) {
   return <img className="room-probe-qr" src={qr.createDataURL(5, 20)} alt="QR приглашения в комнату" />;
 }
 
-export default function LocalRoomProbe({ native, onTraining }: { native: boolean; onTraining?: (membership: RoomMembership) => void }) {
+export default function LocalRoomProbe({ native, onTraining, unavailableReason }: {
+  native: boolean; onTraining?: (membership: RoomMembership) => void; unavailableReason?: string;
+}) {
   const [addresses, setAddresses] = useState<string[]>([]);
   const [address, setAddress] = useState('');
   const [room, setRoom] = useState<RoomStatus>({});
@@ -164,6 +166,7 @@ export default function LocalRoomProbe({ native, onTraining }: { native: boolean
         const membership = await createRoomMembership(verified);
         if (alive.current) onTraining(membership);
       })}>Начать групповую тренировку</button>}
+      {unavailableReason && verified === invitation.trim() && verified && <p role="alert">{unavailableReason}</p>}
     </div>}
     {message && <p role="status">{message}</p>}
     {error && <p role="alert" className="room-probe-error">{error}</p>}

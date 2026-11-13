@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createHash, createHmac, createPublicKey, verify } from 'node:crypto';
+import { appendShot, emptyPractice } from '../src/practice.ts';
 
 test('Android group training keeps its series queued during an outage and sends it after reconnecting', async ({ page }) => {
   const invitation = 'FS1:192.168.43.1:25000:' + 'a'.repeat(32);
@@ -13,7 +14,10 @@ test('Android group training keeps its series queued during an outage and sends 
     if (uploads.length === 1) return null;
     return { endId: operation.endId, revision: operation.revision };
   });
-  await page.addInitScript(invite => {
+  await page.addInitScript(({ invite, practice }) => {
+    localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries: [
+      { id: 'personal', startedAt: '2026-11-13T00:00:00Z', practice },
+    ] }));
     Object.assign(window, { androidBridge: {}, Capacitor: {
       PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'publish', 'snapshot'].map(name => ({ name, rtype: 'promise' })) }],
       nativePromise: async (_plugin: string, method: string, options?: { payload: string; publicKey: string; signature: string }) => {
@@ -27,12 +31,16 @@ test('Android group training keeps its series queued during an outage and sends 
         return result;
       },
     } });
-  }, invitation);
+  }, { invite: invitation, practice: appendShot(emptyPractice(), { point: null, code: 'M', points: 0 }) });
   await page.goto('./');
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-local-room').click();
   await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+  await page.getByRole('button', { name: 'Выбрать условия' }).click();
   await page.getByTestId('start-training').click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).entries[0])).toMatchObject({
+    id: 'personal', paused: true, practice: { rounds: [{ series: [{ shots: [{ code: 'M' }] }] }] },
+  });
   await page.getByRole('button', { name: 'Отметить промах' }).click();
   await page.getByTestId('next-end').click();
   const status = page.getByTestId('room-sync-status');
@@ -123,4 +131,7 @@ test('published web client authenticates the reply without sending the invite se
   await expect(page.getByRole('alert')).toContainText('Нет ответа от комнаты');
   await page.getByRole('button', { name: 'Проверить связь' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Комната ответила' })).toBeVisible();
+  await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+  await page.getByTestId('start-training').click();
+  await expect(page.getByTestId('room-sync-status')).toHaveText('Групповая');
 });

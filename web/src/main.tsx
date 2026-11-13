@@ -121,6 +121,7 @@ function App() {
   const [reportTrail, setReportTrail] = useState<string[]>([]);
   const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report' | 'settings'>('training');
   const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
+  const [roomSwitch, setRoomSwitch] = useState<RoomMembership | null>(null);
   const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
   const syncingRoom = useRef(false);
   const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
@@ -339,7 +340,7 @@ function App() {
   }
 
   function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice) {
-    if (ongoing) { selectEntry(ongoing, 'training'); return true; }
+    if (ongoing && !roomSetup) { selectEntry(ongoing, 'training'); return true; }
     if (!conditions && paused) return resumeEntry(paused);
     const chosen = refreshConditions(conditions ?? suggested.conditions);
     if (!chosen) return false;
@@ -357,7 +358,12 @@ function App() {
       catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
     }
     if (!writeDiary(previous => {
-      const draft = { ...previous, achievementLedger, lastSetup: trainingSetup(next), entries: [...previous.entries, item] };
+      // Pause the other practice only when the new group practice is actually saved.
+      const existing = roomSetup && ongoing ? previous.entries.map(candidate => candidate.id === ongoing.id ? {
+        ...candidate, paused: true,
+        ...(candidate.trainingTime ? { trainingTime: stopTrainingTime(candidate.trainingTime, Date.parse(startedAt)) } : {}),
+      } : candidate) : previous.entries;
+      const draft = { ...previous, achievementLedger, lastSetup: trainingSetup(next), entries: [...existing, item] };
       if (roomSetup) draft.groupSeries = [...(previous.groupSeries ?? []), { ...newGroupSeriesJournal(roomSetup.roomId, roomSetup.entryId, item.practice), trainingId: id }];
       return tournament ? linkTournamentSession(draft, tournament, id) : draft;
     })) return false;
@@ -374,6 +380,19 @@ function App() {
     setReportTrail([]);
     setReportBack('journal');
     selectEntry(item, item.practice.savedAt || item.paused || item.deletedAt ? 'report' : 'training');
+  }
+
+  function prepareRoomTraining(membership: RoomMembership) {
+    setRoomSwitch(null);
+    setRoomSetup(membership); setSetupMemo(null); setRepeatSetup(null); setSessionId(null);
+    setConditionsBack('settings'); setPage('conditions');
+  }
+
+  function enterRoomTraining(membership: RoomMembership) {
+    const linked = state.diary?.groupSeries?.find(journal => journal.roomId === membership.roomId && journal.trainingId === ongoing?.id);
+    if (linked && ongoing) selectEntry(ongoing, 'training');
+    else if (ongoing) setRoomSwitch(membership);
+    else prepareRoomTraining(membership);
   }
 
   function resumeEntry(item: DiaryEntry) {
@@ -800,10 +819,8 @@ function App() {
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     localRoom={supportsLocalRoom()
       ? <Suspense fallback={<p>Открываем проверку связи…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
-        onTraining={!ongoing && state.diary ? membership => {
-          setRoomSetup(membership); setSetupMemo(null); setRepeatSetup(null); setSessionId(null);
-          setConditionsBack('settings'); setPage('conditions');
-        } : undefined} /></Suspense> : undefined}
+        onTraining={state.diary ? enterRoomTraining : undefined}
+        unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense> : undefined}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
@@ -840,6 +857,10 @@ function App() {
     </div>}
     about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
+    {roomSwitch && <BottomSheet title="Перейти в групповую тренировку?" onClose={() => setRoomSwitch(null)}>
+      <p>Текущая тренировка встанет на паузу после запуска групповой. Её можно будет продолжить из истории.</p>
+      <button type="button" className="primary" onClick={() => prepareRoomTraining(roomSwitch)}>Выбрать условия</button>
+    </BottomSheet>}
     {rankWindow}
     {myTargetsOpen && <MyTargetsImport onClose={() => setMyTargetsOpen(false)} />}
     {releaseHistoryOpen && releaseNotes}
