@@ -26,6 +26,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PracticeTimerSoundPlugin.class);
         registerPlugin(TrainingWindowPlugin.class);
         registerPlugin(AppScalePlugin.class);
+        registerPlugin(LocalRoomProbePlugin.class);
         super.onCreate(savedInstanceState);
         if (getBridge() != null) getBridge().getWebView().getSettings().setTextZoom(100);
         showTrainingWhenLocked(this, false);

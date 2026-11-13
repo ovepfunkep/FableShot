@@ -95,7 +95,7 @@ try {
 $nativeSource = Join-Path $webRoot 'native/android'
 $nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.Replace('.', '/'))
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
-foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java')) {
+foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java')) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
     $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")
@@ -128,6 +128,14 @@ $manifest = [IO.File]::ReadAllText($manifestPath)
 $manifest = $manifest.Replace('@mipmap/ic_launcher_round', '@drawable/fableshot_icon').Replace('@mipmap/ic_launcher', '@drawable/fableshot_icon').Replace('android:allowBackup="true"', 'android:allowBackup="false"')
 if ($manifest -notmatch 'android.permission.WAKE_LOCK') {
     $manifest = $manifest.Replace('</manifest>', "    <uses-permission android:name=`"android.permission.WAKE_LOCK`" />`n</manifest>")
+}
+foreach ($permission in @('CAMERA', 'ACCESS_NETWORK_STATE')) {
+    if (!$manifest.Contains("android.permission.$permission")) {
+        $manifest = $manifest.Replace('</manifest>', "    <uses-permission android:name=`"android.permission.$permission`" />`n</manifest>")
+    }
+}
+if (!$manifest.Contains('android.hardware.camera')) {
+    $manifest = $manifest.Replace('</manifest>', "    <uses-feature android:name=`"android.hardware.camera`" android:required=`"false`" />`n</manifest>")
 }
 [IO.File]::WriteAllText($manifestPath, $manifest, $utf8)
 

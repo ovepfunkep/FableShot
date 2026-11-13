@@ -9,6 +9,7 @@ const sections = [
   { id: 'statistics', title: 'Статистика', icon: 'stats' },
   { id: 'data', title: 'Данные и перенос', icon: 'download' },
   { id: 'help', title: 'Помощь', icon: 'help' },
+  { id: 'local-room', title: 'Проверка локальной комнаты', icon: 'motion' },
   { id: 'about', title: 'О приложении', icon: 'about' },
 ] as const;
 
@@ -50,7 +51,7 @@ export function SettingsAction({ icon, children, tone, ...props }: {
   return <button type="button" className="settings-entry" data-tone={tone} {...props}>{content}</button>;
 }
 
-export function SettingsScreen({ section, onSection, onBack, appearance, motion, training, statistics, data, help, about, children }: {
+export function SettingsScreen({ section, onSection, onBack, appearance, motion, training, statistics, data, help, about, localRoom, children }: {
   section: SettingsSection | null;
   onSection: (section: SettingsSection | null) => void;
   onBack: () => void;
@@ -61,10 +62,11 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
   data: ReactNode;
   help: ReactNode;
   about: ReactNode;
+  localRoom?: ReactNode;
   children?: ReactNode;
 }) {
   const selected = sections.find(item => item.id === section);
-  const content = { appearance, motion, training, statistics, data, help, about };
+  const content = { appearance, motion, training, statistics, data, help, about, 'local-room': localRoom };
   return <main className="conditions-page settings-page" data-testid="settings-screen" data-section={section ?? 'root'}>
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={() => section ? onSection(null) : onBack()}><Icon name="back" /></button>
@@ -73,7 +75,7 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
     </header>
     <div className="conditions-content settings-content" key={section ?? 'root'}>
       {section ? content[section] : <nav className="settings-entries" aria-label="Разделы настроек">
-        {sections.map(item => <SettingsAction key={item.id} icon={item.icon} data-testid={`settings-${item.id}`}
+        {sections.filter(item => item.id !== 'local-room' || localRoom).map(item => <SettingsAction key={item.id} icon={item.icon} data-testid={`settings-${item.id}`}
           onClick={() => onSection(item.id)}>{item.title}</SettingsAction>)}
       </nav>}
     </div>

@@ -1,4 +1,5 @@
-import { StrictMode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
 import { useAndroidUpdates } from './android-updates.ts';
 import { createRoot } from 'react-dom/client';
@@ -72,6 +73,7 @@ import type { Conditions, RoundRule } from './conditions.ts';
 import './style.css';
 
 type Edit = { seriesId: number; index: number; shot: Shot };
+const LocalRoomProbe = lazy(() => import('./LocalRoomProbe.tsx'));
 const miss: Shot = { point: null, code: 'M', points: 0 };
 
 function trainingSetup(practice: Practice): NonNullable<Diary['lastSetup']> {
@@ -761,6 +763,8 @@ function App() {
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
+    localRoom={Capacitor.isPluginAvailable('LocalRoomProbe') || window.location.origin === 'https://ovepfunkep.github.io'
+      ? <Suspense fallback={<p>Открываем проверку связи…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')} /></Suspense> : undefined}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
