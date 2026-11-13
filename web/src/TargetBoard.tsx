@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput } from './target.ts';
 import type { Point, Shot, TargetSpec } from './target.ts';
+import { clampTargetZoom, MAX_TARGET_ZOOM, TargetZoom } from './TargetZoom.tsx';
 
 type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
@@ -23,7 +24,7 @@ function initialTargetView(scope?: ZoomScope): View {
   if (scope) {
     try {
       const zoom = Number(window.localStorage.getItem(zoomKey(scope)));
-      if (Number.isFinite(zoom) && zoom >= 1 && zoom <= 8) return { ...initialView, zoom };
+      if (Number.isFinite(zoom) && zoom >= 1 && zoom <= MAX_TARGET_ZOOM) return { ...initialView, zoom };
     } catch { /* The target remains usable without local storage. */ }
   }
   return initialView;
@@ -280,7 +281,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
       const after = [...track.pointers.values()];
       const from = midpoint(before[0], before[1]);
       const to = midpoint(after[0], after[1]);
-      const zoom = clamp(current.zoom * distance(after[0], after[1]) / Math.max(1, distance(before[0], before[1])), 1, 8);
+      const zoom = clampTargetZoom(current.zoom * distance(after[0], after[1]) / Math.max(1, distance(before[0], before[1])));
       const ratio = zoom / current.zoom;
       changeView(zoom, to.x - size.width / 2 - (from.x - size.width / 2 - current.x) * ratio,
         to.y - size.height / 2 - (from.y - size.height / 2 - current.y) * ratio);
@@ -313,7 +314,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
 
   function zoomBy(factor: number) {
     const current = viewRef.current;
-    const zoom = clamp(current.zoom * factor, 1, 8);
+    const zoom = clampTargetZoom(current.zoom * factor);
     changeView(zoom, current.x * zoom / current.zoom, current.y * zoom / current.zoom);
     rememberZoom();
   }
@@ -324,13 +325,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
       onPointerCancel={event => end(event, false)} onLostPointerCapture={event => end(event, false)}>
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
     </div>
-    <div className="zoom" role="group" aria-label="Приближение мишени">
-      <button type="button" aria-label="Уменьшить" onClick={() => zoomBy(1 / 1.5)} disabled={view.zoom <= 1}>−</button>
-      <button type="button" className="zoom-value" aria-label="Сбросить приближение" onClick={() => { changeView(1, 0, 0); rememberZoom(); }}>
-        {view.zoom.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}×
-      </button>
-      <button type="button" aria-label="Увеличить" onClick={() => zoomBy(1.5)} disabled={view.zoom >= 8}>+</button>
-    </div>
+    <TargetZoom zoom={view.zoom} onStep={zoomBy} onReset={() => { changeView(1, 0, 0); rememberZoom(); }} />
     {navigation}
     {aim && <Lens aim={aim} spec={spec} />}
   </section>;

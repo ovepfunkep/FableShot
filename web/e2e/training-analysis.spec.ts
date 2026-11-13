@@ -53,9 +53,36 @@ test('map and zone distribution share conditions while the map can isolate one s
   await expect(map.getByTestId('hit-map-shift')).toHaveText('Смещение 8,0 мм');
   await map.getByTestId('hit-map-mode-points').click();
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
+  const target = map.getByTestId('hit-map-plot');
+  const resetZoom = map.getByRole('button', { name: 'Сбросить приближение' });
+  await map.getByRole('button', { name: 'Увеличить', exact: true }).click();
+  await expect(resetZoom).toHaveText('1,5×');
+  await target.scrollIntoViewIfNeeded();
+  const box = (await target.boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  const centered = await target.getAttribute('viewBox');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 30, y, { steps: 4 });
+  await page.mouse.up();
+  await expect(target).not.toHaveAttribute('viewBox', centered!);
   await map.getByTestId('hit-map-series').selectOption('');
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 4 из 5');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
+  await expect(resetZoom).toHaveText('1,5×');
+  await resetZoom.click();
+  await expect(target).toHaveAttribute('viewBox', '0 0 260 260');
+
+  await target.scrollIntoViewIfNeeded();
+  const pinchBox = (await target.boundingBox())!;
+  const middleX = pinchBox.x + pinchBox.width / 2, middleY = pinchBox.y + pinchBox.height / 2;
+  const touchPoints = (offset: number) => [{ x: middleX - offset, y: middleY, id: 1 }, { x: middleX + offset, y: middleY, id: 2 }];
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touchPoints(20) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touchPoints(40) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(resetZoom).toHaveText('2,0×');
 
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 1 из 1');

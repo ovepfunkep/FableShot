@@ -1,4 +1,5 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
+import type { PointerEvent } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { Conditions } from './conditions.ts';
 import { HIT_MAP_GRID_SIZE, hitCentroid, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, knownMissPoints } from './hit-map.ts';
@@ -9,6 +10,7 @@ import { Icon } from './TrainingChrome.tsx';
 import './training-hit-map.css';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
+import { clampTargetZoom, TargetZoom } from './TargetZoom.tsx';
 
 type MapSeries = { id: number; round: number; number: number; shots: readonly Shot[] };
 type MapMode = 'density' | 'points';
@@ -20,6 +22,7 @@ const center = side / 2;
 const gridRadius = side * .46;
 const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const initialView = { zoom: 1, x: center, y: center };
 
 function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, arrowScale }: {
   points: readonly Point[];
@@ -34,8 +37,60 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
   const radius = gridRadius / limit;
   const at = (coordinate: number) => center + coordinate * radius;
   const centroid = hitCentroid(points);
+  const [view, setView] = useState(initialView);
+  const currentView = useRef(initialView);
+  const pointers = useRef(new Map<number, Point>());
+  const span = side / view.zoom;
 
-  return <svg viewBox={`0 0 ${side} ${side}`} className="hit-map-plot" role="img"
+  function changeView(zoom: number, x: number, y: number) {
+    const half = center / zoom;
+    const clamp = (value: number) => Math.max(half, Math.min(side - half, value));
+    const next = { zoom, x: clamp(x), y: clamp(y) };
+    currentView.current = next;
+    setView(next);
+  }
+
+  function trackPointer(event: PointerEvent<SVGSVGElement>) {
+    if (event.button !== 0 || pointers.current.size >= 2) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  }
+
+  function movePointer(event: PointerEvent<SVGSVGElement>) {
+    const previous = pointers.current.get(event.pointerId);
+    if (!previous) return;
+    const next = { x: event.clientX, y: event.clientY };
+    const other = [...pointers.current].find(([id]) => id !== event.pointerId)?.[1];
+    pointers.current.set(event.pointerId, next);
+    const current = currentView.current;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (other) {
+      const before = Math.hypot(previous.x - other.x, previous.y - other.y);
+      const after = Math.hypot(next.x - other.x, next.y - other.y);
+      const zoom = clampTargetZoom(current.zoom * after / Math.max(1, before));
+      const moveAxis = (origin: number, a: number, b: number, fixed: number, start: number, pixels: number) =>
+        origin + ((a + fixed) / 2 - start - pixels / 2) * side / (pixels * current.zoom)
+          - ((b + fixed) / 2 - start - pixels / 2) * side / (pixels * zoom);
+      changeView(zoom, moveAxis(current.x, previous.x, next.x, other.x, rect.left, rect.width),
+        moveAxis(current.y, previous.y, next.y, other.y, rect.top, rect.height));
+    } else if (current.zoom > 1) {
+      changeView(current.zoom, current.x - (next.x - previous.x) * side / (rect.width * current.zoom),
+        current.y - (next.y - previous.y) * side / (rect.height * current.zoom));
+    }
+  }
+
+  function forgetPointer(event: PointerEvent<SVGSVGElement>) {
+    pointers.current.delete(event.pointerId);
+  }
+
+  return <div className="hit-map-viewport">
+    <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
+      onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
+      onReset={() => changeView(1, center, center)} />
+    <svg viewBox={`${view.x - span / 2} ${view.y - span / 2} ${span} ${span}`} className="hit-map-plot" role="img"
+    data-zoomed={view.zoom > 1}
+    onPointerDown={trackPointer} onPointerMove={movePointer} onPointerUp={forgetPointer}
+    onPointerCancel={forgetPointer} onLostPointerCapture={forgetPointer}
     aria-label={mode === 'density' ? 'Плотность попаданий на мишени' : 'Точки попаданий на мишени'}
     data-testid="hit-map-plot">
     {spotOffsets(profile).map(offset => <g key={offset} transform={`translate(0 ${offset * radius})`}>
@@ -57,7 +112,8 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="#111811" strokeWidth={3} />
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="white" strokeWidth={1} />
     </g>}
-  </svg>;
+    </svg>
+  </div>;
 }
 
 export function TrainingHitMap({ series, conditions }: { series: readonly MapSeries[]; conditions: Conditions }) {
