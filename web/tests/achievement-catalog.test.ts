@@ -12,13 +12,13 @@ function rule(id: string) {
 }
 
 test('catalog preserves active runtime IDs, ordering, count targets and the source rule text', () => {
-  assert.equal(ACHIEVEMENT_CATALOG.length, 74);
+  assert.equal(ACHIEVEMENT_CATALOG.length, 77);
   assert.equal(new Set(ACHIEVEMENT_CATALOG.map(item => item.id)).size, ACHIEVEMENT_CATALOG.length);
   assert.deepEqual(ACHIEVEMENT_CATALOG.slice(0, 9).map(item => item.id),
     ['START01', 'START05', 'START06', 'START07', 'START08', 'START09', 'START10', 'START02', 'START03']);
   assert.deepEqual(Object.fromEntries(ACHIEVEMENT_CATALOG.filter(item => item.target > 1).map(item => [item.id, item.target])), {
     START05: 5, START06: 100, START07: 500, START08: 1000, START09: 20, START10: 100,
-    PROGRESS08: 3, GEAR02: 10, GEAR03: 3, GEAR06: 50,
+    PROGRESS08: 3, GEAR02: 10, GEAR03: 3, GEAR06: 50, ROOM02: 3, ROOM03: 5,
   });
   assert.equal(rule('HIT01').title, 'Тройной эспрессо');
   assert.match(rule('HIT01').description, /из 3 стрел.*\n18 м · мишень 40 см\./);

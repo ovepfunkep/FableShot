@@ -8,6 +8,8 @@ import type { ProgressResult } from './progress-scoring.ts';
 import { loadRoomMembership, readRoomName, roomSnapshot } from './group-room-membership.ts';
 import { displayCompositeScore } from './composite-scoring.ts';
 import type { CompositeScore } from './composite-scoring.ts';
+import { Icon } from './TrainingChrome.tsx';
+import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
 
 function CompositeBreakdown({ score }: { score: CompositeScore }) {
   if (score.total === undefined) return <small>{{
@@ -42,6 +44,8 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
   const [error, setError] = useState('');
   const [roomName, setRoomName] = useState(title);
   const [refreshing, setRefreshing] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (archived || !entryId) return;
@@ -101,45 +105,62 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
         Процент показывает, на сколько изменилась доля от максимума: 8 вместо 7 из 10 — это +10%.</small>}
     </details>;
   };
-  return <BottomSheet title="Таблица комнаты" onClose={onClose}>
+  const filtersActive = category !== 'all' || !!conditionFilter || layout !== 'auto';
+  const count = new Set([...series, ...participants].map(end => end.entryId)).size;
+  return <BottomSheet title={roomName || 'Таблица комнаты'} onClose={onClose} tag="room-leaderboard"
+    headerAction={<RoomHelpButton onClick={() => setHelpOpen(true)} />}>
     <div className="room-leaderboard">
-      {roomName && <strong>{roomName}</strong>}
-      <label className="room-leaderboard-layout">Зачёт<select aria-label="Зачёт" value={mode} onChange={event => setMode(event.target.value as GroupScoring)}>
-        <option value="classic">Классические очки</option><option value="cg3">Общие очки</option><option value="pg1">Прогресс</option>
-      </select></label>
-      {history && (archived || error) && <small>Получено {new Date(history.receivedAt).toLocaleString('ru-RU')}</small>}
-      {onRefresh && <button type="button" className="secondary" disabled={refreshing} onClick={async () => {
+      <div className="room-toolbar">
+        <div className="room-status" role="status" data-offline={!!error}>
+          <Icon name="group" /><span>{error ? archived ? 'Обновление недоступно' : 'Нет связи' : archived ? 'Сохранённая таблица'
+            : received ? `Участники · ${count}` : 'Подключаемся…'}</span>
+        </div>
+      </div>
+      {history && (archived || error) && <small>Получено {new Date(history.receivedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</small>}
+      {onRefresh && <button type="button" className="room-pill" disabled={refreshing} onClick={async () => {
         setRefreshing(true);
         setError('');
         try { setLive(await onRefresh()); }
         catch { setError('Не удалось обновить таблицу комнаты.'); }
         finally { setRefreshing(false); }
       }}>{refreshing ? 'Обновляем…' : 'Обновить таблицу'}</button>}
-      <div className="room-leaderboard-filters">
-        <label>Серия<select aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">{archived ? 'Последняя' : 'Моя'} · {latest}</option>
+      <div className="room-modes" role="group" aria-label="Зачёт">
+        {([['classic', 'Классика'], ['cg3', 'Общие'], ['pg1', 'Прогресс']] as const).map(([id, label]) =>
+          <button key={id} type="button" aria-pressed={mode === id} onClick={() => setMode(id)}>{label}</button>)}
+      </div>
+      <div className="room-toolbar">
+        <select className="room-pill" aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
+          <option value="">{archived ? 'Последняя' : 'Моя серия'} · {latest}</option>
           {choices.map(value => <option value={value} key={value}>Серия {value}</option>)}
-        </select></label>
+        </select>
+        <button type="button" className="icon-button room-filter-button" data-active={filtersActive} aria-haspopup="dialog"
+          aria-label="Фильтры таблицы" onClick={() => setFiltersOpen(true)}><Icon name="filter" /></button>
+      </div>
+      {filtersActive && <small>Фильтры активны</small>}
+      {filtersOpen && <BottomSheet title="Фильтры таблицы" onClose={() => setFiltersOpen(false)}>
+      <div className="room-leaderboard-filters">
         <label>Лук<select aria-label="Лук" value={category} onChange={event => setCategory(event.target.value)}>
           <option value="all">Все луки</option><option value="unknown">Без категории</option>
           {BOW_CATEGORIES.map(item => <option value={item.value} key={item.value}>{item.label}</option>)}
         </select></label>
-      </div>
-      {conditions.size > 0 && <label className="room-leaderboard-layout">Условия<select aria-label="Условия"
+      {conditions.size > 0 && <label>Условия<select aria-label="Условия"
         value={conditionFilter ?? ''} onChange={event => setCondition(event.target.value)}>
         <option value="">Все условия</option>
         {[...conditions].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>}
-      {rows.length > 0 && <label className="room-leaderboard-layout">Вид<select value={layout} onChange={event => setLayout(event.target.value)}>
+      <label>Вид<select aria-label="Вид" value={layout} onChange={event => setLayout(event.target.value)}>
         <option value="auto">Авто</option><option value="cards">Карточки</option><option value="rows">Список</option>
-      </select></label>}
-      {(!conditionFilter || category === 'all') && rows.length > 1 && <small>Товарищеский зачёт · условия могут различаться</small>}
-      {error && <p role="status">{error}{received && ' Показаны последние полученные результаты.'}</p>}
-      {!received && !error && <p role="status">Получаем результаты…</p>}
+      </select></label>
+      <button type="button" className="primary" onClick={() => setFiltersOpen(false)}>Готово</button>
+      </div></BottomSheet>}
+      {helpOpen && <RoomHelp onClose={() => setHelpOpen(false)} />}
+      {mode === 'classic' && (!conditionFilter || category === 'all') && rows.length > 1 && <small>Товарищеский зачёт</small>}
+      {error && <small>{error}{received && ' Показана сохранённая таблица.'}</small>}
       {received && !rows.length && <p>{conditionFilter || category !== 'all' ? 'На этом срезе нет результатов по выбранным фильтрам.' : 'Здесь появятся опубликованные серии.'}</p>}
       {rows.length > 0 && (cards ? <ul className="room-standing-cards">
         {rows.map(row => <li key={row.id} data-own={row.id === entryId}>
-          <header><strong>{row.place ? `${row.place}. ` : ''}{name(row)}</strong><small>{bow(row)}</small></header>
+          <div className="room-standing-person"><span className="room-place" aria-label={row.place ? `Место ${row.place}` : 'Без места'}>{row.place ?? '—'}</span>
+            <span><strong>{name(row)}</strong><small>{bow(row)}</small></span></div>
           <dl><div><dt>За серию</dt><dd>{score(row)}</dd></div><div><dt>{row.arrows && !row.complete ? 'Частичный итог' : 'Итог'}</dt><dd>{total(row)}</dd></div></dl>
           {row.composite && <CompositeBreakdown score={row.composite} />}
           {progressDetails(row)}

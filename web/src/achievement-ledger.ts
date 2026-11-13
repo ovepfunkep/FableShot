@@ -2,7 +2,7 @@ import { achievementRarityFor, achievementScopesFor, achievementTierOrder, ACHIE
 import type { RankCategory } from './sport-ranks.ts';
 import type { StageRankBasis } from './stage-rank-achievements.ts';
 
-export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1;
+export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1; roomAwards?: true;
   stageRankCategories?: Record<string, RankCategory | null> };
 export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; valid?: boolean; nativeSnapshot?: true; stageRank?: StageRankBasis };
 export type AchievementLedger = { epoch: string; grants: AchievementGrant[]; publications?: { documentId: string; fingerprint: string }[] };
@@ -14,7 +14,8 @@ export function isAchievementEnrollment(value: unknown): value is AchievementEnr
   if (!value || typeof value !== 'object') return false;
   const enrollment = value as Partial<AchievementEnrollment>;
   const categories = enrollment.stageRankCategories;
-  return identity(enrollment.epoch) && (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female') &&
+  return identity(enrollment.epoch) && (enrollment.roomAwards === undefined || enrollment.roomAwards === true) &&
+    (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female') &&
     (enrollment.stageRankVersion === undefined || enrollment.stageRankVersion === 1) &&
     (categories === undefined || (enrollment.stageRankVersion === 1 && !!categories && typeof categories === 'object' &&
       !Array.isArray(categories) && Object.entries(categories).every(([id, category]) =>

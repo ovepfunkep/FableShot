@@ -5,6 +5,7 @@ import { checkBrowserRoom } from './browser-room-probe.ts';
 import { createRoomMembership, readRoomName, roomBridge as probe, roomSnapshot } from './group-room-membership.ts';
 import type { RoomMembership, RoomStatus } from './group-room-membership.ts';
 import './local-room-probe.css';
+import { BottomSheet } from './ConditionsScreen.tsx';
 
 
 function InviteScanner({ onScan, onError }: { onScan: (value: string) => void; onError: (message: string) => void }) {
@@ -72,6 +73,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [confirmClose, setConfirmClose] = useState(false);
   const alive = useRef(false);
   const acceptScan = useCallback((value: string) => {
     setInvitation(value);
@@ -116,6 +118,16 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const nameField = <label>Имя для комнаты<input maxLength={60} value={name} onChange={event => setName(event.target.value)}
     placeholder="Стрелок" /></label>;
   return <section className="room-probe">
+    {confirmClose && <BottomSheet title="Закрыть комнату?" onClose={() => setConfirmClose(false)}>
+      <p>Обмен закончится для всех. Уже сохранённые тренировки и таблицы останутся в истории. Серии в очереди больше не отправятся в эту комнату.</p>
+      <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+        await probe.stop();
+        setRoom({});
+        setConfirmClose(false);
+      })}>Закрыть для всех</button>
+      <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(false)}>Оставить открытой</button>
+      {error && <p role="alert">{error}</p>}
+    </BottomSheet>}
     {native && <div className="settings-panel room-probe-panel">
       <h2>{room.roomName || 'Создать комнату'}</h2>
       {room.invitation ? <>
@@ -133,7 +145,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
           const membership = await createRoomMembership(room.invitation!, name, room.roomName, room);
           if (alive.current) onTraining(membership);
         })}>Начать групповую тренировку</button>}
-        <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => { await probe.stop(); setRoom({}); })}>Закрыть комнату</button>
+        <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>Закрыть комнату</button>
       </> : <>
         {!room.restorable && <label>Название комнаты<input maxLength={60} placeholder="Групповая тренировка" value={roomTitle}
           onChange={event => setRoomTitle(event.target.value)} /></label>}
@@ -151,12 +163,8 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
         <button type="button" className="primary" disabled={busy || !address} onClick={() => void run(async () => {
           const created = await probe.start({ address, roomName: roomTitle });
           if (alive.current) setRoom(created);
-          else await probe.stop();
         })}>{room.restorable ? 'Восстановить комнату' : 'Создать'}</button>
-        {room.restorable && <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => {
-          await probe.stop();
-          setRoom({});
-        })}>Закрыть комнату</button>}
+        {room.restorable && <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>Закрыть комнату</button>}
       </>}
     </div>}
     {!room.invitation && <div className="settings-panel room-probe-panel">

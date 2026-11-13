@@ -497,6 +497,15 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     family: "archive", rarity: 'Uncommon', target: 1, priority: 8,
     categorySpecific: false, performanceFormat: false,
   },
+  { id: 'ROOM01', title: 'Свои на рубеже', flavor: 'Наконец-то есть кому сказать «это была пристрелка»',
+    description: 'Завершите групповую тренировку, в которой комната приняла хотя бы одну вашу полную серию и одну полную серию другого стрелка.',
+    family: 'room.participation', rarity: 'Common', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
+  { id: 'ROOM02', title: 'Собрались пострелять', flavor: 'Третий раз — уже клубная традиция',
+    description: 'Завершите три такие групповые тренировки в разные дни.',
+    family: 'room.participation', rarity: 'Uncommon', target: 3, priority: 2, categorySpecific: false, performanceFormat: false },
+  { id: 'ROOM03', title: 'Догнал себя при свидетелях', flavor: 'Прошлый ты просит реванш. Есть свидетели',
+    description: 'Завершите групповую тренировку с подтверждённым улучшением от +5% по PG1. Нужны готовая база, от 12 стрел и ещё один стрелок на сопоставимом срезе.',
+    family: 'room.progress', rarity: 'Rare', target: 5, priority: 1, categorySpecific: true, performanceFormat: false },
   ...STAGE_RANK_RULES,
 ];
 

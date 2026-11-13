@@ -152,20 +152,3 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
   color: var(--muted);
   font-size: .75rem;
 }
-.room-leaderboard { display: grid; gap: 12px; }
-.room-leaderboard-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.room-leaderboard-filters label { display: grid; gap: 4px; }
-.room-leaderboard-filters select { min-width: 0; min-height: 44px; background: var(--surface); color: var(--text); }
-.room-leaderboard table { border-collapse: collapse; text-align: end; }
-.room-leaderboard th:first-child { text-align: start; }
-.room-leaderboard td, .room-leaderboard th { padding: 8px 5px; border-bottom: 1px solid var(--edge); }
-.room-leaderboard small { display: block; color: var(--muted); font-weight: normal; }
-.room-leaderboard tr[data-own="true"] { color: var(--accent); }
-.room-leaderboard-layout { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.room-leaderboard-layout select { min-width: 0; max-width: 75%; min-height: 44px; background: var(--surface); color: var(--text); }
-.room-standing-cards { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.room-standing-cards li { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); overflow-wrap: anywhere; }
-.room-standing-cards li[data-own="true"] { border-color: var(--accent); }
-.room-standing-cards dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
-.room-standing-cards dt { color: var(--muted); font-size: .8rem; }
-.room-standing-cards dd { font-weight: 700; margin: 2px 0 0; }

@@ -12,23 +12,27 @@ import { tournamentTitle } from './tournaments.ts';
 import type { Tournament, TournamentChoice } from './tournaments.ts';
 import './conditions.css';
 
-export function BottomSheet({ title, onClose, children, tag }: {
-  title: string; onClose: () => void; children: ReactNode; tag?: string;
+export function BottomSheet({ title, onClose, children, tag, headerAction }: {
+  title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const drag = useRef<number | null>(null);
   useLayoutEffect(() => { dialog.current?.showModal(); }, []);
   return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag}
-    onCancel={event => { event.preventDefault(); onClose(); }}
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="condition-sheet-body">
-      <header onPointerDown={event => { drag.current = event.clientY; event.currentTarget.setPointerCapture(event.pointerId); }}
+      <header onPointerDown={event => {
+        if (event.target instanceof Element && event.target.closest('button')) return;
+        drag.current = event.clientY;
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
         onPointerUp={event => {
           if (drag.current !== null && event.clientY - drag.current > 65) onClose();
           drag.current = null;
         }}>
         <span className="sheet-handle" aria-hidden="true" />
-        <h2>{title}</h2>
+        {headerAction ? <div className="sheet-title-actions"><h2>{title}</h2>{headerAction}</div> : <h2>{title}</h2>}
       </header>
       {children}
     </div>

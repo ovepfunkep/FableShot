@@ -66,8 +66,10 @@ import { loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary 
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
 import { announceRoomEntry, loadRoomMembership, readRoomName, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
 import { readRoomParticipants, readRoomSeries } from './group-leaderboard.ts';
+import { awardRoomAchievements, ROOM_ACHIEVEMENT_IDS } from './room-achievements.ts';
 import type { RoomMembership } from './group-room-membership.ts';
 import { GroupLeaderboard } from './GroupLeaderboard.tsx';
+import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
 import type { Diary, DiaryEntry } from './persistence.ts';
 import { advanceSeries, appendShot, applyConditions, attachProgressBaseline, bindTechnique, completePractice, currentSeries, deleteRound, deleteSeries,
   emptyPractice, findSeries, isRoundFull, removeShot, replaceShot, resumePractice,
@@ -124,6 +126,7 @@ function App() {
   const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
   const [roomSwitch, setRoomSwitch] = useState<RoomMembership | null>(null);
   const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
+  const [roomHelpOpen, setRoomHelpOpen] = useState(false);
   const syncingRoom = useRef(false);
   const announcedRooms = useRef(new Map<string, string | null>());
   const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
@@ -170,7 +173,7 @@ function App() {
       if (proposed === previous) return true;
       const awarded = trainingId ? awardTrainingChange(previous, proposed, trainingId, preferences.rankCategory ?? null, new Date().toISOString())
         : { diary: proposed, added: [] };
-      let next = awarded.diary;
+      let next = trainingId ? awardRoomAchievements(awarded.diary, trainingId, new Date().toISOString()) : awarded.diary;
       let newRecords: PersonalRecordEvent[] = [];
       if (trainingId) {
         const before = previous.entries.find(entry => entry.id === trainingId);
@@ -219,9 +222,10 @@ function App() {
       if (!manual && (!roomName || roomName === item.groupRoomName) &&
         JSON.stringify(item.groupRoomHistory?.series) === JSON.stringify(history.series) &&
         JSON.stringify(item.groupRoomHistory?.participants) === JSON.stringify(history.participants)) return previous;
-      return { ...previous, entries: previous.entries.map(candidate => candidate === item ? { ...item,
+      const updated = { ...previous, entries: previous.entries.map(candidate => candidate === item ? { ...item,
         groupRoomName: roomName ?? item.groupRoomName ?? 'Групповая тренировка', groupRoomHistory: history,
       } : candidate) };
+      return awardRoomAchievements(updated, trainingId, new Date(history.receivedAt).toISOString());
     });
     if (!saved) throw new Error('Не удалось сохранить таблицу.');
     return history;
@@ -233,7 +237,9 @@ function App() {
       if (syncingRoom.current || document.visibilityState !== 'visible') return;
       const diary = diaryRef.current;
       const active = diary?.entries.find(item => !item.practice.savedAt && !item.paused && !item.deletedAt);
-      const journals = diary?.groupSeries?.filter(journal => journal.trainingId === active?.id || pendingGroupSeries(journal).length) ?? [];
+      const journals = diary?.groupSeries?.filter(journal => journal.trainingId === active?.id || pendingGroupSeries(journal).length ||
+        diary.entries.some(item => item.id === journal.trainingId && !item.deletedAt && item.achievementEnrollment?.roomAwards &&
+          item.practice.savedAt && Date.now() - Date.parse(item.practice.savedAt) < 60_000)) ?? [];
       if (!journals.length) return;
       syncingRoom.current = true;
       try {
@@ -392,7 +398,7 @@ function App() {
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
       ...(roomSetup ? { groupRoomName: roomSetup.roomName ?? 'Групповая тренировка' } : {}),
       achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
-        stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION } };
+        stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION, ...(roomSetup ? { roomAwards: true as const } : {}) } };
     if (roomSetup) {
       try { saveRoomMembership(roomSetup); }
       catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
@@ -827,7 +833,7 @@ function App() {
 
   if (page === 'achievements') return <AchievementGallery grants={grants}
     progress={state.diary ? evaluateAchievementEvidence(eligibleForAchievements(state.diary), entry => entry.achievementEnrollment?.rankCategory ?? null) : []}
-    availableRuleIds={[...ACHIEVEMENT_EVIDENCE_RULE_IDS, ...ACHIEVEMENT_ACTION_RULE_IDS, ...STAGE_RANK_RULES.map(rule => rule.id),
+    availableRuleIds={[...ACHIEVEMENT_EVIDENCE_RULE_IDS, ...ACHIEVEMENT_ACTION_RULE_IDS, ...ROOM_ACHIEVEMENT_IDS, ...STAGE_RANK_RULES.map(rule => rule.id),
       'PROGRESS04', 'PROGRESS06', 'PROGRESS10']} onBack={() => setPage('profile')} />;
   if (page === 'records') return <>
     <PersonalRecordsScreen entries={recent} onBack={() => setPage('profile')} onOpen={id => openRecordReport(id, 'records')}
@@ -871,9 +877,10 @@ function App() {
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={() => setPage('journal')}><Icon name="back" /></button>
       <h1>Групповая тренировка</h1>
-      <Icon name="group" />
+      <RoomHelpButton onClick={() => setRoomHelpOpen(true)} />
     </header>
     <div className="conditions-content settings-content">
+      {roomHelpOpen && <RoomHelp onClose={() => setRoomHelpOpen(false)} />}
       <Suspense fallback={<p>Открываем комнаты…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
         displayName={preferences.displayName}
         onTraining={state.diary ? enterRoomTraining : undefined}

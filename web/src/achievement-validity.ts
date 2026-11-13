@@ -4,7 +4,7 @@ import { evaluateAchievementRecords } from './achievement-records.ts';
 import { confirmsStageRank } from './stage-rank-achievements.ts';
 import type { Diary } from './persistence.ts';
 
-const serviceRules = new Set(['APP01', 'APP04', 'APP08', 'MIND03', 'MIND04', 'MIND08']);
+const serviceRules = new Set(['APP01', 'APP04', 'APP08', 'MIND03', 'MIND04', 'MIND08', 'ROOM01', 'ROOM02', 'ROOM03']);
 const recordRules = new Set(['PROGRESS04', 'PROGRESS06', 'PROGRESS10']);
 
 /** Rechecks existing receipts without issuing awards or changing their original date. */

@@ -16,6 +16,8 @@ const paths = {
   podium: 'M3 20V12h6V6h6v9h6v5H3Z',
   trophy: 'M8 3h8v7a4 4 0 0 1-8 0V3Zm0 2H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 2v6m-4 0h8',
   help: 'M9 8a3 3 0 1 1 5 2.2c-1.2.7-2 1.2-2 2.8m0 4h.01',
+  helpCircle: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM9 9a3 3 0 1 1 5 2.2c-1.2.7-2 1.2-2 2.8m0 3h.01',
+  filter: 'M4 7h7m4 0h5M4 17h3m4 0h9m-9-12v4m-4 6v4',
   close: 'M5 5l14 14M19 5L5 19',
   back: 'M19 12H5m6-6-6 6 6 6',
   undo: 'M9 6l-5 5 5 5M4 11h10a5 5 0 0 1 5 5v2',

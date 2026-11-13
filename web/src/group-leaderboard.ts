@@ -9,6 +9,7 @@ type RoomConditions = { distanceMeters: number; targetProfileId: string; targetD
 export type RoomSeries = {
   entryId: string;
   ordinal: number;
+  revision?: number;
   displayName?: string;
   result: { points: number; arrows: number; bowCategory: string | null; conditions?: RoomConditions; hits?: number; spread?: RoomSpread; progressBase?: RoomProgressBase } | null;
 };
@@ -26,13 +27,13 @@ function readConditions(value: unknown): RoomConditions {
   return { distanceMeters, targetProfileId, targetDiameterMm };
 }
 
-const conditionsKey = (value: RoomConditions) => JSON.stringify([value.distanceMeters, value.targetProfileId, value.targetDiameterMm]);
+export const roomConditionsKey = (value: RoomConditions) => JSON.stringify([value.distanceMeters, value.targetProfileId, value.targetDiameterMm]);
 
 export function roomConditionChoices(series: readonly RoomSeries[]) {
   const choices = new Map<string, string>();
   for (const end of series) {
     const value = end.result?.conditions;
-    if (value) choices.set(conditionsKey(value),
+    if (value) choices.set(roomConditionsKey(value),
       `${value.distanceMeters.toLocaleString('ru-RU')} м · ${value.targetDiameterMm / 10} см · ${getTargetProfile(value.targetProfileId)?.title}`);
   }
   return choices;
@@ -75,13 +76,14 @@ export function readRoomSeries(snapshot: unknown): RoomSeries[] {
     const key = `${value.entryId}:${value.ordinal}`;
     if (keys.has(key)) throw new Error('В комнате получена повторная серия.');
     keys.add(key);
+    if (value.revision !== undefined && (!Number.isSafeInteger(value.revision) || value.revision < 1)) throw new Error('Некорректная редакция серии.');
     if (result?.spread !== undefined && (typeof result.hits !== 'number' || !Number.isSafeInteger(result.hits) ||
       result.hits < 0 || result.hits > result.arrows || !isRoomSpread(result.spread, result.hits))) {
       throw new Error('Некорректные данные кучности.');
     }
     const base = result?.progressBase;
     if (base !== undefined && !isRoomProgressBase(base)) throw new Error('Некорректная база прогресса.');
-    return { entryId: value.entryId, ordinal: value.ordinal, displayName: value.displayName, result: result && {
+    return { entryId: value.entryId, ordinal: value.ordinal, revision: value.revision, displayName: value.displayName, result: result && {
       points: result.points, arrows: result.arrows, bowCategory: result.bowCategory,
       ...(result.conditions === undefined ? {} : { conditions: readConditions(result.conditions) }),
       ...(base && { progressBase: { sessions: base.sessions, arrows: base.arrows, points: base.points } }),
@@ -117,13 +119,13 @@ export function groupStandings(series: readonly RoomSeries[], ordinal: number, c
     const comparable = live.filter(end => {
       const result = end.result!;
       return (category === undefined || result.bowCategory === category) &&
-        (conditions === undefined || !!result.conditions && conditionsKey(result.conditions) === conditions);
+        (conditions === undefined || !!result.conditions && roomConditionsKey(result.conditions) === conditions);
     });
     const current = comparable.find(end => end.ordinal === ordinal)?.result ?? null;
     const points = comparable.reduce((sum, end) => sum + end.result!.points, 0);
     const arrows = comparable.reduce((sum, end) => sum + end.result!.arrows, 0);
     const displayName = people.get(id)?.displayName ?? ends.filter(end => end.displayName).at(-1)?.displayName;
-    const comparableConditions = new Set(comparable.map(end => end.result!.conditions && conditionsKey(end.result!.conditions)));
+    const comparableConditions = new Set(comparable.map(end => end.result!.conditions && roomConditionsKey(end.result!.conditions)));
     const compatible = comparableConditions.size === 1 && !comparableConditions.has(undefined) &&
       new Set(comparable.map(end => end.result!.bowCategory)).size === 1;
     const facts = comparable.map(end => {
