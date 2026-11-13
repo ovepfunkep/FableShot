@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius } from './target.ts';
+import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput } from './target.ts';
 import type { Point, Shot, TargetSpec } from './target.ts';
 
 type Size = { width: number; height: number };
@@ -75,7 +75,7 @@ export function TargetPreview({ profileId }: { profileId: string }) {
   useLayoutEffect(() => {
     const profile = getTargetProfile(profileId)!;
     const ctx = canvas.current && canvasContext(canvas.current, 48, 48);
-    if (ctx) paintFace(ctx, { x: 24, y: 24 }, 22, {
+    if (ctx) for (const offset of spotOffsets(profile)) paintFace(ctx, { x: 24, y: 24 + offset * (profile.vertical ? 13 : 22) }, profile.vertical ? 13 : 22, {
       profileId, diameterMm: profile.diameters[0] ?? 400, shaftDiameterMm: 6,
     });
   }, [profileId]);
@@ -112,12 +112,13 @@ function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, navigation, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, navigation, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
   selectedIndex?: number | null; navigation?: ReactNode; onBlockedTap?: () => void;
   spec?: TargetSpec;
   panOnly?: boolean;
   zoomScope?: ZoomScope;
+  realArrowDiameter?: number;
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -126,6 +127,8 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
   const viewRef = useRef(view);
   const [aim, setAim] = useState<Aim | null>(null);
   const gesture = useRef<Gesture>({ pointers: new Map(), aimId: null, multi: false, timer: null, blocked: null });
+  const profile = getTargetProfile(spec.profileId)!;
+  const baseRadius = profile.vertical ? Math.max(1, Math.min(size.width / 1.32, size.height / 3.8)) : radiusOf(size);
 
   useLayoutEffect(() => {
     const element = surface.current!;
@@ -147,14 +150,31 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     if (!size.width || !size.height || !canvas.current) return;
     const ctx = canvasContext(canvas.current, size.width, size.height);
     if (!ctx) return;
-    const radius = radiusOf(size) * view.zoom;
+    const radius = baseRadius * view.zoom;
     const center = { x: size.width / 2 + view.x, y: size.height / 2 + view.y };
-    paintFace(ctx, center, radius, spec, true);
+    for (const offset of spotOffsets(profile)) paintFace(ctx, { x: center.x, y: center.y + offset * radius }, radius, spec, true);
     function paintShot(shot: Shot, index: number, selected: boolean) {
-      const position = shot.point ?? shot.missPoint;
-      if (!position || !ctx) return;
+      const local = shot.point ?? shot.missPoint;
+      if (!local || !ctx) return;
+      const position = spotPoint(local, shot.spot);
       const x = center.x + position.x * radius;
       const y = center.y + position.y * radius;
+      if (realArrowDiameter && !shot.missPoint) {
+        const footprint = radius * realArrowDiameter / spec.diameterMm;
+        if (selected) {
+          circle(ctx, x, y, Math.max(8, footprint + 3));
+          ctx.strokeStyle = '#c6f43d';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        circle(ctx, x, y, footprint);
+        ctx.fillStyle = '#14200d';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = Math.min(1, footprint / 2);
+        ctx.stroke();
+        return;
+      }
       if (selected) {
         circle(ctx, x, y, 13);
         ctx.fillStyle = '#101510';
@@ -177,11 +197,12 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     }
     shots.forEach((shot, index) => { if (index !== selectedIndex) paintShot(shot, index, false); });
     if (selectedIndex != null && shots[selectedIndex]) paintShot(shots[selectedIndex], selectedIndex, true);
-  }, [size, view, shots, selectedIndex, spec]);
+  }, [size, view, shots, selectedIndex, spec, realArrowDiameter, baseRadius, profile]);
 
   function changeView(zoom: number, x: number, y: number) {
-    const limit = radiusOf(size) * (panOnly ? zoom : zoom - 1);
-    const next = { zoom, x: clamp(x, -limit, limit), y: clamp(y, -limit, limit) };
+    const limit = baseRadius * (panOnly ? zoom : zoom - 1);
+    const verticalLimit = limit * (profile.vertical ? 1.8 : 1);
+    const next = { zoom, x: clamp(x, -limit, limit), y: clamp(y, -verticalLimit, verticalLimit) };
     viewRef.current = next;
     setView(next);
   }
@@ -197,11 +218,11 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
-  function normalized(point: Point): Point {
+  function normalized(point: Point) {
     const current = viewRef.current;
-    const radius = radiusOf(size) * current.zoom;
-    return { x: (point.x - size.width / 2 - current.x) / radius,
-      y: (point.y - size.height / 2 - current.y) / radius };
+    const radius = baseRadius * current.zoom;
+    return targetInput({ x: (point.x - size.width / 2 - current.x) / radius,
+      y: (point.y - size.height / 2 - current.y) / radius }, profile);
   }
 
   function clearAim() {
@@ -213,10 +234,10 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
   }
 
   function showAim(position: Point) {
-    const point = normalized(position);
+    const { point } = normalized(position);
     const rect = surface.current?.getBoundingClientRect();
     setAim(rect && isOnTargetInput(point, spec)
-      ? { point, screen: { x: rect.left + position.x, y: rect.top + position.y }, radius: radiusOf(size) * viewRef.current.zoom } : null);
+      ? { point, screen: { x: rect.left + position.x, y: rect.top + position.y }, radius: baseRadius * viewRef.current.zoom } : null);
   }
 
   function start(event: ReactPointerEvent<HTMLDivElement>) {
@@ -233,7 +254,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     }
     track.multi = false;
     track.blocked = null;
-    if (!isOnTargetInput(normalized(position), spec)) return;
+    if (!isOnTargetInput(normalized(position).point, spec)) return;
     if (!inputEnabled || panOnly) {
       if (onBlockedTap) track.blocked = { id: event.pointerId, origin: position };
       return;
@@ -274,7 +295,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     const track = gesture.current;
     if (!track.pointers.has(event.pointerId)) return;
     const shouldScore = commit && inputEnabled && !track.multi && track.aimId === event.pointerId;
-    const point = normalized(local(event));
+    const { point, spot } = normalized(local(event));
     const shouldSuggest = commit && !inputEnabled && !track.multi && track.blocked?.id === event.pointerId
       && distance(local(event), track.blocked.origin) <= 8 && isOnTargetInput(point, spec);
     track.pointers.delete(event.pointerId);
@@ -286,7 +307,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     }
     if (shouldScore) {
       const shot = markTargetPoint(point, spec);
-      if (shot) onShot(shot);
+      if (shot) onShot(spot === undefined ? shot : { ...shot, spot });
     } else if (shouldSuggest) onBlockedTap?.();
   }
 

@@ -1,7 +1,7 @@
 import type { Conditions } from './conditions.ts';
 import type { EquipmentLibrary, EquipmentSnapshot } from './equipment.ts';
 import { acceptsDiameter, getTargetProfile } from './target.ts';
-import type { Point } from './target.ts';
+import type { Point, TargetSpot } from './target.ts';
 import { readMyTargetsDatabase } from './mytargets-sqlite.ts';
 import type { MyTargetsSqlRow, MyTargetsTables } from './mytargets-sqlite.ts';
 import { readMyTargetsZip } from './mytargets-zip.ts';
@@ -9,7 +9,7 @@ import { readMyTargetsZip } from './mytargets-zip.ts';
 export type MyTargetsWarning = { code: string; sourceId: string; blocking: boolean };
 export type MyTargetsShot = {
   sourceId: string; sourceRecord: number; points: number | null; code: string | null;
-  point: Point | null; rawPoint: Point | null; physicalArrowNumber?: number;
+  point: Point | null; rawPoint: Point | null; spot?: TargetSpot; physicalArrowNumber?: number;
 };
 export type MyTargetsSeries = {
   sourceId: string; sourceNumber: string; timestamp: string; shots: MyTargetsShot[];
@@ -72,7 +72,11 @@ function profile(target: number | null, style: number | null, mm: number | null)
     if ([800, 1220].includes(mm) && style === 0) return 'wa-outdoor-full-v1';
   }
   if (target === 1 && style === 0) return 'wa-outdoor-six-v1';
-  if (target === 2 || (target === 5 && [400, 600].includes(mm))) {
+  if (target === 5 && [400, 600].includes(mm)) {
+    if (style === 2) return 'wa-indoor-triple-inner-v1';
+    if (style === 0 || style === 1) return 'wa-indoor-triple-outer-v1';
+  }
+  if (target === 2) {
     if (style === 2) return 'wa-indoor-five-inner-v1';
     if (style === 0 || style === 1) return 'wa-indoor-five-outer-v1';
   }
@@ -337,7 +341,6 @@ async function parseArchive(tables: MyTargetsTables, preview: MyTargetsPreview) 
       const label = `${({ 0: 'WA Full', 1: 'WA 6 Ring', 2: 'WA 5 Ring', 5: 'WA Vertical 3 Spot' } as Record<number, string>)[target] ?? `MyTargets target ${target}`} (${string(r, 'targetDiameter')})`;
       const raw = rawConditions(String(integer(r, 'index') + 1), string(r, 'distance'), label, bow?.name ?? '', arrows?.name ?? '', target, style);
       const round: MyTargetsRound = { sourceId: `${sourceId}:r${rId}`, rawConditions: raw, conditions: mappedConditions(raw, equipment), plannedArrows: planned, series: [] };
-      if (target === 5 && round.conditions) warn(preview, 'vertical_spot_projection', round.sourceId);
       for (const e of ends.get(rId) ?? []) {
         const eId = integer(e, 'id'), exact = integer(e, 'exact'); if (exact !== 0 && exact !== 1) reject('archive_invalid_facts');
         const series: MyTargetsSeries = { sourceId: `${round.sourceId}:e${eId}`, sourceNumber: String(integer(e, 'index') + 1), timestamp: string(e, 'saveTime'), shots: [], fingerprint: '', overlapFingerprint: null };
@@ -358,7 +361,8 @@ async function parseArchive(tables: MyTargetsTables, preview: MyTargetsPreview) 
           if (exact && !round.conditions) warn(preview, 'unverified_coordinate', shotId);
           const number = Number(s.arrowNumber), validArrow = Number.isInteger(number) && number > 0 && number <= 1000;
           if (s.arrowNumber != null && !validArrow && number !== 0) warn(preview, 'invalid_arrow_number', shotId);
-          series.shots.push({ sourceId: shotId, sourceRecord, ...hit, rawPoint, point, ...(validArrow ? { physicalArrowNumber: number } : {}) });
+          const spot = target === 5 ? (integer(s, 'index') % 3) as TargetSpot : undefined;
+          series.shots.push({ sourceId: shotId, sourceRecord, ...hit, rawPoint, point, spot, ...(validArrow ? { physicalArrowNumber: number } : {}) });
         }
         if (series.shots.length) {
           if (series.shots.length > planned || series.shots.length > 12) warn(preview, 'invalid_archive_series', series.sourceId, true);

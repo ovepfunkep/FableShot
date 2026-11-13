@@ -151,7 +151,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   </section>;
 }
 
-export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, groupAction }: {
+export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup }: {
   active: boolean;
   paused?: boolean;
   recent: readonly DiaryEntry[];
@@ -162,7 +162,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
   onStart: () => void;
   onConditions: () => void;
   onOpen: (id: string) => void;
-  groupAction?: import('react').ReactNode;
+  onGroup?: () => void;
 }) {
   const { preferences } = useTrainingPreferences();
   return <div className="journal-home" data-testid="home-screen">
@@ -170,14 +170,17 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
       <p className="journal-home-eyebrow">{active ? 'В процессе' : 'Время для себя'}</p>
       <h2>{active ? 'Продолжим тренировку?' : 'Привычная тренировка'}</h2>
       <HomeConditions conditions={conditions} />
-      <button type="button" className="primary journal-home-primary" data-testid="home-start-training" onClick={needsEquipment ? onConditions : onStart}>
-        <JournalGlyph name="start" />{active ? 'Продолжить тренировку' : needsEquipment ? 'Выбрать снаряжение' : 'Начать'}
-      </button>
-      {(!active || paused) && <button type="button" className="journal-home-edit" data-testid="home-change-conditions" onClick={onConditions}>
-        <JournalGlyph name="edit" />{paused ? 'Новая тренировка' : 'Изменить условия'}
-      </button>}
+      <div className="journal-home-training-actions">
+        <button type="button" className="journal-home-mini" data-testid="home-change-conditions"
+          aria-label={paused ? 'Новая тренировка' : 'Изменить условия'} onClick={onConditions}><JournalGlyph name="edit" /></button>
+        <button type="button" className="primary journal-home-primary" data-testid="home-start-training" onClick={needsEquipment ? onConditions : onStart}>
+          <JournalGlyph name="start" />{active ? 'Продолжить тренировку' : needsEquipment ? 'Выбрать снаряжение' : 'Начать'}
+        </button>
+        {onGroup && <button type="button" className="journal-home-mini" data-testid="home-group-room" aria-label="Групповая тренировка" onClick={onGroup}>
+          <Icon name="group" />
+        </button>}
+      </div>
     </section>
-    {groupAction}
     {statisticVisible(preferences, 'volume') && <section className="journal-home-totals" data-testid="home-all-time-totals" aria-label="Всего за всё время">
       <div className="journal-home-card"><JournalGlyph name="target" /><span><strong>{arrowCount.toLocaleString('ru-RU')}</strong>Стрел</span></div>
       <div className="journal-home-card"><JournalGlyph name="calendar" /><span><strong>{practiceCount.toLocaleString('ru-RU')}</strong>Тренировок</span></div>

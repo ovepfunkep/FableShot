@@ -19,6 +19,31 @@ async function hit(page: Page, radiusFraction = 0) {
   await page.touchscreen.tap(bounds.x + bounds.width / 2 + radius * radiusFraction, bounds.y + bounds.height / 2);
 }
 
+test('traffic-light target records and displays hits on all three spots', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('home-change-conditions').click();
+  await selectTarget(page, 'wa-indoor-triple-outer-v1');
+  await page.getByTestId('start-training').click();
+  const target = page.getByTestId('target');
+  await expect(target).toHaveAttribute('data-target-profile', 'wa-indoor-triple-outer-v1');
+  const box = (await target.boundingBox())!;
+  const radius = Math.min(box.width / 1.32, box.height / 3.8);
+  for (const offset of [-1.2, 0, 1.2]) {
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2 + radius * offset);
+  }
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await page.reload();
+  await openTraining(page);
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await page.getByTestId('hit-map-mode-points').click();
+  const hits = page.getByTestId('hit-map-plot').locator(':scope > circle[fill="#111811"]');
+  const coordinates = await hits.evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('cy'))));
+  expect(coordinates).toHaveLength(3);
+  expect(coordinates[0]).toBeLessThan(coordinates[1]);
+  expect(coordinates[1]).toBeLessThan(coordinates[2]);
+});
+
 test('new training remembers the last applied setup even if its empty series was trimmed', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('home-change-conditions').click();

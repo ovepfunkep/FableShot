@@ -36,7 +36,6 @@ const warningMessages: Record<string, string> = {
   invalid_round_or_end_number: 'Недопустимый номер раунда или серии', invalid_series_size: 'Некорректный размер серии',
   invalid_archive_series: 'Некорректный размер серии', archive_series_totals_mismatch: 'Итоги серии не совпадают с исходными стрелами',
   invalid_coordinate_pair: 'Координаты отсутствуют или повреждены', unverified_coordinate: 'Координаты не подтверждены и не переносятся',
-  vertical_spot_projection: 'Попадания в вертикальную тройную мишень показаны относительно центра каждого круга',
   coordinate_not_preserved: 'Недопустимые координаты не перенесены', invalid_arrow_number: 'Недопустимый или повторный номер стрелы не перенесён',
   already_imported: 'Эта стрела уже импортирована', possible_overlap: 'Возможное совпадение с другим файлом — серия пропущена',
   overlap_explicitly_allowed: 'Возможное совпадение разрешено вручную', attachments_retained_only_in_source: 'Вложения остаются только в исходном архиве',

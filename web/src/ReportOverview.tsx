@@ -145,10 +145,11 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
       {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
-      {visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
+      <TrainingReportMetrics practice={practice} entries={entries} overview={{
+      records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
-        onSession={onOpenRecordSession} />}
-      {visible('series') && practice.rounds.map((round, roundIndex) => {
+        onSession={onOpenRecordSession} />,
+      series: visible('series') && practice.rounds.map((round, roundIndex) => {
         const shots = roundShots(round);
         if (!shots.length) return null;
         return <section className="report-round" key={round.id} data-testid={`report-round-${roundIndex + 1}`}>
@@ -162,11 +163,11 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
               totalTestId={`report-series-total-${series.id}`} showHits={visible('result')} />
           </button>)}
         </section>;
-      })}
-      {visible('mean_trend') && <TrainingMeanTrend practice={practice} />}
-      {hasShots && visible('norms') && <ExerciseRankCard practice={practice} category={preferences.rankCategory ?? null}
-        onCategory={rankCategory => update({ ...preferences, rankCategory })} onOpenReference={onRankReference} />}
-      <TrainingReportMetrics practice={practice} entries={entries} />
+      }),
+      mean_trend: visible('mean_trend') && <TrainingMeanTrend practice={practice} />,
+      norms: hasShots && visible('norms') && <ExerciseRankCard practice={practice} category={preferences.rankCategory ?? null}
+        onCategory={rankCategory => update({ ...preferences, rankCategory })} onOpenReference={onRankReference} />,
+      }} />
     </div>
     {menuOpen && entry && <dialog ref={menu} className="report-menu" aria-label="Действия с тренировкой"
       onCancel={event => { event.preventDefault(); setMenuOpen(false); }}

@@ -1,12 +1,14 @@
 export type Point = { x: number; y: number };
 export type Hit = { points: number; code: string };
-export type Shot = Hit & { point: Point | null; missPoint?: Point; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
+export type Shot = Hit & { point: Point | null; missPoint?: Point; spot?: TargetSpot; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
+export type TargetSpot = 0 | 1 | 2;
 export type TargetSpec = { profileId: string; diameterMm: number; shaftDiameterMm: number };
 export type TargetProfile = {
   id: string;
   title: string;
   diameters: readonly number[];
   archiveDiameters?: readonly number[];
+  vertical?: true;
   zones: readonly (Hit & { outerRadius: number })[];
 };
 
@@ -30,7 +32,27 @@ export const TARGET_PROFILES: readonly TargetProfile[] = [
   { id: 'wa-outdoor-six-v1', title: 'Зоны 5–10 и X', diameters: [800], archiveDiameters: [400], zones: [xZone, ...rings(5)] },
   { id: 'wa-indoor-five-outer-v1', title: 'Indoor · зоны 6–10', diameters: [400, 600], archiveDiameters: [1220], zones: rings(6) },
   { id: 'wa-indoor-five-inner-v1', title: 'Indoor · зоны 6–10, малая десятка', diameters: [400, 600], zones: rings(6, true) },
+  { id: 'wa-indoor-triple-outer-v1', title: 'Светофор · обычная десятка', diameters: [400, 600], zones: rings(6), vertical: true },
+  { id: 'wa-indoor-triple-inner-v1', title: 'Светофор · малая десятка', diameters: [400, 600], zones: rings(6, true), vertical: true },
 ];
+
+const VERTICAL_SPACING = 1.2;
+export const spotOffsets = (profile: TargetProfile): readonly number[] => profile.vertical
+  ? [-VERTICAL_SPACING, 0, VERTICAL_SPACING] : [0];
+
+export function targetMapMinimum(profile: TargetProfile): number {
+  return profile.vertical ? VERTICAL_SPACING + profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH + .06 : 1.15;
+}
+
+export function spotPoint(point: Point, spot?: TargetSpot): Point {
+  return spot === undefined ? point : { x: point.x, y: point.y + (spot - 1) * VERTICAL_SPACING };
+}
+
+export function targetInput(point: Point, profile: TargetProfile): { point: Point; spot?: TargetSpot } {
+  if (!profile.vertical) return { point };
+  const spot = (point.y < -VERTICAL_SPACING / 2 ? 0 : point.y > VERTICAL_SPACING / 2 ? 2 : 1) as TargetSpot;
+  return { point: { x: point.x, y: point.y - (spot - 1) * VERTICAL_SPACING }, spot };
+}
 
 export const DEFAULT_TARGET: TargetSpec = {
   profileId: 'wa-indoor-outer-v1', diameterMm: 400, shaftDiameterMm: 6,

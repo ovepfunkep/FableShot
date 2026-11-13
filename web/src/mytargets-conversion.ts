@@ -7,7 +7,7 @@ import type { MyTargetsPreview, MyTargetsWarning } from './mytargets-import.ts';
 import { isDiary } from './persistence.ts';
 import type { Diary, DiaryEntry } from './persistence.ts';
 import type { Round, Series } from './practice.ts';
-import { isOnFace } from './target.ts';
+import { getTargetProfile, isInMissRing, isOnFace } from './target.ts';
 import type { Shot } from './target.ts';
 
 export type MyTargetsMergeOptions = {
@@ -127,12 +127,16 @@ export function mergeMyTargets(preview: MyTargetsPreview, existingDiary: Diary, 
             shaftDiameterMm: conditions.equipment?.arrows.diameterMm ?? 6 };
           const point = shot.points > 0 && shot.point && Number.isFinite(shot.point.x) && Number.isFinite(shot.point.y) && isOnFace(shot.point, target)
             ? { ...shot.point } : null;
+          const triple = getTargetProfile(target.profileId)?.vertical;
+          const missPoint = triple && shot.points === 0 && shot.point && isInMissRing(shot.point, target) ? { ...shot.point } : undefined;
           if (shot.points > 0 && shot.point && !point) warn('coordinate_not_preserved', shot.sourceId);
           const number = shot.physicalArrowNumber;
           const validNumber = number !== undefined && validNumberedCount(number) && !arrowNumbers.has(number);
           if (number !== undefined && !validNumber) warn('invalid_arrow_number', shot.sourceId);
           if (validNumber) arrowNumbers.add(number);
           shots.push({ points: shot.points, code: shot.code!, point, imported: true,
+            ...(missPoint ? { missPoint } : {}),
+            ...((point || missPoint) && shot.spot !== undefined && triple ? { spot: shot.spot } : {}),
             ...(shot.rawPoint ? { sourcePoint: { ...shot.rawPoint } } : {}), ...(validNumber ? { physicalArrowNumber: number } : {}) });
           sourceRecords.push(shot.sourceRecord);
           knownRecords.add(shot.sourceRecord);

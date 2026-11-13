@@ -5,6 +5,28 @@ import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
 import { STATISTIC_SECTIONS } from '../src/statistics-visibility.ts';
 import { openHistoryEntry } from './journal-navigation.ts';
 
+test('dragging a report block persists its order in the report', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-statistics').click();
+  await page.getByText('Порядок блоков тренировки', { exact: true }).click();
+  const result = page.getByRole('button', { name: 'Перетащить: Результат', exact: true });
+  const series = page.locator('[data-report-order="series"]');
+  await result.scrollIntoViewIfNeeded();
+  const from = (await result.boundingBox())!;
+  const to = (await series.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('[data-report-order]').nth(1)).toHaveAttribute('data-report-order', 'result');
+  await page.reload();
+  await page.getByTestId('home-start-training').click();
+  await page.getByTestId('target').click();
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await expect(page.locator('[data-report-block]').first()).toHaveAttribute('data-report-block', 'result');
+});
+
 test('whole exercise uses two rounds and display switches persist without rewriting the diary', async ({ page }) => {
   const practice = emptyPractice();
   const conditions = { ...DEFAULT_CONDITIONS, equipment: {

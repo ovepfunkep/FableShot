@@ -90,7 +90,7 @@ test('ZIP repeated round indices retain distinct source IDs and incomplete plan'
 
 test('ZIP preserves reduced-face scores and converts exact positions to nominal-radius coordinates', async () => {
   for (const [target, diameter, profile, scale] of [
-    [5, '40cm', 'wa-indoor-five-outer-v1', .5],
+    [5, '40cm', 'wa-indoor-triple-outer-v1', .5],
     [2, '122cm', 'wa-indoor-five-outer-v1', .5],
     [1, '40cm', 'wa-outdoor-six-v1', .6],
   ] as const) {
@@ -102,6 +102,7 @@ test('ZIP preserves reduced-face scores and converts exact positions to nominal-
     assert.equal(allShots(preview)[0].code, 'X');
     assert.deepEqual(allShots(preview)[0].point, { x: .1 * scale, y: -.2 * scale });
     assert.deepEqual(allShots(preview)[0].rawPoint, { x: .1, y: -.2 });
+    assert.deepEqual(allShots(preview).map(shot => shot.spot), target === 5 ? [0, 1] : [undefined, undefined]);
   }
 });
 

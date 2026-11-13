@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { CompositeScoreCard } from './CompositeScoreCard.tsx';
 import { conditionsKey } from './composite-scoring.ts';
@@ -13,7 +14,8 @@ import type { Shot } from './target.ts';
 import { TrainingHitMap } from './TrainingHitMap.tsx';
 import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
-import { statisticVisible } from './statistics-visibility.ts';
+import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
+import type { ReportBlock } from './statistics-visibility.ts';
 import './training-report-metrics.css';
 
 type ScopedSeries = Series & { round: number; number: number };
@@ -93,26 +95,39 @@ function ZoneDistribution({ shots }: { shots: readonly Shot[] }) {
   </section>;
 }
 
-export function TrainingReportMetrics({ practice, entries }: { practice: Practice; entries: readonly DiaryEntry[] }) {
+export function TrainingReportMetrics({ practice, entries, overview }: {
+  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>;
+}) {
   const { preferences } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const scopes = useMemo(() => reportScopes(practice), [practice]);
   const scope = scopes.find(item => item.key === selectedKey) ?? scopes[0];
   const shots = useMemo(() => scope?.series.flatMap(series => series.shots) ?? [], [scope]);
-  if (!scope || !(['result', 'average', 'volume', 'grouping', 'offset', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) return null;
-  return <>
-    {scopes.length > 1 && <label className="report-metrics-scope">
+  const blocks = { ...overview };
+  if (scope && (['result', 'average', 'volume', 'grouping', 'offset', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) {
+    Object.assign(blocks, {
+      result: <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} />,
+      general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
+      progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
+      hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,
+      numbered_arrows: visible('numbered_arrows') && <NumberedArrowAnalysis key={`arrows:${scope.key}`} series={scope.series} />,
+      distribution: <ZoneDistribution shots={shots} />,
+    });
+  }
+  const order = reportBlockOrder(preferences).filter(id => blocks[id]);
+  const firstMetric = order.find(id => !(id in overview));
+  return <>{order.map(id => <ReportBlockSlot key={id} id={id}>
+    {id === firstMetric && scope && scopes.length > 1 && <label className="report-metrics-scope">
       <span>Условия расчёта</span>
       <select data-testid="report-metrics-scope" value={scope.key} onChange={event => setSelectedKey(event.currentTarget.value)}>
         {scopes.map((item, index) => <option key={item.key} value={item.key}>{index + 1}. {scopeLabel(item)}</option>)}
       </select>
     </label>}
-    <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} />
-    {visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />}
-    {visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />}
-    {visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />}
-    {visible('numbered_arrows') && <NumberedArrowAnalysis key={`arrows:${scope.key}`} series={scope.series} />}
-    <ZoneDistribution shots={shots} />
-  </>;
+    {blocks[id]}
+  </ReportBlockSlot>)}</>;
+}
+
+function ReportBlockSlot({ id, children }: { id: ReportBlock; children: ReactNode }) {
+  return <div className="report-ordered-block" data-report-block={id}>{children}</div>;
 }

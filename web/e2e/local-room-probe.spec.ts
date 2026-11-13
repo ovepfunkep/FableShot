@@ -15,6 +15,10 @@ test('the host can restore a saved room on the current hotspot address', async (
     } });
   }, invitation);
   await page.goto('./');
+  const positions = await page.locator('.journal-home-training-actions button').evaluateAll(buttons =>
+    buttons.map(button => ({ id: button.getAttribute('data-testid'), x: button.getBoundingClientRect().x })));
+  expect(positions.sort((a, b) => a.x - b.x).map(button => button.id))
+    .toEqual(['home-change-conditions', 'home-start-training', 'home-group-room']);
   await page.getByTestId('home-group-room').click();
   await expect(page.getByText(/Комната сохранена/)).toBeVisible();
   await page.getByRole('button', { name: 'Найти адрес' }).click();

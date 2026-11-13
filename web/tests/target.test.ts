@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptsDiameter, DEFAULT_TARGET, getTargetProfile, isOnFace, outerRadius, scorePoint,
-  shaftRadius, summarize, TARGET_PROFILES } from '../src/target.ts';
+  markTargetPoint, shaftRadius, spotOffsets, spotPoint, summarize, targetInput, TARGET_PROFILES } from '../src/target.ts';
 
 test('ordinary Indoor centre is a ten, not X', () => {
   assert.deepEqual(scorePoint({ x: 0, y: 0 }), { points: 10, code: '10' });
@@ -29,7 +29,7 @@ test('placement includes the shaft touching the outside of the face', () => {
   assert.throws(() => scorePoint({ x: NaN, y: 0 }), RangeError);
 });
 
-test('the seven Android profiles keep their IDs, allowed diameters and nominal radii', () => {
+test('target profiles keep their IDs, allowed diameters and nominal radii', () => {
   const cases = [
     ['practice-full-10-v1', [], 450, 1, '10'],
     ['wa-outdoor-full-v1', [800, 1220], 1220, 1, 'X'],
@@ -38,6 +38,8 @@ test('the seven Android profiles keep their IDs, allowed diameters and nominal r
     ['wa-outdoor-six-v1', [800], 800, .6, 'X'],
     ['wa-indoor-five-outer-v1', [400, 600], 400, .5, '10'],
     ['wa-indoor-five-inner-v1', [400, 600], 600, .5, '10'],
+    ['wa-indoor-triple-outer-v1', [400, 600], 400, .5, '10'],
+    ['wa-indoor-triple-inner-v1', [400, 600], 600, .5, '10'],
   ] as const;
   assert.deepEqual(TARGET_PROFILES.map(profile => profile.id), cases.map(([id]) => id));
   for (const [profileId, diameters, diameterMm, radius, centerCode] of cases) {
@@ -49,6 +51,17 @@ test('the seven Android profiles keep their IDs, allowed diameters and nominal r
     assert.deepEqual(scorePoint({ x: 0, y: 0 }, spec), { code: centerCode, points: 10 });
   }
   assert.equal(getTargetProfile('missing'), undefined);
+});
+
+test('three-spot centres score independently and the paper between them is not an input', () => {
+  const spec = { ...DEFAULT_TARGET, profileId: 'wa-indoor-triple-outer-v1' };
+  const profile = getTargetProfile(spec.profileId)!;
+  assert.deepEqual(spotOffsets(profile).map(y => {
+    const aim = targetInput({ x: 0, y }, profile);
+    assert.deepEqual(spotPoint(aim.point, aim.spot), { x: 0, y });
+    return [aim.spot, markTargetPoint(aim.point, spec)?.points];
+  }), [[0, 10], [1, 10], [2, 10]]);
+  assert.equal(markTargetPoint(targetInput({ x: .08, y: -.6 }, profile).point, spec), null);
 });
 
 test('reduced targets score their last ring and reject the rest of the nominal face', () => {

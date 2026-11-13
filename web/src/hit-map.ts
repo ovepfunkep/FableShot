@@ -1,17 +1,18 @@
 import type { Point, Shot } from './target.ts';
+import { spotPoint } from './target.ts';
 
 export const HIT_MAP_GRID_SIZE = 24;
 
-export function knownHitPoints(shots: readonly Shot[]): Point[] {
+export function knownHitPoints(shots: readonly Shot[], layout = false): Point[] {
   const points: Point[] = [];
-  for (const { point } of shots) {
-    if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) points.push(point);
+  for (const { point, spot } of shots) {
+    if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) points.push(layout ? spotPoint(point, spot) : point);
   }
   return points;
 }
 
-export function knownMissPoints(shots: readonly Shot[]): Point[] {
-  return shots.flatMap(shot => shot.missPoint ? [shot.missPoint] : []);
+export function knownMissPoints(shots: readonly Shot[], layout = false): Point[] {
+  return shots.flatMap(shot => shot.missPoint ? [layout ? spotPoint(shot.missPoint, shot.spot) : shot.missPoint] : []);
 }
 
 export function hitCentroid(points: readonly Point[]): Point | null {
@@ -40,8 +41,8 @@ export function hitGeometry(shots: readonly Shot[], diameterMm: number): {
   };
 }
 
-export function hitMapLimit(points: readonly Point[]): number {
-  return points.reduce((limit, { x, y }) => Math.max(limit, Math.max(Math.abs(x), Math.abs(y)) + .1), 1.15);
+export function hitMapLimit(points: readonly Point[], minimum = 1.15): number {
+  return points.reduce((limit, { x, y }) => Math.max(limit, Math.max(Math.abs(x), Math.abs(y)) + .1), minimum);
 }
 
 export function hitDensity(points: readonly Point[], limit: number) {

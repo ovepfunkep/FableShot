@@ -4,7 +4,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { wrapPdfText } from './technique-pdf.ts';
 import type { ReportSnapshot } from './report-export.ts';
 import { formatAverage } from './preferences.ts';
-import { getTargetProfile, MISS_RING_WIDTH, summarize } from './target.ts';
+import { getTargetProfile, MISS_RING_WIDTH, spotOffsets, summarize, targetMapMinimum } from './target.ts';
 import type { Point } from './target.ts';
 import { HIT_MAP_GRID_SIZE, hitDensity, hitMapLimit, knownHitPoints, knownMissPoints } from './hit-map.ts';
 import { numberedArrowMapExtent } from './numbered-arrow-analysis.ts';
@@ -96,12 +96,16 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       }); y -= 190;
     }
   }
-  function target(conditions: ReportSnapshot['analysis'][number]['conditions'], center: Point, radius: number, extent: number, showMissRing = false) {
+  function target(conditions: ReportSnapshot['analysis'][number]['conditions'], center: Point, radius: number, extent: number, showMissRing = false, showLayout = false) {
     const profile = getTargetProfile(conditions.targetProfileId);
-    if (profile && showMissRing) page.drawCircle({ x: center.x, y: center.y,
-      size: radius * (profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH) / extent, color: hex('#536052') });
-    for (const zone of [...profile?.zones ?? []].reverse()) page.drawCircle({ x: center.x, y: center.y, size: radius * zone.outerRadius / extent,
-      color: hex(zones[zone.points]), borderColor: muted, borderWidth: .3 });
+    if (!profile) return;
+    for (const offset of showLayout ? spotOffsets(profile) : [0]) {
+      const y = center.y - offset * radius / extent;
+      if (showMissRing) page.drawCircle({ x: center.x, y,
+        size: radius * (profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH) / extent, color: hex('#536052') });
+      for (const zone of [...profile.zones].reverse()) page.drawCircle({ x: center.x, y, size: radius * zone.outerRadius / extent,
+        color: hex(zones[zone.points]), borderColor: muted, borderWidth: .3 });
+    }
   }
   function dot(point: Point, center: Point, radius: number, extent: number, color = ink) {
     page.drawCircle({ x: center.x + point.x * radius / extent, y: center.y - point.y * radius / extent, size: 2.1,
@@ -228,11 +232,12 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     }
     if (shown('hit_map')) {
       ensure(295); heading('Карта попаданий');
-      const points = knownHitPoints(scope.shots), misses = knownMissPoints(scope.shots);
-      const extent = hitMapLimit([...points, ...misses]), radius = 95;
+      const points = knownHitPoints(scope.shots, true), misses = knownMissPoints(scope.shots, true);
+      const profile = getTargetProfile(scope.conditions.targetProfileId);
+      const extent = hitMapLimit([...points, ...misses], profile && targetMapMinimum(profile)), radius = 95;
       const centers = [{ x: left + 124, y: y - 117 }, { x: left + 387, y: y - 117 }];
       text('Попадания', left + 88, y, 10, true); text('Плотность', left + 355, y, 10, true);
-      centers.forEach(center => target(scope.conditions, center, radius, extent, !!misses.length));
+      centers.forEach(center => target(scope.conditions, center, radius, extent, !!misses.length, true));
       points.forEach(point => dot(point, centers[0], radius, extent));
       const density = hitDensity(points, extent), cell = radius * 2 / HIT_MAP_GRID_SIZE;
       for (const value of density.cells) {

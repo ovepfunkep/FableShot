@@ -1,6 +1,6 @@
 import { appStorage } from './app-storage.ts';
-import { isDisabledStatistics } from './statistics-visibility.ts';
-import type { StatisticFeature } from './statistics-visibility.ts';
+import { isDisabledStatistics, isReportOrder } from './statistics-visibility.ts';
+import type { ReportBlock, StatisticFeature } from './statistics-visibility.ts';
 import { isRankAssignments } from './assigned-ranks.ts';
 import type { RankAssignment } from './assigned-ranks.ts';
 import { isThemeMode, isThemeStyle } from './web-theme.ts';
@@ -14,8 +14,10 @@ export type TrainingPreferences = {
   keepAwake: boolean;
   trainingOnLockScreen?: boolean;
   useSystemScale?: boolean;
+  realArrowDiameter?: boolean;
   rankCategory?: 'male' | 'female';
   disabledStatistics?: StatisticFeature[];
+  reportOrder?: ReportBlock[];
   displayName?: string;
   shootingBaseMinutes?: number;
   rankAssignments?: RankAssignment[];
@@ -37,7 +39,9 @@ export function valid(value: unknown): value is TrainingPreferences {
   return Object.keys(DEFAULT_PREFERENCES).every(key => typeof record[key] === 'boolean') &&
     (record.rankCategory === undefined || record.rankCategory === 'male' || record.rankCategory === 'female') &&
     (record.useSystemScale === undefined || typeof record.useSystemScale === 'boolean') &&
+    (record.realArrowDiameter === undefined || typeof record.realArrowDiameter === 'boolean') &&
     (record.disabledStatistics === undefined || isDisabledStatistics(record.disabledStatistics)) &&
+    (record.reportOrder === undefined || isReportOrder(record.reportOrder)) &&
     (record.displayName === undefined || typeof record.displayName === 'string' && record.displayName.length <= 40) &&
     (record.rankAssignments === undefined || isRankAssignments(record.rankAssignments)) &&
     (record.onboardingSeen === undefined || typeof record.onboardingSeen === 'boolean') &&

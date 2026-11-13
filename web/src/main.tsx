@@ -499,8 +499,8 @@ function App() {
   const past = series.id !== active.series.id;
   const completed = practice.savedAt !== null;
   const timer = usePracticeTimer(!!ongoing, preferences.haptics);
-  const screenError = useKeepScreenOn(!completed && !!entry && page === 'training');
   useEffect(() => { if (!ongoing) setTimerOpen(false); }, [ongoing]);
+  const screenError = useKeepScreenOn(!completed && !!entry && page === 'training');
   const editing = edit?.seriesId === series.id ? edit : null;
   const seriesEditor = page === 'editor';
   const dirty = editing !== null && JSON.stringify(editing.shot) !== JSON.stringify(series.shots[editing.index]);
@@ -569,6 +569,7 @@ function App() {
     if (editing) {
       const updated = { ...editing.shot, ...shot };
       if (!shot.missPoint) delete updated.missPoint;
+      if (!shot.point && !shot.missPoint) delete updated.spot;
       setEdit({ ...editing, shot: updated });
     }
     else if (canAppend && update(previous => appendShot(previous, shot))) {
@@ -814,8 +815,7 @@ function App() {
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
       conditions={homeConditions}
-      groupAction={supportsLocalRoom() && <SettingsAction icon="group" data-testid="home-group-room"
-        onClick={() => setPage('group-room')}>Групповая тренировка</SettingsAction>}
+      onGroup={supportsLocalRoom() ? () => setPage('group-room') : undefined}
       needsEquipment={!ongoing && !paused && needsHomeEquipment} onStart={() => startPractice()} onOpen={openSaved}
       onConditions={() => {
         setSetupMemo(null);
@@ -895,10 +895,9 @@ function App() {
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
-    localRoom={supportsLocalRoom()
-      ? <SettingsAction icon="group" onClick={() => { setSettingsSection(null); setPage('group-room'); }}>Открыть групповые тренировки</SettingsAction> : undefined}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
+      <div className="settings-panel"><TrainingPreferenceControls keys={['realArrowDiameter']} /></div>
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}
     motion={<div className="settings-panel">
@@ -1073,6 +1072,7 @@ function App() {
       roundRank={currentRanks && <RankTag rank={currentRanks.round} testId="rank-round" onOpen={() => setRankScope({ kind: 'round', id: round.id })} />}
       seriesRank={currentRanks && <RankTag rank={currentRanks.series} testId="rank-series" onOpen={() => setRankScope({ kind: 'series', id: series.id })} />} />}
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
+      realArrowDiameter={preferences.realArrowDiameter ? series.conditions.equipment?.arrows.diameterMm ?? undefined : undefined}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark} navigation={navigation}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />

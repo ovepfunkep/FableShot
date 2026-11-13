@@ -39,6 +39,8 @@ export function useTrainingPreferences(): PreferencesState {
 }
 
 const switches = [
+  { key: 'realArrowDiameter', title: 'Реальный диаметр стрел', tag: 'setting-real-arrow-diameter', subtitle: 'Если указан диаметр стрелы в снаряжении',
+    hint: 'Показывает отметку в масштабе мишени и приближения. Для выбора стрелы используйте нижнюю панель попаданий.' },
   { key: 'hideScores', title: 'Скрывать очки', tag: 'setting-hide-scores', hint: 'Для интриги и большего места под мишень: убирает оценки стрел, суммы и средние вместе с подписями. Номера стрел, лупа и правка остаются. Результаты можно открыть в статистике. Попадания сохраняются как обычно.' },
   { key: 'averageHundredths', title: 'Средний до сотых', tag: 'setting-average-hundredths', hint: 'Показывает средний балл с двумя знаками после запятой в тренировке, списках серий и статистике.' },
   { key: 'animations', title: 'Анимации', tag: 'setting-animations', hint: 'Плавные изменения цифр и подсветка активной стрелы. Системная настройка уменьшения движения также учитывается.' },
@@ -56,11 +58,13 @@ export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof s
   return <section className="training-preferences" aria-label="Параметры отображения">
     {switches.filter(item => (!keys || keys.includes(item.key)) &&
       (item.key !== 'trainingOnLockScreen' || Capacitor.getPlatform() === 'android') &&
-      (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale()))).map(item => {
-      const checked = preferences[item.key] ?? (item.key !== 'useSystemScale');
+      (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale())) &&
+      (item.key !== 'realArrowDiameter' || keys?.includes(item.key))).map(item => {
+      const checked = preferences[item.key] ?? (item.key !== 'useSystemScale' && item.key !== 'realArrowDiameter');
       return <div key={item.key} className="preference-row">
         <span className="preference-title">{item.title}
           <span className="preference-help-anchor">{'\u00a0'}<button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button></span>
+          {'subtitle' in item && <small className="preference-subtitle">{item.subtitle}</small>}
         </span>
         <button type="button" role="switch" className="preference-switch" aria-label={item.title} aria-checked={checked}
           data-testid={item.tag} disabled={!!error} onClick={() => update({ ...preferences, [item.key]: !checked })}><span /></button>

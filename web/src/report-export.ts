@@ -20,7 +20,7 @@ export const REPORT_CSV_COLUMNS = ['format', 'record_type', 'session_id', 'sessi
   'end_role', 'end_state', 'planned_arrows', 'shot_id', 'input_order', 'points', 'zone', 'automatic_points',
   'automatic_rule', 'x', 'y', 'face_id', 'score_source', 'position_source', 'position_status',
   'physical_arrow_number', 'shot_created_ms', 'shot_updated_ms', 'shot_revision', 'count', 'round_number', 'series_number',
-  'source_x', 'source_y', 'source_coordinate_system'] as const;
+  'source_x', 'source_y', 'source_coordinate_system', 'target_spot'] as const;
 
 /** Same safe quoting as AnalyticsCsv.kt. Numeric cells must not become escaped strings. */
 export function reportCsvCell(value: unknown): string {
@@ -75,7 +75,8 @@ function appendCsvRows(entry: DiaryEntry, rows: string[]) {
       x: position?.x, y: position ? -position.y : null, score_source: shot.imported ? 'imported' : 'manual',
       position_source: position ? shot.imported && !shot.missPoint ? 'imported' : 'target' : null, position_status: position ? 'confirmed' : 'missing',
       physical_arrow_number: shot.physicalArrowNumber, source_x: shot.sourcePoint?.x, source_y: shot.sourcePoint?.y,
-      source_coordinate_system: shot.sourcePoint ? 'mytargets-raw-y-down' : null });
+      source_coordinate_system: shot.sourcePoint ? 'mytargets-raw-y-down' : null,
+      target_spot: shot.spot === undefined ? null : shot.spot + 1 });
     });
     });
   });

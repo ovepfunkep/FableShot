@@ -12,7 +12,7 @@ import type { AchievementEnrollment, AchievementLedger } from './achievement-led
 import { isPersonalRecordEvent } from './personal-record-events.ts';
 import type { PersonalRecordEvent } from './personal-record-events.ts';
 import type { Point, Shot } from './target.ts';
-import { isInMissRing, isOnFace } from './target.ts';
+import { getTargetProfile, isInMissRing, isOnFace } from './target.ts';
 import { appendShot, completePractice, emptyPractice, ROUND_LIMIT } from './practice.ts';
 import { DEFAULT_CONDITIONS, DEFAULT_ROUND_RULE, MAX_SERIES_ARROWS, isConditions, isRoundRule } from './conditions.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
@@ -56,7 +56,8 @@ function isPoint(value: unknown): value is Point {
 
 function isShot(value: unknown): value is Shot {
   if (value === null || typeof value !== 'object') return false;
-  const { point, points, code, physicalArrowNumber, imported, sourcePoint, missPoint } = value as Partial<Shot>;
+  const { point, points, code, physicalArrowNumber, imported, sourcePoint, missPoint, spot } = value as Partial<Shot>;
+  if (spot !== undefined && spot !== 0 && spot !== 1 && spot !== 2) return false;
   if (imported !== undefined && imported !== true) return false;
   if (sourcePoint !== undefined && (imported !== true || !isPoint(sourcePoint))) return false;
   if (physicalArrowNumber !== undefined && !validNumberedCount(physicalArrowNumber)) return false;
@@ -89,6 +90,7 @@ function isSeries(value: unknown, legacy = false): value is Series {
   const target = { profileId: conditions.targetProfileId, diameterMm: conditions.targetDiameterMm,
     shaftDiameterMm: conditions.equipment?.arrows.diameterMm ?? 6 };
   return shots.every(shot => {
+    if (shot.spot !== undefined && !getTargetProfile(target.profileId)?.vertical) return false;
     if (shot.physicalArrowNumber !== undefined) {
       if (used.has(shot.physicalArrowNumber)) return false;
       used.add(shot.physicalArrowNumber);
