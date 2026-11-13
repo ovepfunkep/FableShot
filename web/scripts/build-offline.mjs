@@ -36,13 +36,15 @@ const assets = ${JSON.stringify(paths)}.map(path => new URL(path, scope).href);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(current).then(cache =>
-    cache.addAll(assets.map(url => new Request(url, { cache: 'reload' })))));
+    cache.addAll(assets.map(url => new Request(url, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key.startsWith(prefix) && key !== current)
+    // A tab can still be running the previous bundle after the worker changes.
+    await Promise.all(keys.filter(key => key.startsWith(prefix) && key !== current).slice(0, -1)
       .map(key => caches.delete(key)));
     await self.clients.claim();
   })());
@@ -52,13 +54,23 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
-  if (request.mode !== 'navigate' && !assets.includes(url.href)) return;
+  const bundleAsset = url.pathname.startsWith(new URL('assets/', scope).pathname);
+  if (request.mode !== 'navigate' && !assets.includes(url.href) && !bundleAsset) return;
   event.respondWith((async () => {
     const cache = await caches.open(current);
     // These are fixed same-origin files. The module request can add Origin,
     // while the precache request does not, even though their bytes match.
     const key = request.mode === 'navigate' ? shell : url.href;
-    return await cache.match(key, { ignoreVary: true }) ?? await fetch(request);
+    const cached = await cache.match(key, { ignoreVary: true });
+    if (cached) return cached;
+    if (bundleAsset) {
+      const previous = (await caches.keys()).filter(name => name.startsWith(prefix) && name !== current).at(-1);
+      if (previous) {
+        const oldAsset = await (await caches.open(previous)).match(key, { ignoreVary: true });
+        if (oldAsset) return oldAsset;
+      }
+    }
+    return fetch(request);
   })());
 });
 `;

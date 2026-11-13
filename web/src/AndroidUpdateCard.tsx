@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { androidUpdateNotes, fetchAndroidUpdateHistory } from './android-updates.ts';
 import type { AndroidUpdate, useAndroidUpdates } from './android-updates.ts';
 import { BottomSheet } from './ConditionsScreen.tsx';
+import { Icon } from './TrainingChrome.tsx';
 import './about-screen.css';
 
 function AndroidUpdateDetails({ installed, update, onClose }: { installed: number; update: AndroidUpdate; onClose: () => void }) {
@@ -33,17 +34,24 @@ export function AndroidUpdateCard({ updates, manual = false }: { updates: Return
   if (!updates.available || (!manual && !updates.announce)) return null;
   return <section className="android-update" aria-label="Обновления Android" data-testid="android-update">
     {updates.update && <>
-      <strong>Доступно обновление!</strong>
-      <div className="android-update-actions">
-        <button type="button" onClick={() => setDetailsOpen(true)}>Что нового?</button>
-        <button type="button" onClick={async () => setDownloadError(!await updates.download())}>Скачать APK</button>
-        {!manual && <button type="button" className="android-update-dismiss" onClick={updates.dismiss}>Позже</button>}
+      <div className="android-update-banner">
+        <button type="button" className="android-update-download" aria-label="Скачать APK" title="Скачать APK"
+          onClick={async () => setDownloadError(!await updates.download())}><Icon name="download" /></button>
+        <div className="android-update-copy">
+          <strong>Доступно обновление</strong>
+          <div className="android-update-meta">
+            <span>{updates.update.version}</span>
+            <button type="button" aria-haspopup="dialog" onClick={() => setDetailsOpen(true)}>Что нового?</button>
+          </div>
+        </div>
+        {!manual && <button type="button" className="android-update-dismiss" aria-label="Позже" title="Позже"
+          onClick={updates.dismiss}><Icon name="close" /></button>}
       </div>
+      {downloadError && <small role="status">Не удалось открыть загрузку APK.</small>}
       {detailsOpen && updates.installed !== null && <AndroidUpdateDetails key={updates.update.code}
         installed={updates.installed} update={updates.update} onClose={() => setDetailsOpen(false)} />}
     </>}
     {manual && <button type="button" className="technique-condition-link" disabled={updates.checking} onClick={updates.check}>Проверить обновления</button>}
     {manual && updates.status && <small role="status">{updates.status}</small>}
-    {downloadError && <small role="status">Не удалось открыть загрузку APK.</small>}
   </section>;
 }

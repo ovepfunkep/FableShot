@@ -32,9 +32,33 @@
 .about-credits-list h2 { margin: 0; color: var(--accent); font-size: 1.2rem; }
 .about-credits-list p { max-width: 30ch; margin: 0 auto; line-height: 1.5; }
 .about-copyright { color: var(--muted); text-align: center; font-size: .8125rem; }
-.android-update { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; padding: 4px 12px; border: 1px solid var(--edge); border-radius: var(--card-radius); background: var(--surface); }
-.android-update-actions { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.android-update-actions button { padding: 0; min-height: 44px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: .875rem; cursor: pointer; }
-.android-update-actions .android-update-dismiss { color: var(--muted); }
-.android-update > small { flex-basis: 100%; padding-bottom: 6px; }
+.android-update { display: grid; gap: 8px; }
+.journal-content > .android-update { margin: 8px var(--journal-home-gutter) 0; }
+.android-update-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+.android-update-download, .android-update-dismiss {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+}
+.android-update-download { background: var(--accent-wash); color: var(--accent); }
+.android-update-dismiss { background: transparent; color: var(--muted); }
+.android-update-dismiss svg { width: 18px; height: 18px; }
+.android-update-copy { padding-top: 4px; }
+.android-update-copy strong { display: block; font-size: .875rem; line-height: 1.3; }
+.android-update-meta { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; color: var(--muted); font-size: .75rem; }
+.android-update-meta button { min-height: 34px; padding: 0; border: 0; background: transparent; color: var(--accent); }
+.android-update > small { margin-inline: 10px; color: var(--muted); }
 .android-update-notes { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }

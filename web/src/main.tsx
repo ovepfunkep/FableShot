@@ -141,13 +141,13 @@ function App() {
   const [memoSnapshot, setMemoSnapshot] = useState<TechniqueSelection | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    enableOffline().then(() => {
-      if (alive) setOffline('ready');
+    const pending = new AbortController();
+    enableOffline(pending.signal).then(() => {
+      if (!pending.signal.aborted) setOffline('ready');
     }, () => {
-      if (alive) setOffline('error');
+      if (!pending.signal.aborted) setOffline('error');
     });
-    return () => { alive = false; };
+    return () => pending.abort();
   }, []);
 
   function writeDiary(change: (previous: Diary) => Diary, trainingId?: string): boolean {

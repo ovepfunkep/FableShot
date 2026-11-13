@@ -35,7 +35,12 @@ test('Android rechecks when Home becomes active and opens release notes or the A
   });
   await page.goto('./');
   const card = page.getByTestId('android-update');
-  await expect(card).toContainText('Доступно обновление!');
+  await expect(card).toContainText('Доступно обновление');
+  await expect(card).toContainText('0.30.0');
+  const banner = (await card.boundingBox())!;
+  const hero = (await page.getByTestId('home-hero').boundingBox())!;
+  expect(banner.x).toBeCloseTo(hero.x);
+  expect(banner.width).toBeCloseTo(hero.width);
   await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
   expect(checks).toBe(1);
   expect(historyRequests).toBe(0);
@@ -71,6 +76,6 @@ test('Android rechecks when Home becomes active and opens release notes or the A
   expect(checks).toBe(3);
   await manual.click();
   await expect.poll(() => checks).toBe(4);
-  await expect(card).toContainText('Доступно обновление!');
+  await expect(card).toContainText('Доступно обновление');
   await expect(page.getByText('Новый отчёт', { exact: true })).toHaveCount(0);
 });

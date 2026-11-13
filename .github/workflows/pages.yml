@@ -1,9 +1,12 @@
-name: Publish FableShot PWA
+name: Publish FableShot release
 
 on:
-  push:
-    branches: [codex/initial-import]
   workflow_dispatch:
+    inputs:
+      release_id:
+        description: Draft GitHub Release ID with signed Android APK
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,7 +16,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      code: ${{ steps.release.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify matching Android release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          tag="v$(node -p "require('./web/package.json').version")"
+          code=$(node -p "require('./web/package.json').config.androidVersionCode")
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" |
+            jq -e --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg apk "FableShot-android-$code.apk" '
+              .draft and (.prerelease | not) and .tag_name == $tag and .target_commitish == $sha
+              and any(.assets[]; .name == $apk and .state == "uploaded" and .size > 0)'
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
   build:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -43,3 +76,21 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+  publish-android:
+    needs: [verify, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish matching Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          CODE: ${{ needs.verify.outputs.code }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true --silent
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" |
+            jq -e --arg tag "$TAG" --arg apk "FableShot-android-$CODE.apk" '
+              .tag_name == $tag and any(.assets[]; .name == $apk and .state == "uploaded")'
