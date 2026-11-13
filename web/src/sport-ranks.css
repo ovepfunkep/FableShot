@@ -12,7 +12,8 @@
   white-space: nowrap;
   line-height: 1.05;
 }
-.rank-tag strong { color: var(--accent); font-size: .75rem; }
+.rank-tag strong { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: .75rem; }
+.rank-medal { width: 14px; height: 14px; }
 .rank-tag span { font-size: .6875rem; }
 button.rank-tag:active { background: var(--raised); }
 

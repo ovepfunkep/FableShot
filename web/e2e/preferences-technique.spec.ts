@@ -4,11 +4,11 @@ import type { Page } from '@playwright/test';
 
 async function openSettings(page: Page) {
   await page.getByRole('button', { name: 'Условия тренировки', exact: true }).click();
-  await page.getByTestId('conditions-options').click();
+  await expect(page.getByTestId('conditions-technique')).toBeHidden();
   await page.getByTestId('conditions-advanced').click();
+  await expect(page.getByTestId('conditions-technique')).toBeVisible();
 }
 async function closeSettings(page: Page) {
-  await page.getByTestId('conditions-options-done').click();
   await page.getByTestId('start-training').click();
 }
 async function hit(page: Page) {

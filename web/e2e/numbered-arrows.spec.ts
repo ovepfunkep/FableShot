@@ -67,12 +67,10 @@ test('numbered kit records hits first, prevents duplicates and edits old assignm
   await page.getByTestId('nav-home').click();
   await openTraining(page);
   await page.getByRole('button', { name: 'Условия тренировки', exact: true }).click();
-  await page.getByTestId('conditions-options').click();
   await page.getByTestId('conditions-advanced').click();
   const toggle = page.getByTestId('numbered-arrows-toggle');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
-  await page.getByTestId('conditions-options-done').click();
   await page.getByTestId('start-training').click();
   await page.reload();
   await openTraining(page);

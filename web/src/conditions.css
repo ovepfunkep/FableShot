@@ -46,12 +46,24 @@
 .target-profile-option strong { font-size: 14px; font-weight: 700; }
 .target-profile-option small { color: var(--muted); font-size: 12px; }
 .target-preview { width: 48px; height: 48px; flex: none; }
-.round-options { display: grid; gap: 8px; }
-.round-advanced > summary { min-height: 44px; padding-block: 10px; cursor: pointer; color: var(--accent); }
+.round-options { display: grid; gap: 16px; }
+.round-options-heading h3 { margin: 0; font-size: .9375rem; }
+.round-options > .primary { margin-top: 4px; }
+.conditions-advanced > summary {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  min-height: 50px; padding: 8px 14px; border: 1px solid var(--edge); border-radius: 16px;
+  background: var(--surface); font-size: .875rem; font-weight: 700; cursor: pointer;
+}
+.conditions-advanced > summary::-webkit-details-marker { display: none; }
+.conditions-advanced > summary > svg:first-child { width: 20px; color: var(--accent); }
+.conditions-advanced > summary > svg:last-child { width: 18px; color: var(--muted); }
+.conditions-advanced[open] > summary > svg:last-child { transform: rotate(90deg); }
+.conditions-advanced-content { display: grid; gap: 12px; padding-top: 12px; }
+.conditions-display-options { display: grid; gap: 10px; padding: 8px 14px; border: 1px solid var(--edge); border-radius: 16px; background: var(--surface); }
 .inline-heading { display: flex; align-items: center; gap: 8px; }
 .help-icon { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); background: none; }
 .condition-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-.condition-tabs button { border: 1px solid var(--edge); border-radius: 12px; background: none; min-height: 42px; padding: 6px 12px; }
+.condition-tabs button { border: 1px solid var(--edge); border-radius: 12px; background: none; min-height: 44px; padding: 8px 14px; }
 .text-action { min-height: 44px; border: 0; background: none; color: var(--accent); text-align: left; padding: 4px 0; }
 .round-help { margin: 0; font-size: 14px; line-height: 1.7; }
 .preset-editor { display: grid; gap: 12px; }

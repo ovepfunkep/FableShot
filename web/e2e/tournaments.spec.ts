@@ -89,6 +89,8 @@ test('training setup links a start and a completed tournament keeps its protocol
   });
   await page.goto('./');
   await page.getByTestId('home-change-conditions').click();
+  await expect(page.getByLabel('Турнирный старт')).toBeHidden();
+  await page.getByTestId('conditions-advanced').click();
   await page.getByLabel('Турнирный старт').selectOption({ label: 'Зимний кубок · Баребоу' });
   await page.getByTestId('start-training').click();
   await page.getByTestId('target').click();

@@ -8,11 +8,14 @@ import { getTargetProfile } from './target.ts';
 import './sport-ranks.css';
 
 export function RankTag({ rank, onOpen, testId }: { rank: StageRank; onOpen?: () => void; testId?: string }) {
-  const barebowPace = rank.bow === 'barebow' && rank.evaluation?.exercise.arrows === 60 && !rank.finalResult && !!rank.label;
-  const label = barebowPace && rank.label !== 'ниже порога' ? `Темп ${rank.label}` : rank.label;
-  const contents = <><strong>{label ?? '—'}</strong><span>{rank.classLabel ?? 'Разряд'}</span></>;
+  const label = rank.label;
+  const forecast = !rank.finalResult && rank.evaluation?.pace;
+  const contents = <><strong>{forecast && <svg className="rank-medal" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m6 3 3 7m9-7-3 7M9 3h6" /><circle cx="12" cy="15" r="5.5" /><path d="m10 15 1.5 1.5L14 14" />
+  </svg>}{label ?? '—'}</strong><span>{rank.classLabel ?? 'Разряд'}</span></>;
   if (onOpen) return <button type="button" className="rank-tag" data-testid={testId} onClick={onOpen}
-    aria-label={`${rank.scopeLabel} · ${label ?? 'разряд'}`}>{contents}</button>;
+    aria-label={`${rank.scopeLabel} · ${forecast ? 'Прогноз ' : ''}${label ?? 'разряд'}`}>{contents}</button>;
   return rank.label ? <span className="rank-tag" data-testid={testId}>{contents}</span> : null;
 }
 

@@ -97,7 +97,8 @@ test('round options support series boundaries and saved presets with a pinned st
   await page.getByTestId('next-end').click();
   await expect(page.getByTestId('training-rounds-open')).toContainText('Раунд 2');
   await openConditions(page);
-  await expect(page.getByTestId('conditions-options')).toContainText('Параметры тренировки');
+  await expect(page.getByTestId('conditions-options')).toContainText('Раунд');
+  await expect(page.getByRole('button', { name: /^Раунд/ })).toHaveCount(0);
   await page.getByTestId('training-presets').click();
   await expect(page.getByRole('button', { name: /^Открытый рубеж/ })).toBeVisible();
 });

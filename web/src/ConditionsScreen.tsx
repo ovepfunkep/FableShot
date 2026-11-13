@@ -194,18 +194,31 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       <ConditionRow title="Комплект" value={equipment?.name ?? 'Без комплекта'} icon="kit" tag="conditions-equipment"
         onClick={() => { setEditEquipment(false); setSheet('equipment'); }}
         onEdit={equipment ? () => { setEditEquipment(true); setSheet('equipment'); } : undefined} />
-      <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
-        <Icon name="notes" /><span><strong>Памятка и фокус</strong><small>{techniqueTitle}</small></span><Icon name="right" />
-      </button>
-      <ConditionRow title={editableRule ? 'Раунд' : 'Параметры тренировки'} value={editableRule ? ruleText(nextRule) : 'Отображение'} icon="round" tag="conditions-options"
-        onClick={() => setSheet('round')} />
-      {tournamentOptions.length > 0 && <label className="conditions-tournament">
-        <Icon name="trophy" /><span>Турнир</span>
-        <select aria-label="Турнирный старт" value={tournamentKey} onChange={event => setTournamentKey(event.target.value)}>
-          <option value="">Обычная тренировка</option>
-          {tournamentOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
-        </select>
-      </label>}
+      <ConditionRow title="Раунд" value={ruleText(nextRule)} icon="round" tag="conditions-options"
+        onClick={editableRule ? () => setSheet('round') : undefined} />
+      <details className="conditions-advanced">
+        <summary data-testid="conditions-advanced"><Icon name="settings" /><span>Дополнительно</span><Icon name="right" /></summary>
+        <div className="conditions-advanced-content">
+          <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
+            <Icon name="notes" /><span><strong>Памятка и фокус</strong><small>{techniqueTitle}</small></span><Icon name="right" />
+          </button>
+          {tournamentOptions.length > 0 && <label className="conditions-tournament">
+            <Icon name="trophy" /><span>Турнир</span>
+            <select aria-label="Турнирный старт" value={tournamentKey} onChange={event => setTournamentKey(event.target.value)}>
+              <option value="">Обычная тренировка</option>
+              {tournamentOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+            </select>
+          </label>}
+          <div className="conditions-display-options">
+            {hasNumberedSet && <div className="preference-row">
+              <span className="preference-title">Нумерация стрел</span>
+              <button type="button" role="switch" aria-label="Нумерация стрел" aria-checked={numberedArrows ?? true}
+                data-testid="numbered-arrows-toggle" className="preference-switch" onClick={() => setNumberedArrows(!(numberedArrows ?? true))}><span /></button>
+            </div>}
+            <TrainingPreferenceControls />
+          </div>
+        </div>
+      </details>
       {error && <p className="conditions-error" role="alert">{error}</p>}
     </div>
     <footer className="conditions-footer">
@@ -228,11 +241,10 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
         </button>)}
       </div>
     </BottomSheet>}
-    {sheet === 'round' && <BottomSheet title="Параметры тренировки" onClose={() => setSheet(null)} tag="conditions-options-sheet">
+    {sheet === 'round' && <BottomSheet title="Ограничение раунда" onClose={() => setSheet(null)} tag="conditions-options-sheet">
       <div className="round-options">
-        {editableRule && <>
-        <div className="inline-heading"><h3>Ограничение раунда</h3><button type="button" className="help-icon" aria-label="О формате раунда" onClick={() => setHelp(true)}>?</button></div>
-        <div className="condition-tabs">
+        <div className="inline-heading round-options-heading"><h3>Формат</h3><button type="button" className="help-icon" aria-label="О формате раунда" onClick={() => setHelp(true)}>?</button></div>
+        <div className="condition-tabs" role="group" aria-label="Формат раунда">
           {(['arrows', 'series', 'unlimited'] as const).map(unit => <button type="button" key={unit}
             data-testid={unit === 'arrows' ? 'volume-arrows' : unit === 'series' ? 'volume-fixed' : 'volume-free'}
             aria-pressed={roundUnit === unit} onClick={() => {
@@ -244,16 +256,6 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
         {roundUnit !== 'unlimited' && <ConditionNumber title={roundUnit === 'arrows' ? 'Стрел в раунде' : 'Серий в раунде'}
           tag={roundUnit === 'arrows' ? 'round-arrows' : 'round-series'} value={roundLimit}
           choices={roundUnit === 'arrows' ? [30, 60, 72] : [6, 10, 12]} invalid={!isRoundRule(nextRule)} onChange={setRoundLimit} />}
-        </>}
-        <details className="round-advanced">
-          <summary data-testid="conditions-advanced">Дополнительно</summary>
-          {hasNumberedSet && <div className="preference-row">
-            <span className="preference-title">Нумерация стрел</span>
-            <button type="button" role="switch" aria-label="Нумерация стрел" aria-checked={numberedArrows ?? true}
-              data-testid="numbered-arrows-toggle" className="preference-switch" onClick={() => setNumberedArrows(!(numberedArrows ?? true))}><span /></button>
-          </div>}
-          <TrainingPreferenceControls />
-        </details>
         <button type="button" className="primary" data-testid="conditions-options-done" onClick={() => setSheet(null)}>Готово</button>
       </div>
     </BottomSheet>}

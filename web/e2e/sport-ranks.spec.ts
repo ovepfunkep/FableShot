@@ -18,6 +18,8 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await page.keyboard.press('Escape');
   for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
   await expect(page.getByTestId('rank-round')).toContainText('МСМК');
+  await expect(page.getByTestId('rank-round')).not.toContainText('Темп');
+  await expect(page.getByTestId('rank-round').locator('.rank-medal')).toBeVisible();
   await expect(page.getByTestId('rank-series')).toContainText('МСМК');
   await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Отметить промах' }).click();
