@@ -151,7 +151,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   </section>;
 }
 
-export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen }: {
+export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, groupAction }: {
   active: boolean;
   paused?: boolean;
   recent: readonly DiaryEntry[];
@@ -162,6 +162,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
   onStart: () => void;
   onConditions: () => void;
   onOpen: (id: string) => void;
+  groupAction?: import('react').ReactNode;
 }) {
   const { preferences } = useTrainingPreferences();
   return <div className="journal-home" data-testid="home-screen">
@@ -176,6 +177,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
         <JournalGlyph name="edit" />{paused ? 'Новая тренировка' : 'Изменить условия'}
       </button>}
     </section>
+    {groupAction}
     {statisticVisible(preferences, 'volume') && <section className="journal-home-totals" data-testid="home-all-time-totals" aria-label="Всего за всё время">
       <div className="journal-home-card"><JournalGlyph name="target" /><span><strong>{arrowCount.toLocaleString('ru-RU')}</strong>Стрел</span></div>
       <div className="journal-home-card"><JournalGlyph name="calendar" /><span><strong>{practiceCount.toLocaleString('ru-RU')}</strong>Тренировок</span></div>

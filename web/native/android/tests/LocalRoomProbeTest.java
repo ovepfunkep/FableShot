@@ -44,6 +44,17 @@ public final class LocalRoomProbeTest {
         } catch (IOException expected) {
             System.out.println("Room probe: exchange, wrong invitation, reconnect, and close passed.");
         }
+        try (LocalRoomProbe restored = new LocalRoomProbe(loopback, secret, null, false, port)) {
+            Thread listener = new Thread(restored::serve);
+            listener.start();
+            try {
+                connect(loopback, port, secret);
+                if (restored.checks() != 1) throw new AssertionError("Previous invitation did not work after restart");
+            } finally {
+                restored.close();
+                listener.join(3000);
+            }
+        }
         try (LocalRoomProbe room = new LocalRoomProbe(loopback, secret, request -> request)) {
             Thread listener = new Thread(room::serve);
             listener.start();

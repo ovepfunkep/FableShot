@@ -9,6 +9,7 @@ import { statisticVisible } from './statistics-visibility.ts';
 
 const paths = {
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2',
+  group: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2 20v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M16 4a3.5 3.5 0 0 1 0 7m2 2a5 5 0 0 1 4 5v2',
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-4a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z',
   calendar: 'M4 6h16v15H4zM8 3v6m8-6v6M4 11h16',
   timer: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9 2h6m-3 7v4l3 2m3-10 2-2',

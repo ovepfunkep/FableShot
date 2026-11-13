@@ -1,6 +1,7 @@
 package app.fableshot.android.webpilot;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -13,6 +14,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.BindException;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +28,12 @@ public class LocalRoomProbePlugin extends Plugin {
     private LocalRoomProbe room;
     private LocalRoomSeriesStore store;
     private volatile String invitation;
+    private String roomName;
+    private boolean triedRestore;
+
+    private SharedPreferences savedRoom() {
+        return getContext().getSharedPreferences("fableshot-active-room", Context.MODE_PRIVATE);
+    }
 
     @PluginMethod
     public void addresses(PluginCall call) {
@@ -52,18 +60,45 @@ public class LocalRoomProbePlugin extends Plugin {
         try {
             InetAddress address = parseAddress(call.getString("address"));
             if (NetworkInterface.getByInetAddress(address) == null) throw new IOException("Address is no longer assigned");
-            byte[] secret = LocalRoomProbe.randomBytes(24);
-            LocalRoomSeriesStore createdStore = new LocalRoomSeriesStore(getContext(), secret);
+            SharedPreferences saved = savedRoom();
+            String encoded = saved.getString("secret", null);
+            byte[] secret = encoded == null ? LocalRoomProbe.randomBytes(24) : Base64.decode(encoded, Base64.URL_SAFE);
+            String name = encoded == null ? call.getString("roomName", "").trim() : saved.getString("name", "");
+            if (name.length() > 60) { call.reject("Название комнаты слишком длинное."); return; }
+            openRoom(address, secret, name.isEmpty() ? "Групповая тренировка" : name, saved.getInt("port", 0));
+            call.resolve(roomStatus());
+        } catch (IOException | android.database.sqlite.SQLiteException error) {
+            call.reject("Не удалось открыть комнату. Проверьте адрес точки доступа.");
+        }
+    }
+
+    private void openRoom(InetAddress address, byte[] secret, String name, int port) throws IOException {
+        LocalRoomSeriesStore createdStore = new LocalRoomSeriesStore(getContext(), secret, name);
+        LocalRoomProbe created = null;
+        boolean opened = false;
+        try {
+            createdStore.loadAcceptedCount();
             boolean preview = (getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
-            LocalRoomProbe created = new LocalRoomProbe(address, secret, createdStore::receive, preview);
+            try {
+                created = new LocalRoomProbe(address, secret, createdStore::receive, preview, port);
+            } catch (BindException error) {
+                if (port == 0) throw error;
+                created = new LocalRoomProbe(address, secret, createdStore::receive, preview);
+            }
+            String encoded = Base64.encodeToString(secret, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+            if (!savedRoom().edit().putString("secret", encoded).putString("address", address.getHostAddress())
+                .putInt("port", created.port()).putString("name", name).commit()) throw new IOException("Could not save room");
             store = createdStore;
             room = created;
-            invitation = "FS1:" + address.getHostAddress() + ":" + created.port() + ":"
-                + Base64.encodeToString(secret, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+            roomName = name;
+            invitation = "FS1:" + address.getHostAddress() + ":" + created.port() + ":" + encoded;
             new Thread(created::serve, "fableshot-room-probe").start();
-            status(call);
-        } catch (IOException error) {
-            call.reject("Не удалось открыть комнату. Проверьте адрес точки доступа.");
+            opened = true;
+        } finally {
+            if (!opened) {
+                if (created != null) created.close();
+                createdStore.close();
+            }
         }
     }
 
@@ -102,12 +137,37 @@ public class LocalRoomProbePlugin extends Plugin {
 
     @PluginMethod
     public synchronized void status(PluginCall call) {
-        call.resolve(room == null ? new JSObject() : new JSObject().put("invitation", invitation).put("checks", room.checks())
-            .put("acceptedSeries", store.acceptedSeries()));
+        SharedPreferences saved = savedRoom();
+        if (room != null) {
+            try {
+                if (!room.isOpen() || NetworkInterface.getByInetAddress(parseAddress(saved.getString("address", ""))) == null) closeRoom();
+            } catch (IOException error) { closeRoom(); }
+        }
+        String secret = saved.getString("secret", null);
+        if (room == null && !triedRestore && secret != null) {
+            triedRestore = true;
+            try {
+                InetAddress address = parseAddress(saved.getString("address", ""));
+                if (NetworkInterface.getByInetAddress(address) != null) {
+                    openRoom(address, Base64.decode(secret, Base64.URL_SAFE), saved.getString("name", ""), saved.getInt("port", 0));
+                }
+            } catch (IOException | android.database.sqlite.SQLiteException error) {
+                // Keep the saved room available for a manual address selection.
+            }
+        }
+        call.resolve(roomStatus());
+    }
+
+    private JSObject roomStatus() {
+        if (room != null) return new JSObject().put("invitation", invitation).put("checks", room.checks())
+            .put("acceptedSeries", store.acceptedSeries()).put("roomName", roomName).put("cg3", true).put("pg1", true);
+        SharedPreferences saved = savedRoom();
+        return saved.contains("secret") ? new JSObject().put("restorable", true).put("roomName", saved.getString("name", "")) : new JSObject();
     }
 
     @PluginMethod
     public synchronized void stop(PluginCall call) {
+        if (!savedRoom().edit().clear().commit()) { call.reject("Не удалось закрыть сохранённую комнату."); return; }
         closeRoom();
         call.resolve();
     }

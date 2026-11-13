@@ -64,7 +64,8 @@ import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
 import { loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
-import { roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
+import { announceRoomEntry, loadRoomMembership, readRoomName, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
+import { readRoomParticipants, readRoomSeries } from './group-leaderboard.ts';
 import type { RoomMembership } from './group-room-membership.ts';
 import { GroupLeaderboard } from './GroupLeaderboard.tsx';
 import type { Diary, DiaryEntry } from './persistence.ts';
@@ -98,7 +99,7 @@ function App() {
   const diaryRef = useRef(state.diary);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tab, setTab] = useState<JournalTab>('home');
-  const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
+  const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments' | 'group-room'>('journal');
   const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
   const [myTargetsOpen, setMyTargetsOpen] = useState(false);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
@@ -119,11 +120,12 @@ function App() {
   const [reportBack, setReportBack] = useState<'journal' | 'training' | 'profile' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
   const [ranksBack, setRanksBack] = useState<'records' | 'profile'>('records');
   const [reportTrail, setReportTrail] = useState<string[]>([]);
-  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report' | 'settings'>('training');
+  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report' | 'group-room'>('training');
   const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
   const [roomSwitch, setRoomSwitch] = useState<RoomMembership | null>(null);
   const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
   const syncingRoom = useRef(false);
+  const announcedRooms = useRef(new Map<string, string | null>());
   const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
   const [setupMemo, setSetupMemo] = useState<TechniqueSelection | null>(null);
   const [historyFilters, setHistoryFilters] = useState(DEFAULT_HISTORY_FILTERS);
@@ -207,17 +209,54 @@ function App() {
     writeDiary(previous => awardServiceAction(previous, id, new Date().toISOString(), trainingId));
   }
 
+  async function refreshRoomHistory(trainingId: string, membership: RoomMembership, manual = false) {
+    const snapshot = await roomSnapshot(membership.invitation);
+    const history = { receivedAt: Date.now(), series: readRoomSeries(snapshot), participants: readRoomParticipants(snapshot) };
+    const roomName = readRoomName(snapshot) ?? membership.roomName;
+    const saved = writeDiary(previous => {
+      const item = previous.entries.find(candidate => candidate.id === trainingId && !candidate.deletedAt);
+      if (!item || (item.groupRoomHistory?.receivedAt ?? 0) > history.receivedAt) return previous;
+      if (!manual && (!roomName || roomName === item.groupRoomName) &&
+        JSON.stringify(item.groupRoomHistory?.series) === JSON.stringify(history.series) &&
+        JSON.stringify(item.groupRoomHistory?.participants) === JSON.stringify(history.participants)) return previous;
+      return { ...previous, entries: previous.entries.map(candidate => candidate === item ? { ...item,
+        groupRoomName: roomName ?? item.groupRoomName ?? 'Групповая тренировка', groupRoomHistory: history,
+      } : candidate) };
+    });
+    if (!saved) throw new Error('Не удалось сохранить таблицу.');
+    return history;
+  }
+
   useEffect(() => {
     if (!supportsLocalRoom()) return;
     const retry = async () => {
       if (syncingRoom.current || document.visibilityState !== 'visible') return;
-      const pending = diaryRef.current?.groupSeries?.filter(journal => pendingGroupSeries(journal).length) ?? [];
-      if (!pending.length) return;
+      const diary = diaryRef.current;
+      const active = diary?.entries.find(item => !item.practice.savedAt && !item.paused && !item.deletedAt);
+      const journals = diary?.groupSeries?.filter(journal => journal.trainingId === active?.id || pendingGroupSeries(journal).length) ?? [];
+      if (!journals.length) return;
       syncingRoom.current = true;
       try {
-        for (const journal of pending) {
+        for (const journal of journals) {
+          let membership: RoomMembership | null;
+          try { membership = loadRoomMembership(journal.entryId); }
+          catch { continue; }
+          if (!membership) continue;
+          if (active && journal.trainingId === active.id) {
+            const category = currentSeries(active.practice)?.series.conditions.equipment?.bow.category ?? null;
+            if (membership.roomName && (!announcedRooms.current.has(journal.entryId) || announcedRooms.current.get(journal.entryId) !== category)) {
+              try {
+                await announceRoomEntry(membership, category);
+                announcedRooms.current.set(journal.entryId, category);
+              } catch { /* Older hosts can still accept classic series. */ }
+            }
+          }
           try { await sendPendingGroupSeries(journal.entryId, roomTransport(journal.entryId), () => diaryRef.current, writeDiary); }
           catch { /* No receipt was stored. The next attempt will retry the latest revision. */ }
+          if (journal.trainingId) {
+            try { await refreshRoomHistory(journal.trainingId, membership); }
+            catch { /* Keep the latest valid snapshot during an outage. */ }
+          }
         }
       } finally { syncingRoom.current = false; }
     };
@@ -351,6 +390,7 @@ function App() {
     const baseline = freezeProgressBaseline(diaryRef.current?.entries ?? [], id, startedAt, chosen, startedAt);
     const achievementLedger = diaryRef.current?.achievementLedger ?? { epoch: crypto.randomUUID(), grants: [] };
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
+      ...(roomSetup ? { groupRoomName: roomSetup.roomName ?? 'Групповая тренировка' } : {}),
       achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
         stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION } };
     if (roomSetup) {
@@ -385,13 +425,24 @@ function App() {
   function prepareRoomTraining(membership: RoomMembership) {
     setRoomSwitch(null);
     setRoomSetup(membership); setSetupMemo(null); setRepeatSetup(null); setSessionId(null);
-    setConditionsBack('settings'); setPage('conditions');
+    setConditionsBack('group-room'); setPage('conditions');
   }
 
   function enterRoomTraining(membership: RoomMembership) {
-    const linked = state.diary?.groupSeries?.find(journal => journal.roomId === membership.roomId && journal.trainingId === ongoing?.id);
-    if (linked && ongoing) selectEntry(ongoing, 'training');
-    else if (ongoing) setRoomSwitch(membership);
+    for (const journal of state.diary?.groupSeries ?? []) {
+      if (journal.roomId !== membership.roomId) continue;
+      const previous = loadRoomMembership(journal.entryId);
+      if (!previous || previous.roomId !== membership.roomId) continue;
+      saveRoomMembership({ ...previous, invitation: membership.invitation, roomName: membership.roomName ?? previous.roomName,
+        cg3: membership.cg3 ?? previous.cg3, pg1: membership.pg1 ?? previous.pg1 });
+      const item = entries.find(candidate => candidate.id === journal.trainingId && !candidate.deletedAt);
+      if (item) {
+        if (item === ongoing) selectEntry(item, 'training');
+        else openSaved(item.id);
+        return;
+      }
+    }
+    if (ongoing) setRoomSwitch(membership);
     else prepareRoomTraining(membership);
   }
 
@@ -710,6 +761,7 @@ function App() {
     if (showingOnboarding) { leaveOnboarding(); return; }
     switch (page) {
       case 'journal': setTab('home'); break;
+      case 'group-room': setPage('journal'); break;
       case 'conditions': leaveConditions(); break;
       case 'report': leaveReport(); break;
       case 'editor':
@@ -756,6 +808,8 @@ function App() {
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
       conditions={homeConditions}
+      groupAction={supportsLocalRoom() && <SettingsAction icon="group" data-testid="home-group-room"
+        onClick={() => setPage('group-room')}>Групповая тренировка</SettingsAction>}
       needsEquipment={!ongoing && !paused && needsHomeEquipment} onStart={() => startPractice()} onOpen={openSaved}
       onConditions={() => {
         setSetupMemo(null);
@@ -813,14 +867,29 @@ function App() {
     onAchievement={recordServiceAchievement} onPublication={publication => void recordPublication(publication)}
     onBack={() => setPage('journal')} onRanks={() => { setRanksBack('profile'); setPage('best-ranks'); }} />{notice}{error}</>;
   if (page === 'archive') return <><ArchiveScreen onBack={() => setPage('settings')} onAchievement={recordServiceAchievement} />{notice}{error}</>;
+  if (page === 'group-room') return <main className="conditions-page settings-page">
+    <header className="topbar">
+      <button type="button" className="icon-button" aria-label="Назад" onClick={() => setPage('journal')}><Icon name="back" /></button>
+      <h1>Групповая тренировка</h1>
+      <Icon name="group" />
+    </header>
+    <div className="conditions-content settings-content">
+      <Suspense fallback={<p>Открываем комнаты…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
+        displayName={preferences.displayName}
+        onTraining={state.diary ? enterRoomTraining : undefined}
+        unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense>
+      {roomSwitch && <BottomSheet title="Перейти в групповую тренировку?" onClose={() => setRoomSwitch(null)}>
+        <p>Текущая тренировка встанет на паузу после запуска групповой. Её можно будет продолжить из истории.</p>
+        <button type="button" className="primary" onClick={() => prepareRoomTraining(roomSwitch)}>Выбрать условия</button>
+      </BottomSheet>}
+    </div>
+  </main>;
   if (page === 'settings' || page === 'statistics') return <SettingsScreen
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     localRoom={supportsLocalRoom()
-      ? <Suspense fallback={<p>Открываем проверку связи…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
-        onTraining={state.diary ? enterRoomTraining : undefined}
-        unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense> : undefined}
+      ? <SettingsAction icon="group" onClick={() => { setSettingsSection(null); setPage('group-room'); }}>Открыть групповые тренировки</SettingsAction> : undefined}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
@@ -857,10 +926,6 @@ function App() {
     </div>}
     about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
-    {roomSwitch && <BottomSheet title="Перейти в групповую тренировку?" onClose={() => setRoomSwitch(null)}>
-      <p>Текущая тренировка встанет на паузу после запуска групповой. Её можно будет продолжить из истории.</p>
-      <button type="button" className="primary" onClick={() => prepareRoomTraining(roomSwitch)}>Выбрать условия</button>
-    </BottomSheet>}
     {rankWindow}
     {myTargetsOpen && <MyTargetsImport onClose={() => setMyTargetsOpen(false)} />}
     {releaseHistoryOpen && releaseNotes}
@@ -903,7 +968,15 @@ function App() {
 
   if (page === 'report') return <>
     {offlineLabel}
+    {entry?.groupRoomHistory && roomLeaderboardOpen && <GroupLeaderboard archived entryId={roomJournal?.entryId} mySeries={1}
+      saved={entry.groupRoomHistory} title={entry.groupRoomName} onClose={() => setRoomLeaderboardOpen(false)}
+      onRefresh={roomJournal && !entry.deletedAt && supportsLocalRoom() ? async () => {
+        const membership = loadRoomMembership(roomJournal.entryId);
+        if (!membership || membership.roomId !== roomJournal.roomId) throw new Error('Приглашение недоступно.');
+        return refreshRoomHistory(entry.id, membership, true);
+      } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
+      onRoomLeaderboard={entry?.groupRoomHistory ? () => setRoomLeaderboardOpen(true) : undefined}
       onPause={pauseEntry}
       onRepeat={!ongoing && entry && !entry.deletedAt ? () => {
         setSetupMemo(null);
@@ -971,6 +1044,9 @@ function App() {
       {seriesEditor && <button type="button" className="icon-button" aria-label="Заметки серии"
         onClick={() => { if (saveEdit(true)) setNotesScope({ seriesId: series.id }); }}><Icon name="notes" /></button>}
       {!seriesEditor && <>
+      {roomJournal && <button type="button" className="icon-button" aria-label="Таблица комнаты" onClick={() => {
+        if (saveEdit()) setRoomLeaderboardOpen(true);
+      }}><Icon name="group" /></button>}
       <button type="button" className="icon-button" aria-label="Памятка и фокус" data-testid="training-technique-open"
         onClick={() => { if (saveEdit()) setTechniqueOpen(true); }}><Icon name="notes" /></button>
       <button type="button" className="icon-button" aria-label="Условия тренировки" disabled={past || completed || !entry}
@@ -979,10 +1055,8 @@ function App() {
         onClick={() => { if (saveEdit()) { if (!completed) setReportBack('training'); setPage('report'); } }}><Icon name="stats" /></button>
       </>}
     </header>
-    {roomJournal && !seriesEditor && <button type="button" className="secondary room-leaderboard-open" onClick={() => {
-      if (saveEdit()) setRoomLeaderboardOpen(true);
-    }}>Таблица комнаты</button>}
     {roomJournal && roomLeaderboardOpen && <GroupLeaderboard key={roomJournal.entryId} entryId={roomJournal.entryId}
+      saved={entry?.groupRoomHistory} title={entry?.groupRoomName}
       mySeries={roomJournal.ends.find(end => end.endId === series.id)?.ordinal ??
         Math.max(1, roomJournal.ends.length + Number(series.shots.length > 0))}
       onClose={() => setRoomLeaderboardOpen(false)} />}

@@ -19,23 +19,37 @@ import org.json.JSONObject;
 
 final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     private final String roomId;
+    private final String roomName;
     private boolean closed;
     private volatile int acceptedSeries;
 
     int acceptedSeries() { return acceptedSeries; }
 
-    LocalRoomSeriesStore(Context context, byte[] roomSecret) {
-        super(context.getApplicationContext(), "fableshot-local-room-series.db", null, 1);
+    synchronized void loadAcceptedCount() {
+        try (Cursor rows = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM series WHERE room = ?", new String[] {roomId})) {
+            if (rows.moveToFirst()) acceptedSeries = rows.getInt(0);
+        }
+    }
+
+    LocalRoomSeriesStore(Context context, byte[] roomSecret, String roomName) {
+        super(context.getApplicationContext(), "fableshot-local-room-series.db", null, 2);
         roomId = fingerprint(roomSecret);
+        this.roomName = roomName;
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE series (room TEXT, entry TEXT, id INTEGER, ordinal INTEGER, revision INTEGER, payload TEXT, "
             + "PRIMARY KEY (room, entry, id), UNIQUE (room, entry, ordinal))");
+        createParticipants(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unknown room database version");
+        if (oldVersion == 1 && newVersion == 2) createParticipants(db);
+        else throw new IllegalStateException("Unknown room database version");
+    }
+
+    private static void createParticipants(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE participants (room TEXT NOT NULL, entry TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (room, entry))");
     }
 
     synchronized byte[] receive(byte[] frame) throws IOException {
@@ -54,11 +68,34 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             verifier.update(payload.getBytes(StandardCharsets.UTF_8));
             if (!verifier.verify(signature)) throw new IOException("Invalid series signature");
             JSONObject end = new JSONObject(payload);
-            if (end.length() != 6) throw new IOException("Unexpected series fields");
+            if (end.has("displayName")) {
+                Object name = end.get("displayName");
+                if (!(name instanceof String) || ((String) name).trim().isEmpty() || ((String) name).length() > 60) {
+                    throw new IOException("Invalid display name");
+                }
+            }
             String entryId = fingerprint(publicKey);
             if (!roomId.equals(end.getString("roomId")) || !entryId.equals(end.getString("entryId"))) {
                 throw new IOException("Invalid room or entry");
             }
+            if ("join".equals(end.optString("action"))) {
+                if (end.length() != (end.has("displayName") ? 5 : 4)) throw new IOException("Invalid participant fields");
+                Object bow = end.get("bowCategory");
+                if (bow != JSONObject.NULL && (!(bow instanceof String) || !((String) bow).matches("barebow|recurve|compound|traditional|longbow|other"))) {
+                    throw new IOException("Invalid bow category");
+                }
+                JSONObject participant = new JSONObject().put("entryId", entryId).put("bowCategory", bow);
+                if (end.has("displayName")) participant.put("displayName", end.getString("displayName"));
+                ContentValues values = new ContentValues();
+                values.put("room", roomId);
+                values.put("entry", entryId);
+                values.put("payload", participant.toString());
+                if (getWritableDatabase().insertWithOnConflict("participants", null, values, SQLiteDatabase.CONFLICT_REPLACE) == -1) {
+                    throw new IOException("Could not save participant");
+                }
+                return new JSONObject().put("joined", entryId).toString().getBytes(StandardCharsets.UTF_8);
+            }
+            if (end.length() != (end.has("displayName") ? 7 : 6)) throw new IOException("Unexpected series fields");
             long endId = positive(end, "endId");
             long ordinal = positive(end, "ordinal");
             long revision = positive(end, "revision");
@@ -87,13 +124,24 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
                         char score = scores.charAt(i);
                         points += score == 'X' || score == 'T' ? 10 : score - '0';
                     }
-                    end.put("result", new JSONObject().put("points", points).put("arrows", scores.length())
-                        .put("bowCategory", result.get("bowCategory")));
+                    JSONObject projected = new JSONObject().put("points", points).put("arrows", scores.length())
+                        .put("bowCategory", result.get("bowCategory"))
+                        .put("conditions", new JSONObject().put("distanceMeters", result.get("distanceMeters"))
+                            .put("targetProfileId", result.get("targetProfileId")).put("targetDiameterMm", result.get("targetDiameterMm")));
+                    if (result.has("spread")) projected.put("spread", result.getJSONObject("spread"))
+                        .put("hits", scores.replace("0", "").length());
+                    if (result.has("progressBase")) projected.put("progressBase", result.getJSONObject("progressBase"));
+                    end.put("result", projected);
                 }
                 series.put(end);
             }
         }
-        return new JSONObject().put("series", series);
+        org.json.JSONArray participants = new org.json.JSONArray();
+        try (Cursor rows = getReadableDatabase().query("participants", new String[] {"payload"}, "room = ?",
+                new String[] {roomId}, null, null, "entry")) {
+            while (rows.moveToNext()) participants.put(new JSONObject(rows.getString(0)));
+        }
+        return new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("series", series).put("participants", participants);
     }
 
     @Override public synchronized void close() {
@@ -138,7 +186,7 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     }
 
     private static void validateResult(JSONObject result) throws JSONException, IOException {
-        if (result.length() != 5) throw new IOException("Unexpected result fields");
+        if (result.length() != 5 + (result.has("spread") ? 1 : 0) + (result.has("progressBase") ? 1 : 0)) throw new IOException("Unexpected result fields");
         String scores = result.getString("scores");
         String profile = result.getString("targetProfileId");
         String codes;
@@ -159,6 +207,26 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             !result.has("bowCategory") || !result.isNull("bowCategory") &&
                 !result.getString("bowCategory").matches("barebow|recurve|compound|traditional|longbow|other")) {
             throw new IOException("Invalid series result");
+        }
+        if (result.has("spread")) {
+            JSONObject spread = result.getJSONObject("spread");
+            double positions = number(spread, "positions");
+            double squaredDistance = number(spread, "squaredDistance");
+            if (spread.length() != 3 || !(spread.get("complete") instanceof Boolean) ||
+                positions < 0 || positions > scores.replace("0", "").length() || positions != Math.rint(positions) ||
+                !Double.isFinite(squaredDistance) || squaredDistance < 0 || squaredDistance > positions * 2 ||
+                (positions < 2 && squaredDistance != 0)) throw new IOException("Invalid series spread");
+        }
+        if (result.has("progressBase")) {
+            JSONObject base = result.getJSONObject("progressBase");
+            double sessions = number(base, "sessions");
+            double arrows = number(base, "arrows");
+            double points = number(base, "points");
+            if (base.length() != 3 || sessions < 0 || sessions > 5 || sessions != Math.rint(sessions) ||
+                arrows < sessions * 12 || arrows > 900_719_925_474_099L || arrows != Math.rint(arrows) ||
+                points < 0 || points > arrows * 10 || points != Math.rint(points) || (sessions == 0 && arrows != 0)) {
+                throw new IOException("Invalid progress baseline");
+            }
         }
     }
 

@@ -27,7 +27,7 @@ export function compactProgress(practice: Practice): string | null {
   if (!result || result.currentAverage === null || result.baselineAverage === null) return null;
   return `${result.fullRankAvailable ? '' : '≈ '}${formatProgress(result)}`;
 }
-const MIN_SCORED_ARROWS = 12;
+export const MIN_SCORED_ARROWS = 12;
 
 type ProgressSourceTotals = Readonly<{
   sessionId: string;
@@ -239,15 +239,21 @@ export function calculateProgress(
   const selected = series.filter(item => progressConditionKey(item.conditions) === baseline.conditionKey);
   if (selected.at(-1)?.shots.length === 0) selected.pop();
   const scoredCount = selected.reduce((total, item) => total + item.shots.length, 0);
-  const currentAverage = scoredCount > 0 ? selected.reduce((total, item) => total + summarize(item.shots).points, 0) / scoredCount : null;
+  const scoreSum = selected.reduce((total, item) => total + summarize(item.shots).points, 0);
+  return calculateProgressTotals(baseline, scoredCount, scoreSum, selected.every(item =>
+    item.id !== openSeriesId && item.shots.length === (item.plannedCount ?? Math.max(3, item.shots.length))));
+}
+
+export function calculateProgressTotals(baseline: Pick<ProgressBaseline, 'status' | 'maximumPerArrow' | 'scoredCount' | 'scoreSum'>,
+  scoredCount: number, scoreSum: number, complete: boolean): ProgressResult {
+  const currentAverage = scoredCount > 0 ? scoreSum / scoredCount : null;
   const baselineAverage = baseline.scoredCount > 0 ? baseline.scoreSum / baseline.scoredCount : null;
   const difference = currentAverage !== null && baselineAverage !== null ? currentAverage - baselineAverage : null;
   return {
-    percentagePoints: difference === null ? null : 100 * difference / baseline.maximumPerArrow,
+    percentagePoints: difference === null || !baseline.maximumPerArrow ? null : 100 * difference / baseline.maximumPerArrow,
     relativePercent: difference !== null && baselineAverage !== null && baselineAverage > 0 ? 100 * difference / baselineAverage : null,
     rawIncrease: baselineAverage === 0 ? difference : null,
     baselineAverage, currentAverage, scoredCount,
-    fullRankAvailable: baseline.status === 'ready' && scoredCount >= MIN_SCORED_ARROWS && selected.every(item =>
-      item.id !== openSeriesId && item.shots.length === (item.plannedCount ?? Math.max(3, item.shots.length))),
+    fullRankAvailable: baseline.status === 'ready' && scoredCount >= MIN_SCORED_ARROWS && complete,
   };
 }

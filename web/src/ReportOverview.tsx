@@ -61,7 +61,7 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard }: {
   practice: Practice;
   entries: readonly DiaryEntry[];
   entryId: string | null;
@@ -81,6 +81,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onOpenRecordSession: (id: string) => void;
   onPause: () => void;
   onRepeat?: () => void;
+  onRoomLeaderboard?: () => void;
   onDeleteStage: (kind: 'round' | 'series', id: number) => boolean;
 }) {
   const { preferences, update } = useTrainingPreferences();
@@ -134,6 +135,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     </header>
     <div className="report-body" data-testid="report-screen">
       <h2 className="report-title">{entry?.title || 'Тренировка'}</h2>
+      {onRoomLeaderboard && <button type="button" className="report-resume" onClick={onRoomLeaderboard}>Таблица комнаты</button>}
       {entry?.trainingTime && visible('training_time') && <ReportDuration time={entry.trainingTime} />}
       {practice.savedAt === null && (!!focus.length || !!technique?.versionId) && <button type="button" className="report-focus" data-testid="report-technique-focus" onClick={onTechnique}>
         <span aria-hidden="true">☷</span><span>{focus.length ? focus.join(' · ') : technique?.title}</span>

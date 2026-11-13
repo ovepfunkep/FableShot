@@ -23,12 +23,16 @@ import { validNumberedCount } from './equipment.ts';
 import { isProgressBaseline, progressConditionKey } from './progress-scoring.ts';
 import { acknowledgeGroupSeries, flushGroupSeries, isGroupSeriesJournal, trackGroupSeries } from './group-series.ts';
 import type { GroupSeriesJournal, GroupSeriesTransport } from './group-series.ts';
+import { isRoomHistory } from './group-leaderboard.ts';
+import type { RoomHistory } from './group-leaderboard.ts';
 
 const legacyPracticeKey = 'app.fableshot.practice-pilot.v1';
 const previousPracticeKey = 'app.fableshot.practice-pilot.v2';
 const practiceKey = 'app.fableshot.practice-pilot.v3';
 export const DIARY_KEY = 'app.fableshot.practice-diary.v1';
 export type DiaryEntry = { id: string; startedAt: string; createdAt?: string; practice: Practice; title?: string; localDate?: string | null;
+  groupRoomName?: string;
+  groupRoomHistory?: RoomHistory;
   source?: ImportSource; deletedAt?: string | null; trainingTime?: TrainingTime; notes?: DiaryNote[];
   achievementEnrollment?: AchievementEnrollment; nativeArchiveSession?: string; personalRecords?: PersonalRecordEvent[]; paused?: boolean };
 export type NativeArchiveReference = { sha256: string; bytes: number };
@@ -199,6 +203,8 @@ export function isDiary(value: unknown): value is Diary {
       (entry.nativeArchiveSession !== undefined && (!nativeArchive || typeof entry.nativeArchiveSession !== 'string' ||
         !entry.nativeArchiveSession || entry.nativeArchiveSession.length > 128)) ||
       (entry.title !== undefined && (typeof entry.title !== 'string' || entry.title.length > 5000)) ||
+      (entry.groupRoomName !== undefined && (typeof entry.groupRoomName !== 'string' || !entry.groupRoomName.trim() || entry.groupRoomName.length > 60)) ||
+      (entry.groupRoomHistory !== undefined && !isRoomHistory(entry.groupRoomHistory)) ||
       (entry.deletedAt !== undefined && (!isSavedAt(entry.deletedAt) || (entry.deletedAt !== null && entry.practice.savedAt === null && !entry.paused))) ||
       (entry.trainingTime !== undefined && !isTrainingTime(entry.trainingTime, entry.practice.savedAt === null && !entry.paused && !entry.deletedAt)) ||
       (entry.notes !== undefined && !isDiaryNotes(entry.notes)) ||

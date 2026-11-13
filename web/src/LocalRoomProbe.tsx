@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import qrCode from 'qrcode-generator';
 import jsQR from 'jsqr';
 import { checkBrowserRoom } from './browser-room-probe.ts';
-import { createRoomMembership, roomBridge as probe } from './group-room-membership.ts';
+import { createRoomMembership, readRoomName, roomBridge as probe, roomSnapshot } from './group-room-membership.ts';
 import type { RoomMembership, RoomStatus } from './group-room-membership.ts';
 import './local-room-probe.css';
 
@@ -57,14 +57,17 @@ function InvitationQr({ invitation }: { invitation: string }) {
   return <img className="room-probe-qr" src={qr.createDataURL(5, 20)} alt="QR приглашения в комнату" />;
 }
 
-export default function LocalRoomProbe({ native, onTraining, unavailableReason }: {
-  native: boolean; onTraining?: (membership: RoomMembership) => void; unavailableReason?: string;
+export default function LocalRoomProbe({ native, onTraining, unavailableReason, displayName }: {
+  native: boolean; onTraining?: (membership: RoomMembership) => void; unavailableReason?: string; displayName?: string;
 }) {
   const [addresses, setAddresses] = useState<string[]>([]);
   const [address, setAddress] = useState('');
   const [room, setRoom] = useState<RoomStatus>({});
   const [invitation, setInvitation] = useState('');
   const [verified, setVerified] = useState('');
+  const [name, setName] = useState(displayName ?? '');
+  const [roomTitle, setRoomTitle] = useState('');
+  const [joinedRoom, setJoinedRoom] = useState<{ code: string; title?: string; cg3: boolean; pg1: boolean }>();
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -110,21 +113,31 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason }
     finally { if (alive.current) setBusy(false); }
   }
 
+  const nameField = <label>Имя для комнаты<input maxLength={60} value={name} onChange={event => setName(event.target.value)}
+    placeholder="Стрелок" /></label>;
   return <section className="room-probe">
     {native && <div className="settings-panel room-probe-panel">
-      <h2>Создать комнату</h2>
+      <h2>{room.roomName || 'Создать комнату'}</h2>
       {room.invitation ? <>
         <p>Подключите участника к той же сети Wi-Fi. Покажите QR или передайте код.</p>
         <InvitationQr invitation={room.invitation} />
         <label>Код приглашения<input readOnly value={room.invitation} onFocus={event => event.currentTarget.select()} /></label>
+        <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => {
+          await navigator.clipboard.writeText(room.invitation!);
+          setMessage('Код скопирован.');
+        })}>Скопировать код</button>
         <p>Успешных проверок · {room.checks ?? 0}</p>
         <p>Принято серий · {room.acceptedSeries ?? 0}</p>
+        {onTraining && nameField}
         {onTraining && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
-          const membership = await createRoomMembership(room.invitation!);
+          const membership = await createRoomMembership(room.invitation!, name, room.roomName, room);
           if (alive.current) onTraining(membership);
         })}>Начать групповую тренировку</button>}
         <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => { await probe.stop(); setRoom({}); })}>Закрыть комнату</button>
       </> : <>
+        {!room.restorable && <label>Название комнаты<input maxLength={60} placeholder="Групповая тренировка" value={roomTitle}
+          onChange={event => setRoomTitle(event.target.value)} /></label>}
+        {room.restorable && <p>Комната сохранена. Выберите текущий адрес точки доступа, чтобы восстановить обмен.</p>}
         <p>Включите точку доступа в настройках телефона и вернитесь сюда.</p>
         <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => {
           const result = await probe.addresses();
@@ -136,10 +149,14 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason }
           {addresses.map(value => <option key={value} value={value}>{value}</option>)}
         </select></label>}
         <button type="button" className="primary" disabled={busy || !address} onClick={() => void run(async () => {
-          const created = await probe.start({ address });
+          const created = await probe.start({ address, roomName: roomTitle });
           if (alive.current) setRoom(created);
           else await probe.stop();
-        })}>Создать</button>
+        })}>{room.restorable ? 'Восстановить комнату' : 'Создать'}</button>
+        {room.restorable && <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => {
+          await probe.stop();
+          setRoom({});
+        })}>Закрыть комнату</button>}
       </>}
     </div>}
     {!room.invitation && <div className="settings-panel room-probe-panel">
@@ -158,14 +175,25 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason }
           const code = invitation.trim();
           setVerified('');
           const result = await (native ? probe.check({ invitation: code }) : checkBrowserRoom(code));
+          try {
+            const snapshot = await roomSnapshot(code);
+            const title = readRoomName(snapshot);
+            const cg3 = !!snapshot && typeof snapshot === 'object' && 'cg3' in snapshot && snapshot.cg3 === true;
+            const pg1 = !!snapshot && typeof snapshot === 'object' && 'pg1' in snapshot && snapshot.pg1 === true;
+            if (alive.current) setJoinedRoom({ code, title, cg3, pg1 });
+          } catch { /* Old hosts can answer the connectivity check without room metadata. */ }
           setVerified(code);
           setMessage(`Комната ответила за ${result.milliseconds} мс.`);
         });
       }}>Проверить связь</button>
-      {onTraining && verified && verified === invitation.trim() && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
-        const membership = await createRoomMembership(verified);
+      {onTraining && verified && verified === invitation.trim() && <>{nameField}
+        {joinedRoom?.code === verified && joinedRoom.title && <strong>{joinedRoom.title}</strong>}
+        <p>Участники увидят ваше имя, тип лука и результаты закрытых серий.</p>
+        <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+        const metadata = joinedRoom?.code === verified ? joinedRoom : undefined;
+        const membership = await createRoomMembership(verified, name, metadata?.title, metadata);
         if (alive.current) onTraining(membership);
-      })}>Начать групповую тренировку</button>}
+      })}>Начать групповую тренировку</button></>}
       {unavailableReason && verified === invitation.trim() && verified && <p role="alert">{unavailableReason}</p>}
     </div>}
     {message && <p role="status">{message}</p>}

@@ -76,6 +76,9 @@ function HistoryCard({ entry, hundredths, onOpen, tournament }: {
 
   return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}${tournament ? ' is-tournament' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}>
     <span className="journal-tab-card-title"><strong>{entry.title || (entry.paused ? 'Приостановленная тренировка' : draft ? 'Черновик тренировки' : 'Тренировка')}</strong><TabIcon name="next" /></span>
+    {entry.groupRoomName && <span className="journal-tab-icon-value" aria-label={`Групповая тренировка · ${entry.groupRoomName}`}>
+      <Icon name="group" />{entry.groupRoomName}
+    </span>}
     {tournament && <span className="history-tournament-badge"><Icon name="trophy" />Турнир · {tournamentTitle(tournament.tournament)}
       {tournament.start.place !== null && ` · ${tournament.start.place} место`}</span>}
     {maximum > 0 && (showResult || showAverage || progress) && <span className="journal-tab-card-result">

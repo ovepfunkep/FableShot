@@ -3,6 +3,27 @@ import type { Practice, Series } from './practice.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
 import { MAX_SERIES_ARROWS } from './conditions.ts';
 import { acceptsDiameter, getTargetProfile } from './target.ts';
+import { groupSpread } from './composite-scoring.ts';
+import { MIN_SCORED_ARROWS, progressConditionKey } from './progress-scoring.ts';
+
+export type RoomSpread = { positions: number; squaredDistance: number; complete: boolean };
+export type RoomProgressBase = { sessions: number; arrows: number; points: number };
+
+export function isRoomProgressBase(value: unknown): value is RoomProgressBase {
+  if (!value || typeof value !== 'object') return false;
+  const { sessions, arrows, points } = value as RoomProgressBase;
+  return Number.isInteger(sessions) && sessions >= 0 && sessions <= 5 &&
+    Number.isSafeInteger(arrows) && arrows >= sessions * MIN_SCORED_ARROWS && arrows <= Math.floor(Number.MAX_SAFE_INTEGER / 10) &&
+    Number.isSafeInteger(points) && points >= 0 && points <= arrows * 10 && (sessions !== 0 || arrows === 0);
+}
+
+export function isRoomSpread(value: unknown, hits: number): value is RoomSpread {
+  if (!value || typeof value !== 'object') return false;
+  const { positions, squaredDistance, complete } = value as Partial<RoomSpread>;
+  return typeof positions === 'number' && Number.isSafeInteger(positions) && positions >= 0 && positions <= hits &&
+    typeof squaredDistance === 'number' && Number.isFinite(squaredDistance) && squaredDistance >= 0 &&
+    squaredDistance <= positions * 2 && (positions >= 2 || squaredDistance === 0) && typeof complete === 'boolean';
+}
 
 export type GroupSeriesResult = {
   scores: string;
@@ -10,6 +31,8 @@ export type GroupSeriesResult = {
   distanceMeters: number;
   targetProfileId: string;
   targetDiameterMm: number;
+  spread?: RoomSpread;
+  progressBase?: RoomProgressBase;
 };
 
 export type GroupSeriesRevision = {
@@ -45,7 +68,9 @@ export function isGroupSeriesRevision(value: unknown): value is GroupSeriesRevis
     [...new Set(result.scores)].every(code => code === '0' || profile.zones.some(zone => zone.code === (code === 'T' ? '10' : code))) &&
     (result.bowCategory === null || BOW_CATEGORIES.some(category => category.value === result.bowCategory)) &&
     typeof result.distanceMeters === 'number' && Number.isFinite(result.distanceMeters) && result.distanceMeters > 0 &&
-    typeof result.targetDiameterMm === 'number' && result.targetDiameterMm <= 10_000 && acceptsDiameter(profile, result.targetDiameterMm);
+    typeof result.targetDiameterMm === 'number' && result.targetDiameterMm <= 10_000 && acceptsDiameter(profile, result.targetDiameterMm) &&
+    (result.spread === undefined || isRoomSpread(result.spread, result.scores.replace(/0/g, '').length)) &&
+    (result.progressBase === undefined || isRoomProgressBase(result.progressBase));
 }
 
 export function isGroupSeriesJournal(value: unknown): value is GroupSeriesJournal {
@@ -61,16 +86,30 @@ export function isGroupSeriesJournal(value: unknown): value is GroupSeriesJourna
   });
 }
 
-function projectSeries(series: Series): GroupSeriesResult {
+function projectSeries(series: Series, practice: Practice): GroupSeriesResult {
   const { distanceMeters, targetProfileId, targetDiameterMm, equipment } = series.conditions;
+  const baseline = series.progressBaselineId === undefined ? undefined : practice.progressBaselines?.[series.progressBaselineId];
+  const progressBase = baseline && baseline.status !== 'unknown_conditions' && baseline.maximumPerArrow === 10 &&
+    baseline.conditionKey === progressConditionKey(series.conditions)
+    ? { sessions: baseline.sources.length, arrows: baseline.scoredCount, points: baseline.scoreSum } : undefined;
   return { scores: series.shots.map(shot => shot.code === 'X' ? 'X' : shot.points === 10 ? 'T' : String(shot.points)).join(''),
-    bowCategory: equipment?.bow.category ?? null, distanceMeters, targetProfileId, targetDiameterMm };
+    bowCategory: equipment?.bow.category ?? null, distanceMeters, targetProfileId, targetDiameterMm,
+    ...(progressBase && { progressBase }),
+    spread: {
+      positions: series.shots.filter(shot => shot.points > 0 && shot.point !== null).length,
+      squaredDistance: groupSpread(series.shots).squaredDistance,
+      complete: series.shots.length === (series.plannedCount ?? Math.max(3, series.shots.length)),
+    } };
 }
 
 function sameResult(first: GroupSeriesResult | null, second: GroupSeriesResult | null) {
   return first === second || first !== null && second !== null && first.scores === second.scores &&
     first.bowCategory === second.bowCategory && first.distanceMeters === second.distanceMeters &&
-    first.targetProfileId === second.targetProfileId && first.targetDiameterMm === second.targetDiameterMm;
+    first.targetProfileId === second.targetProfileId && first.targetDiameterMm === second.targetDiameterMm &&
+    first.spread?.positions === second.spread?.positions && first.spread?.squaredDistance === second.spread?.squaredDistance &&
+    first.spread?.complete === second.spread?.complete &&
+    first.progressBase?.sessions === second.progressBase?.sessions && first.progressBase?.arrows === second.progressBase?.arrows &&
+    first.progressBase?.points === second.progressBase?.points;
 }
 
 /** Attach only when starting a new training explicitly inside a joined room. */
@@ -88,7 +127,7 @@ export function trackGroupSeries(journal: GroupSeriesJournal, practice: Practice
   const closed = new Map<number, GroupSeriesResult>();
   for (const round of practice.rounds) {
     for (const series of round.series) {
-      if (series.id !== openId && series.shots.length) closed.set(series.id, projectSeries(series));
+      if (series.id !== openId && series.shots.length) closed.set(series.id, projectSeries(series, practice));
     }
   }
   let changed = false;
@@ -133,6 +172,8 @@ export function receiveGroupSeries(accepted: readonly GroupSeriesRevision[], ope
   const replacement = { endId, ordinal, revision, result: result && {
     scores: result.scores, bowCategory: result.bowCategory, distanceMeters: result.distanceMeters,
     targetProfileId: result.targetProfileId, targetDiameterMm: result.targetDiameterMm,
+    ...(result.spread && { spread: { ...result.spread } }),
+    ...(result.progressBase && { progressBase: { ...result.progressBase } }),
   } };
   return { accepted: [...accepted.filter(end => end.endId !== endId), replacement], receipt: { endId, revision } };
 }

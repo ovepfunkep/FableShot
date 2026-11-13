@@ -47,13 +47,25 @@ final class LocalRoomProbe implements AutoCloseable {
     }
 
     LocalRoomProbe(InetAddress address, byte[] secret, SeriesReceiver receiver, boolean allowPreviewOrigin) throws IOException {
+        this(address, secret, receiver, allowPreviewOrigin, 0);
+    }
+
+    LocalRoomProbe(InetAddress address, byte[] secret, SeriesReceiver receiver, boolean allowPreviewOrigin, int port) throws IOException {
         this.secret = secret.clone();
         this.receiver = receiver;
         this.allowPreviewOrigin = allowPreviewOrigin;
-        server = new ServerSocket(0, 16, address);
+        server = new ServerSocket();
+        try {
+            server.setReuseAddress(true);
+            server.bind(new InetSocketAddress(address, port), 16);
+        } catch (IOException error) {
+            server.close();
+            throw error;
+        }
     }
 
     int port() { return server.getLocalPort(); }
+    boolean isOpen() { return !server.isClosed(); }
     int checks() { return checks.get(); }
 
     void serve() {

@@ -54,16 +54,25 @@ function clampFraction(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function groupRms(ends: readonly ScoringEnd[]): number | undefined {
+export function groupSpread(shots: readonly Shot[]) {
+  const points = shots.flatMap(shot => shot.point === null ? [] : [shot.point]);
+  if (points.length < 2) return { squaredDistance: 0, pointCount: 0 };
+  const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  return { squaredDistance: points.reduce((sum, point) => sum + (point.x - cx) ** 2 + (point.y - cy) ** 2, 0), pointCount: points.length };
+}
+
+export type CompositeEndFacts = {
+  number: number; arrows: number; points: number; closed: boolean; complete: boolean;
+  positions: number; missingPositions: boolean; squaredDistance: number; pointCount: number;
+};
+
+function groupRms(ends: readonly CompositeEndFacts[]): number | undefined {
   let squaredDistance = 0;
   let pointCount = 0;
-  for (const { shots } of ends) {
-    const points = shots.flatMap(shot => shot.point === null ? [] : [shot.point]);
-    if (points.length < 2) continue;
-    const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
-    const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
-    squaredDistance += points.reduce((sum, point) => sum + (point.x - cx) ** 2 + (point.y - cy) ** 2, 0);
-    pointCount += points.length;
+  for (const end of ends) {
+    squaredDistance += end.squaredDistance;
+    pointCount += end.pointCount;
   }
   return pointCount ? Math.sqrt(squaredDistance / pointCount) : undefined;
 }
@@ -79,9 +88,24 @@ export function calculateCompositeScore(
 ): CompositeScore {
   const chosen = ends.filter(end => singleEnd ? end.number === slice : end.number <= slice)
     .sort((first, second) => first.number - second.number);
-  const endScores = chosen.map(end => summarize(end.shots).points);
-  const shotCount = chosen.reduce((count, end) => count + end.shots.length, 0);
-  const knownPositions = chosen.reduce((count, end) => count + end.shots.filter(shot => shot.point !== null).length, 0);
+  const h = maximumPerArrow ?? Infinity;
+  const valid = new Set(chosen.map(end => end.id)).size === chosen.length && chosen.every(end =>
+    Number.isInteger(end.plannedCount) && end.plannedCount >= 1 && end.shots.length <= end.plannedCount &&
+    end.shots.every(({ points, point }) => Number.isInteger(points) && points >= 0 && points <= h &&
+      (point === null || Number.isFinite(point.x) && Number.isFinite(point.y))));
+  const facts = chosen.map(end => ({
+    number: end.number, arrows: end.shots.length, points: summarize(end.shots).points, closed: end.closed,
+    complete: end.shots.length === end.plannedCount, positions: end.shots.filter(shot => shot.point !== null).length,
+    missingPositions: end.shots.some(shot => shot.points > 0 && shot.point === null), ...groupSpread(end.shots),
+  }));
+  return calculateCompositeFacts(facts, slice, maximumPerArrow, geometryVerified, profile, singleEnd, valid);
+}
+
+export function calculateCompositeFacts(chosen: readonly CompositeEndFacts[], slice: number, maximumPerArrow: number | null,
+  geometryVerified: boolean, profile: CompositeProfile = STANDARD_PROFILE, singleEnd = false, valid = true): CompositeScore {
+  const endScores = chosen.map(end => end.points);
+  const shotCount = chosen.reduce((count, end) => count + end.arrows, 0);
+  const knownPositions = chosen.reduce((count, end) => count + end.positions, 0);
   const classic = endScores.reduce((sum, points) => sum + points, 0);
   const h = maximumPerArrow !== null && Number.isInteger(maximumPerArrow) && maximumPerArrow > 0 ? maximumPerArrow : null;
   const maximum = h === null ? null : h * shotCount;
@@ -96,26 +120,21 @@ export function calculateCompositeScore(
   }
   if (shotCount === 0) return unavailable('no-data');
   if (h === null || maximum === null) return unavailable('unknown-maximum');
-  if (new Set(chosen.map(end => end.id)).size !== chosen.length || chosen.some(end =>
-    !Number.isInteger(end.plannedCount) || end.plannedCount < 1 || end.shots.length > end.plannedCount ||
-    end.shots.some(({ points, point }) => !Number.isInteger(points) || points < 0 || points > h ||
-      (point !== null && (!Number.isFinite(point.x) || !Number.isFinite(point.y)))))) {
-    return unavailable('invalid-data');
-  }
+  if (!valid) return unavailable('invalid-data');
 
   const a = classic / maximum;
   result.base = 100 * a;
-  if (chosen.some(end => !end.closed || end.shots.length !== end.plannedCount)) return unavailable('incomplete-end');
-  if (profile === STANDARD_PROFILE && chosen.some(end => end.shots.length < 3)) return unavailable('insufficient-end-shots');
+  if (chosen.some(end => !end.closed || !end.complete)) return unavailable('incomplete-end');
+  if (profile === STANDARD_PROFILE && chosen.some(end => end.arrows < 3)) return unavailable('insufficient-end-shots');
   const full = !singleEnd && chosen.length >= 3 && shotCount >= 9;
   if (profile === SCORE_ONLY_PROFILE && !full) return unavailable('insufficient-ends');
   if (profile === STANDARD_PROFILE && !geometryVerified) return unavailable('unverified-geometry');
-  if (profile === STANDARD_PROFILE && chosen.some(end => end.shots.some(shot => shot.points > 0 && shot.point === null))) {
+  if (profile === STANDARD_PROFILE && chosen.some(end => end.missingPositions)) {
     return unavailable('missing-coordinates');
   }
 
   const deviation = full ? Math.sqrt(chosen.reduce((sum, end, index) => {
-    const count = end.shots.length;
+    const count = end.arrows;
     const mean = endScores[index] / (h * count);
     return sum + count * (mean - a) ** 2;
   }, 0) / shotCount) : undefined;
