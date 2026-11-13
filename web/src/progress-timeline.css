@@ -53,3 +53,12 @@
 .progress-filter-session small { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
 .progress-filter-count, .progress-filter-help { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .progress-filter-help summary { cursor: pointer; min-height: 36px; padding-block: 8px; }
+.progress-insights { display: grid; gap: 8px; margin-top: 6px; }
+.progress-insights h3 { margin: 0; font-size: .88rem; }
+.progress-insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr)); gap: 8px; }
+.progress-insight { display: grid; align-content: start; gap: 5px; min-width: 0; padding: 10px; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); }
+.progress-insight h4 { margin: 0; font-size: .8rem; }
+.progress-insight strong[data-better=true] { color: var(--accent); }
+.progress-insight small, .progress-insight details { font-size: .75rem; color: var(--muted); }
+.progress-insight summary { min-height: 32px; cursor: pointer; }
+.progress-insight ul { margin: 0; padding-inline-start: 17px; }

@@ -21,6 +21,13 @@ test('important changes from skipped releases appear once and remain available i
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-about').click();
   await page.getByTestId('settings-version').click();
+  const history = page.getByTestId('release-history');
+  await expect.poll(() => history.evaluate(dialog => dialog.scrollTop)).toBe(0);
+  await history.getByRole('button', { name: 'Закрыть' }).scrollIntoViewIfNeeded();
+  await expect.poll(() => history.evaluate(dialog => dialog.scrollTop)).toBeGreaterThan(0);
+  await history.getByRole('button', { name: 'Закрыть' }).click();
+  await page.getByTestId('settings-version').click();
+  await expect.poll(() => history.evaluate(dialog => dialog.scrollTop)).toBe(0);
   await expect(page.getByTestId('release-history-13')).toBeVisible();
   await expect(page.getByTestId('release-history-17')).toBeVisible();
 });

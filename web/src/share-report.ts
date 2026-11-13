@@ -6,11 +6,11 @@ const bridge = registerPlugin<{
 }>('DocumentExport');
 
 /** Called only from the user's Share gesture, after every file has been prepared. */
-export async function shareReport(files: readonly File[]): Promise<'shared' | 'downloaded' | 'cancelled'> {
+export async function shareReport(files: readonly File[], title = 'FableShot — тренировка'): Promise<'shared' | 'downloaded' | 'cancelled'> {
   if (!files.length) throw new Error('Отчёт ещё не готов.');
   try {
     if (!Capacitor.isNativePlatform() && navigator.canShare?.({ files: [...files] })) {
-      await navigator.share({ files: [...files], title: 'FableShot — тренировка' });
+      await navigator.share({ files: [...files], title });
       return 'shared';
     }
     if (Capacitor.isNativePlatform()) {

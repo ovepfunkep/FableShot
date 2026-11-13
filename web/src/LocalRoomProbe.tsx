@@ -4,6 +4,7 @@ import jsQR from 'jsqr';
 import { checkBrowserRoom } from './browser-room-probe.ts';
 import { createRoomMembership, readRoomName, roomBridge as probe, roomSnapshot } from './group-room-membership.ts';
 import type { RoomMembership, RoomStatus } from './group-room-membership.ts';
+import { readRoomHistory } from './group-leaderboard.ts';
 import './local-room-probe.css';
 import { BottomSheet } from './ConditionsScreen.tsx';
 
@@ -58,8 +59,9 @@ function InvitationQr({ invitation }: { invitation: string }) {
   return <img className="room-probe-qr" src={qr.createDataURL(5, 20)} alt="QR приглашения в комнату" />;
 }
 
-export default function LocalRoomProbe({ native, onTraining, unavailableReason, displayName }: {
+export default function LocalRoomProbe({ native, onTraining, unavailableReason, displayName, onFinalResults }: {
   native: boolean; onTraining?: (membership: RoomMembership) => void; unavailableReason?: string; displayName?: string;
+  onFinalResults?: () => Promise<void>;
 }) {
   const [addresses, setAddresses] = useState<string[]>([]);
   const [address, setAddress] = useState('');
@@ -68,12 +70,13 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const [verified, setVerified] = useState('');
   const [name, setName] = useState(displayName ?? '');
   const [roomTitle, setRoomTitle] = useState('');
-  const [joinedRoom, setJoinedRoom] = useState<{ code: string; title?: string; cg3: boolean; pg1: boolean }>();
+  const [joinedRoom, setJoinedRoom] = useState<{ code: string; title?: string; cg3: boolean; pg1: boolean; finalized: boolean }>();
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmResults, setConfirmResults] = useState(false);
   const alive = useRef(false);
   const acceptScan = useCallback((value: string) => {
     setInvitation(value);
@@ -118,8 +121,17 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const nameField = <label>Имя для комнаты<input maxLength={60} value={name} onChange={event => setName(event.target.value)}
     placeholder="Стрелок" /></label>;
   return <section className="room-probe">
+    {confirmResults && <BottomSheet title="Зафиксировать итоги?" onClose={() => setConfirmResults(false)}>
+      <p>Подождите, пока все отправят серии. После фиксации участники смогут открыть и сохранить таблицу, а приём новых серий завершится.</p>
+      <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+        await onFinalResults?.();
+        setConfirmResults(false);
+      })}>Зафиксировать итоги</button>
+      {error && <p role="alert">{error}</p>}
+    </BottomSheet>}
     {confirmClose && <BottomSheet title="Закрыть комнату?" onClose={() => setConfirmClose(false)}>
-      <p>Обмен закончится для всех. Уже сохранённые тренировки и таблицы останутся в истории. Серии в очереди больше не отправятся в эту комнату.</p>
+      <p>{room.finalizedAt ? 'Перед закрытием дайте участникам открыть или обновить таблицу, чтобы они получили зафиксированные итоги.' :
+        'Обмен закончится для всех. Уже сохранённые тренировки и таблицы останутся в истории. Серии в очереди больше не отправятся в эту комнату.'}</p>
       <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
         await probe.stop();
         setRoom({});
@@ -140,11 +152,15 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
         })}>Скопировать код</button>
         <p>Успешных проверок · {room.checks ?? 0}</p>
         <p>Принято серий · {room.acceptedSeries ?? 0}</p>
-        {onTraining && nameField}
-        {onTraining && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+        {onTraining && !room.finalizedAt && nameField}
+        {onTraining && !room.finalizedAt && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
           const membership = await createRoomMembership(room.invitation!, name, room.roomName, room);
           if (alive.current) onTraining(membership);
         })}>Начать групповую тренировку</button>}
+        {onFinalResults && <button type="button" className="secondary" disabled={busy} onClick={() => {
+          if (room.finalizedAt) void run(onFinalResults);
+          else setConfirmResults(true);
+        }}>{room.finalizedAt ? 'Открыть итоги' : 'Подвести итоги'}</button>}
         <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>Закрыть комнату</button>
       </> : <>
         {!room.restorable && <label>Название комнаты<input maxLength={60} placeholder="Групповая тренировка" value={roomTitle}
@@ -188,13 +204,15 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
             const title = readRoomName(snapshot);
             const cg3 = !!snapshot && typeof snapshot === 'object' && 'cg3' in snapshot && snapshot.cg3 === true;
             const pg1 = !!snapshot && typeof snapshot === 'object' && 'pg1' in snapshot && snapshot.pg1 === true;
-            if (alive.current) setJoinedRoom({ code, title, cg3, pg1 });
+            const finalized = !!readRoomHistory(snapshot).finalizedAt;
+            if (alive.current) setJoinedRoom({ code, title, cg3, pg1, finalized });
           } catch { /* Old hosts can answer the connectivity check without room metadata. */ }
           setVerified(code);
           setMessage(`Комната ответила за ${result.milliseconds} мс.`);
         });
       }}>Проверить связь</button>
-      {onTraining && verified && verified === invitation.trim() && <>{nameField}
+      {joinedRoom?.code === verified && joinedRoom.finalized && <p>Итоги уже зафиксированы. Участники могут открыть таблицу из своей тренировки.</p>}
+      {onTraining && verified && verified === invitation.trim() && !(joinedRoom?.code === verified && joinedRoom.finalized) && <>{nameField}
         {joinedRoom?.code === verified && joinedRoom.title && <strong>{joinedRoom.title}</strong>}
         <p>Участники увидят ваше имя, тип лука и результаты закрытых серий.</p>
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {

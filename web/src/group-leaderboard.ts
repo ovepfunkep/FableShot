@@ -14,7 +14,18 @@ export type RoomSeries = {
   result: { points: number; arrows: number; bowCategory: string | null; conditions?: RoomConditions; hits?: number; spread?: RoomSpread; progressBase?: RoomProgressBase } | null;
 };
 export type RoomParticipant = { entryId: string; displayName?: string; bowCategory: string | null };
-export type RoomHistory = { receivedAt: number; series: RoomSeries[]; participants: RoomParticipant[] };
+export type RoomHistory = { receivedAt: number; series: RoomSeries[]; participants: RoomParticipant[]; finalizedAt?: number };
+
+function validRoomDate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 8.64e15;
+}
+
+export function readRoomHistory(snapshot: unknown): RoomHistory {
+  const finalizedAt = snapshot && typeof snapshot === 'object' && 'finalizedAt' in snapshot ? snapshot.finalizedAt : undefined;
+  if (finalizedAt !== undefined && !validRoomDate(finalizedAt)) throw new Error('Некорректная дата итогов комнаты.');
+  return { receivedAt: Date.now(), series: readRoomSeries(snapshot), participants: readRoomParticipants(snapshot),
+    ...(finalizedAt === undefined ? {} : { finalizedAt }) };
+}
 
 function readConditions(value: unknown): RoomConditions {
   if (!value || typeof value !== 'object') throw new Error('Некорректные условия серии.');
@@ -54,7 +65,8 @@ export function readRoomParticipants(snapshot: unknown): RoomParticipant[] {
 
 export function isRoomHistory(value: unknown): value is RoomHistory {
   if (!value || typeof value !== 'object' || !('receivedAt' in value) || !('participants' in value) ||
-    typeof value.receivedAt !== 'number' || !Number.isSafeInteger(value.receivedAt) || value.receivedAt < 0 || value.receivedAt > 8.64e15) return false;
+    (value.receivedAt !== 0 && !validRoomDate(value.receivedAt)) ||
+    ('finalizedAt' in value && value.finalizedAt !== undefined && !validRoomDate(value.finalizedAt))) return false;
   try { readRoomSeries(value); readRoomParticipants(value); return true; }
   catch { return false; }
 }

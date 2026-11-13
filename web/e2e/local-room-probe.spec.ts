@@ -6,10 +6,20 @@ test('the host can restore a saved room on the current hotspot address', async (
   const invitation = 'FS1:192.168.44.1:25000:' + 'a'.repeat(32);
   await page.addInitScript(invite => {
     Object.assign(window, { androidBridge: {}, Capacitor: {
-      PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'addresses', 'start'].map(name => ({ name, rtype: 'promise' })) }],
-      nativePromise: async (_plugin: string, method: string) => {
+      PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'addresses', 'start', 'finalizeResults'].map(name => ({ name, rtype: 'promise' })) },
+        { name: 'DocumentExport', methods: [{ name: 'shareDocuments', rtype: 'promise' }] }],
+      nativePromise: async (_plugin: string, method: string, options?: { files: { name: string; mimeType: string; dataBase64: string }[] }) => {
+        if (method === 'shareDocuments') {
+          const file = options!.files[0];
+          document.documentElement.dataset.sharedFile = file.name;
+          document.documentElement.dataset.sharedPng = String(file.mimeType === 'image/png' && file.dataBase64.startsWith('iVBOR'));
+          return { opened: true };
+        }
         if (method === 'addresses') return { addresses: ['192.168.44.1'] };
         if (method === 'start') return { roomName: 'Клуб', invitation: invite, acceptedSeries: 7 };
+        if (method === 'finalizeResults') return { roomName: 'Клуб', finalizedAt: Date.now(), participants: [], series: [
+          { entryId: 'a'.repeat(64), ordinal: 1, displayName: 'Лиса', result: { points: 28, arrows: 3, bowCategory: 'barebow' } },
+        ] };
         return { roomName: 'Клуб', restorable: true };
       },
     } });
@@ -25,6 +35,14 @@ test('the host can restore a saved room on the current hotspot address', async (
   await page.getByRole('button', { name: 'Восстановить комнату' }).click();
   await expect(page.getByLabel('Код приглашения')).toHaveValue(invitation);
   await expect(page.getByText('Принято серий · 7')).toBeVisible();
+  await page.getByRole('button', { name: 'Подвести итоги' }).click();
+  await page.getByRole('button', { name: 'Зафиксировать итоги', exact: true }).click();
+  const results = page.getByTestId('room-leaderboard');
+  await expect(results).toContainText('Итоги зафиксированы');
+  await expect(results).toContainText('28/30');
+  await results.getByRole('button', { name: 'Поделиться итогами' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-shared-file', 'FableShot-итоги-комнаты.png');
+  await expect(page.locator('html')).toHaveAttribute('data-shared-png', 'true');
 });
 
 test('Android group training keeps its series queued during an outage and sends it after reconnecting', async ({ page }) => {

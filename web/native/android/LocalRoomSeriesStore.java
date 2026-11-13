@@ -21,6 +21,7 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     private final String roomId;
     private final String roomName;
     private boolean closed;
+    private long finalizedAt;
     private volatile int acceptedSeries;
 
     int acceptedSeries() { return acceptedSeries; }
@@ -59,6 +60,7 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             if (request.length() == 1 && "snapshot".equals(request.optString("action"))) {
                 return snapshot().toString().getBytes(StandardCharsets.UTF_8);
             }
+            if (finalizedAt > 0) throw new IOException("Room results are finalized");
             String payload = request.getString("payload");
             byte[] publicKey = Base64.decode(request.getString("publicKey"), Base64.DEFAULT);
             byte[] signature = Base64.decode(request.getString("signature"), Base64.DEFAULT);
@@ -141,8 +143,21 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
                 new String[] {roomId}, null, null, "entry")) {
             while (rows.moveToNext()) participants.put(new JSONObject(rows.getString(0)));
         }
-        return new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("series", series).put("participants", participants);
+        JSONObject result = new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("series", series).put("participants", participants);
+        if (finalizedAt > 0) result.put("finalizedAt", finalizedAt);
+        return result;
     }
+
+    synchronized JSONObject finalizeResults(android.content.SharedPreferences preferences) throws JSONException, IOException {
+        if (finalizedAt == 0) {
+            long now = System.currentTimeMillis();
+            if (!preferences.edit().putLong("finalizedAt", now).commit()) throw new IOException("Could not save room finalization");
+            finalizedAt = now;
+        }
+        return snapshot();
+    }
+
+    synchronized void restoreFinalization(long time) { finalizedAt = time; }
 
     @Override public synchronized void close() {
         closed = true;

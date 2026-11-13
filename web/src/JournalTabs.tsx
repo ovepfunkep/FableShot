@@ -188,9 +188,8 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
     arrows: total.arrows + session.arrows, points: total.points + session.points,
   }), { arrows: 0, points: 0 });
   const hasResults = entries.some(entry => !entry.deletedAt && entry.practice.savedAt !== null && entry.practice.rounds.some(round => round.series.some(series => series.shots.length)));
-  const activeFilters = filters.period !== 0 || filters.sessionIds !== null || filters.conditionKey !== null;
+  const activeFilters = filters.period !== 0 || filters.sessionIds !== null || filters.conditionKey !== null || filters.equipmentId !== null;
   const period = filters.period === 0 ? 'Всё время' : filters.period === -1 ? `${filters.from} — ${filters.to}` : `${filters.period} дней`;
-  const exportIds = exportOpen ? new Set(filtered.map(entry => entry.id)) : null;
 
   return <section className="journal-tab-content" aria-label="Прогресс тренировок" data-testid="progress-screen">
     {hasResults && <div className="progress-actions">
@@ -213,7 +212,7 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
     </>}
     {filterOpen && <ProgressFiltersSheet entries={entries} value={filters} onClose={() => setFilterOpen(false)}
       onApply={next => { setFilters(next); setFilterOpen(false); }} />}
-    {exportIds && <ProgressExport entries={entries.filter(entry => exportIds.has(entry.id))}
+    {exportOpen && <ProgressExport entries={filtered}
       period={period} onClose={() => setExportOpen(false)} />}
   </section>;
 }

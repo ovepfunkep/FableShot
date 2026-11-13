@@ -12,13 +12,16 @@ import { tournamentTitle } from './tournaments.ts';
 import type { Tournament, TournamentChoice } from './tournaments.ts';
 import './conditions.css';
 
-export function BottomSheet({ title, onClose, children, tag, headerAction }: {
-  title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode;
+export function BottomSheet({ title, onClose, children, tag, headerAction, startAtTop }: {
+  title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode; startAtTop?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const drag = useRef<number | null>(null);
-  useLayoutEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag}
+  useLayoutEffect(() => {
+    dialog.current?.showModal();
+    if (startAtTop && dialog.current) dialog.current.scrollTop = 0;
+  }, [startAtTop]);
+  return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag} tabIndex={startAtTop ? -1 : undefined}
     onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="condition-sheet-body">

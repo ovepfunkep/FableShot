@@ -16,6 +16,11 @@ test('progress scrolls across the full history and compares equipment aliases wi
   await page.getByTestId('nav-progress').click();
   const timeline = page.getByTestId('progress-trend');
   await expect(timeline).toBeVisible();
+  const average = page.getByTestId('progress-insight-average');
+  await expect(average).toContainText('+2,0 балла');
+  await average.getByText('База · 3 трен.').click();
+  await expect(average.getByText('05.01.2026 · 7,0')).toBeVisible();
+  await expect(page.getByTestId('progress-insight-rms')).toContainText('Без изменений');
   await page.getByTestId('analytics-filters').click();
   await expect(page.getByTestId('analytics-conditions').locator('option')).toHaveCount(2);
   await page.keyboard.press('Escape');
@@ -43,5 +48,12 @@ test('progress scrolls across the full history and compares equipment aliases wi
   await expect(page.getByTestId('analytics-count')).toHaveText('Завершённых занятий 1');
   await page.getByTestId('analytics-apply').click();
   await expect(page.locator('.journal-tab-metrics')).toContainText('9,0');
+  await expect(page.getByTestId('progress-insights')).toHaveCount(0);
+  await page.getByTestId('analytics-filters').click();
+  await page.getByRole('button', { name: 'Сбросить фильтры' }).click();
+  await page.getByLabel('Комплект', { exact: true }).selectOption('kit-3');
+  await page.getByTestId('analytics-apply').click();
+  await expect(page.locator('.journal-tab-metrics')).toContainText('10,0');
+  await expect(page.getByTestId('progress-insights')).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).entries)).toEqual(entries);
 });

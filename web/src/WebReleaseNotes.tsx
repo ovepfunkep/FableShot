@@ -28,7 +28,7 @@ export function WebReleaseNotes({ seen, onSeen, showHistory, onCloseHistory }: {
     onSeen(WEB_RELEASE_CODE);
   }, [seen, onSeen]);
 
-  if (showHistory) return <BottomSheet title="История обновлений" tag="release-history" onClose={onCloseHistory}>
+  if (showHistory) return <BottomSheet key="history" title="История обновлений" tag="release-history" onClose={onCloseHistory} startAtTop>
     <div className="web-release-notes">
       {webReleaseHistory().map(release => <section key={release.code} className="web-release-entry" data-testid={`release-history-${release.code}`}>
         <h3>{release.title} <span className="web-release-label">{release.version}</span></h3>
@@ -44,7 +44,7 @@ export function WebReleaseNotes({ seen, onSeen, showHistory, onCloseHistory }: {
   const highlights = [...new Set(pending.flatMap(release => release.highlights))];
   function acknowledge() { setFailed(!onSeen(WEB_RELEASE_CODE)); }
 
-  return <BottomSheet title="Что нового" tag="release-notes" onClose={acknowledge}>
+  return <BottomSheet key="pending" title="Что нового" tag="release-notes" onClose={acknowledge}>
     <div className="web-release-notes">
       <p className="web-release-label" data-testid="release-notes-range">{previousVersion ? `${previousVersion} → ${WEB_RELEASE_VERSION}` : WEB_RELEASE_VERSION}</p>
       <Highlights values={highlights} />

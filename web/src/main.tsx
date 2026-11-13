@@ -64,8 +64,9 @@ import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
 import { loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
-import { announceRoomEntry, loadRoomMembership, readRoomName, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
-import { readRoomParticipants, readRoomSeries } from './group-leaderboard.ts';
+import { announceRoomEntry, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
+import { readRoomHistory } from './group-leaderboard.ts';
+import type { RoomHistory } from './group-leaderboard.ts';
 import { awardRoomAchievements, ROOM_ACHIEVEMENT_IDS } from './room-achievements.ts';
 import type { RoomMembership } from './group-room-membership.ts';
 import { GroupLeaderboard } from './GroupLeaderboard.tsx';
@@ -105,6 +106,7 @@ function App() {
   const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
   const [myTargetsOpen, setMyTargetsOpen] = useState(false);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
+  const [hostResults, setHostResults] = useState<{ history: RoomHistory; name?: string } | null>(null);
   const [onboardingRequested, setOnboardingRequested] = useState(false);
   const [tutorialRequested, setTutorialRequested] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
@@ -214,21 +216,26 @@ function App() {
 
   async function refreshRoomHistory(trainingId: string, membership: RoomMembership, manual = false) {
     const snapshot = await roomSnapshot(membership.invitation);
-    const history = { receivedAt: Date.now(), series: readRoomSeries(snapshot), participants: readRoomParticipants(snapshot) };
-    const roomName = readRoomName(snapshot) ?? membership.roomName;
+    const history = readRoomHistory(snapshot);
+    saveRoomHistory(trainingId, history, readRoomName(snapshot) ?? membership.roomName, manual);
+    return history;
+  }
+
+  function saveRoomHistory(trainingId: string, history: RoomHistory, roomName?: string, manual = false) {
     const saved = writeDiary(previous => {
       const item = previous.entries.find(candidate => candidate.id === trainingId && !candidate.deletedAt);
-      if (!item || (item.groupRoomHistory?.receivedAt ?? 0) > history.receivedAt) return previous;
+      if (!item || item.groupRoomHistory?.finalizedAt ||
+        !history.finalizedAt && (item.groupRoomHistory?.receivedAt ?? 0) > history.receivedAt) return previous;
       if (!manual && (!roomName || roomName === item.groupRoomName) &&
         JSON.stringify(item.groupRoomHistory?.series) === JSON.stringify(history.series) &&
-        JSON.stringify(item.groupRoomHistory?.participants) === JSON.stringify(history.participants)) return previous;
+        JSON.stringify(item.groupRoomHistory?.participants) === JSON.stringify(history.participants) &&
+        item.groupRoomHistory?.finalizedAt === history.finalizedAt) return previous;
       const updated = { ...previous, entries: previous.entries.map(candidate => candidate === item ? { ...item,
         groupRoomName: roomName ?? item.groupRoomName ?? 'Групповая тренировка', groupRoomHistory: history,
       } : candidate) };
       return awardRoomAchievements(updated, trainingId, new Date(history.receivedAt).toISOString());
     });
     if (!saved) throw new Error('Не удалось сохранить таблицу.');
-    return history;
   }
 
   useEffect(() => {
@@ -237,9 +244,10 @@ function App() {
       if (syncingRoom.current || document.visibilityState !== 'visible') return;
       const diary = diaryRef.current;
       const active = diary?.entries.find(item => !item.practice.savedAt && !item.paused && !item.deletedAt);
-      const journals = diary?.groupSeries?.filter(journal => journal.trainingId === active?.id || pendingGroupSeries(journal).length ||
+      const journals = diary?.groupSeries?.filter(journal => !diary.entries.some(item => item.id === journal.trainingId && item.groupRoomHistory?.finalizedAt) &&
+        (journal.trainingId === active?.id || pendingGroupSeries(journal).length ||
         diary.entries.some(item => item.id === journal.trainingId && !item.deletedAt && item.achievementEnrollment?.roomAwards &&
-          item.practice.savedAt && Date.now() - Date.parse(item.practice.savedAt) < 60_000)) ?? [];
+          item.practice.savedAt && Date.now() - Date.parse(item.practice.savedAt) < 60_000))) ?? [];
       if (!journals.length) return;
       syncingRoom.current = true;
       try {
@@ -884,7 +892,23 @@ function App() {
       <Suspense fallback={<p>Открываем комнаты…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
         displayName={preferences.displayName}
         onTraining={state.diary ? enterRoomTraining : undefined}
+        onFinalResults={async () => {
+          const snapshot = await roomBridge.finalizeResults();
+          const history = readRoomHistory(snapshot);
+          if (!history.finalizedAt) throw new Error('Комната не подтвердила итоги.');
+          const name = readRoomName(snapshot);
+          const saved = writeDiary(previous => {
+            const matching = new Set(previous.groupSeries?.filter(journal => history.participants.some(person => person.entryId === journal.entryId) ||
+              history.series.some(series => series.entryId === journal.entryId)).map(journal => journal.trainingId));
+            return matching.size ? { ...previous, entries: previous.entries.map(item => matching.has(item.id)
+              ? { ...item, groupRoomName: name ?? item.groupRoomName, groupRoomHistory: history } : item) } : previous;
+          });
+          if (!saved) throw new Error('Не удалось сохранить итоги в дневник. Откройте их повторно.');
+          setHostResults({ history, name });
+        }}
         unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense>
+      {hostResults && <GroupLeaderboard archived mySeries={1} saved={hostResults.history} title={hostResults.name}
+        onClose={() => setHostResults(null)} />}
       {roomSwitch && <BottomSheet title="Перейти в групповую тренировку?" onClose={() => setRoomSwitch(null)}>
         <p>Текущая тренировка встанет на паузу после запуска групповой. Её можно будет продолжить из истории.</p>
         <button type="button" className="primary" onClick={() => prepareRoomTraining(roomSwitch)}>Выбрать условия</button>
@@ -976,13 +1000,14 @@ function App() {
     {offlineLabel}
     {entry?.groupRoomHistory && roomLeaderboardOpen && <GroupLeaderboard archived entryId={roomJournal?.entryId} mySeries={1}
       saved={entry.groupRoomHistory} title={entry.groupRoomName} onClose={() => setRoomLeaderboardOpen(false)}
-      onRefresh={roomJournal && !entry.deletedAt && supportsLocalRoom() ? async () => {
+      onRefresh={roomJournal && !entry.groupRoomHistory.finalizedAt && !entry.deletedAt && supportsLocalRoom() ? async () => {
         const membership = loadRoomMembership(roomJournal.entryId);
         if (!membership || membership.roomId !== roomJournal.roomId) throw new Error('Приглашение недоступно.');
         return refreshRoomHistory(entry.id, membership, true);
       } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
       onRoomLeaderboard={entry?.groupRoomHistory ? () => setRoomLeaderboardOpen(true) : undefined}
+      roomFinalized={!!entry?.groupRoomHistory?.finalizedAt}
       onPause={pauseEntry}
       onRepeat={!ongoing && entry && !entry.deletedAt ? () => {
         setSetupMemo(null);
@@ -1044,7 +1069,7 @@ function App() {
       </div> : <div className="series-editor-heading">
         <h1>{editing ? `Стрела ${editing.index + 1}` : 'Тренировка'}</h1>
         {roomJournal && <output className="room-sync-status" aria-live="polite" data-testid="room-sync-status">
-          {pendingRoomCount ? `В очереди · ${pendingRoomCount}` : 'Групповая'}
+          {entry?.groupRoomHistory?.finalizedAt ? 'Итоги зафиксированы' : pendingRoomCount ? `В очереди · ${pendingRoomCount}` : 'Групповая'}
         </output>}
       </div>}
       {seriesEditor && <button type="button" className="icon-button" aria-label="Заметки серии"
@@ -1063,6 +1088,7 @@ function App() {
     </header>
     {roomJournal && roomLeaderboardOpen && <GroupLeaderboard key={roomJournal.entryId} entryId={roomJournal.entryId}
       saved={entry?.groupRoomHistory} title={entry?.groupRoomName}
+      onFinalSnapshot={(history, name) => { if (sessionId) saveRoomHistory(sessionId, history, name); }}
       mySeries={roomJournal.ends.find(end => end.endId === series.id)?.ordinal ??
         Math.max(1, roomJournal.ends.length + Number(series.shots.length > 0))}
       onClose={() => setRoomLeaderboardOpen(false)} />}

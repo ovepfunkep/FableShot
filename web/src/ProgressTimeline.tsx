@@ -3,7 +3,7 @@ import type { DiaryEntry } from './persistence.ts';
 import { formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { BottomSheet } from './ConditionsScreen.tsx';
-import { availableTimelineMetrics, buildProgressTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries, progressPeriodRange, TIMELINE_METRICS, TIMELINE_VISIBLE_DAYS, timelineCeiling, timelineDate, timelineViewport } from './progress-timeline.ts';
+import { availableTimelineMetrics, buildProgressTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries, progressPeriodRange, TIMELINE_METRICS, TIMELINE_VISIBLE_DAYS, timelineCeiling, timelineComparison, timelineDate, timelineViewport } from './progress-timeline.ts';
 import type { ProgressFilters, ProgressPeriod, TimelineGroup, TimelineMetric } from './progress-timeline.ts';
 import './progress-timeline.css';
 
@@ -85,6 +85,11 @@ export function ProgressTimeline({ groups }: { groups: readonly TimelineGroup[] 
   const group = supported[0];
   if (!group) return null;
   const metrics = availableTimelineMetrics(group, preferences), metric = metrics.includes(requestedMetric) ? requestedMetric : metrics[0];
+  const comparisons = (['average', 'rms'] as const).flatMap(key => {
+    if (!metrics.includes(key)) return [];
+    const result = timelineComparison(group, key);
+    return result ? [{ key, ...result }] : [];
+  });
   return <section className="progress-timeline journal-tab-panel" aria-label="Динамика прогресса" data-testid="progress-trend">
     <header><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 4v16h16M7 15l4-5 4 2 5-7" /></svg><h2>Динамика прогресса</h2>
       <button type="button" className="progress-timeline-help" aria-label="О динамике прогресса" onClick={() => setHelp(true)}>?</button>
@@ -95,8 +100,30 @@ export function ProgressTimeline({ groups }: { groups: readonly TimelineGroup[] 
         data-testid={`progress-trend-${item.key}`} onClick={() => setMetric(item.key)}>{item.label}</button>)}
     </div>
     <TimelinePlot key={`${group.key}:${metric}`} group={group} metric={metric} />
+    {comparisons.length > 0 && <div className="progress-insights" data-testid="progress-insights">
+      <h3>Последняя тренировка · {label(comparisons[0].latest.day, true)}</h3>
+      <div className="progress-insights-grid">
+        {comparisons.map(({ key, current, baseline, delta, earlier }) => {
+          const average = key === 'average';
+          const digits = average && preferences.averageHundredths ? 2 : 1;
+          const display = (value: number) => value.toLocaleString('ru-RU', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+          const rounded = Number(delta.toFixed(digits));
+          const better = average ? rounded > 0 : rounded < 0;
+          const unit = average ? 'балла' : 'мм';
+          return <section key={key} className="progress-insight" data-testid={`progress-insight-${key}`}>
+            <h4>{average ? 'Средний балл' : 'Кучность RMS'}</h4>
+            <strong data-better={better}>{rounded === 0 ? 'Без изменений' : `${rounded > 0 ? '+' : '−'}${display(Math.abs(rounded))} ${unit}`}</strong>
+            <small>{display(current)} сейчас · {display(baseline)} в базе</small>
+            <details><summary>База · {earlier.length} трен.</summary>
+              <ul>{earlier.map(point => <li key={point.id}>{label(point.day, true)} · {display(point.values[key]!)}</li>)}</ul>
+            </details>
+          </section>;
+        })}
+      </div>
+    </div>}
     {help && <BottomSheet title="Динамика прогресса" onClose={() => setHelp(false)} tag="progress-trend-help">
       <p className="round-help">Каждая точка — сохранённая тренировка при выбранных условиях. На экране 30 дней; листай график вбок, чтобы увидеть всю историю. Нажми на точку для точного значения. RMS — разброс отмеченных попаданий в миллиметрах; меньше — плотнее. Для RMS нужны три отметки. Десятки включают X. Отдельная доля X доступна для тренировок, где её можно определить. CG3 доступен для полных серий с достаточными координатами. При неизвестном классе лука тренировки показаны отдельно.</p>
+      <p>Сводка сравнивает последнюю тренировку со средним значением за 3–5 предыдущих занятий на более ранних датах в этой выборке. База считается отдельно для каждого показателя.</p>
     </BottomSheet>}
   </section>;
 }
@@ -114,7 +141,13 @@ export function ProgressFiltersSheet({ entries, value, onApply, onClose }: {
   const selected = new Set(draft.sessionIds ?? dated.map(entry => entry.id));
   const conditionEntries = useMemo(() => filterProgressEntries(entries, { ...draft, conditionKey: null }),
     [entries, draft.period, draft.from, draft.to, draft.sessionIds]);
-  const groups = useMemo(() => buildProgressTimeline(conditionEntries), [conditionEntries]);
+  const equipment = new Map<string, string>();
+  for (const entry of conditionEntries) for (const round of entry.practice.rounds) for (const series of round.series) {
+    const kit = series.conditions.equipment;
+    if (series.shots.length && kit && !equipment.has(kit.id)) equipment.set(kit.id, kit.name);
+  }
+  const groups = useMemo(() => buildProgressTimeline(filterProgressEntries(conditionEntries, { ...DEFAULT_PROGRESS_FILTERS, equipmentId: draft.equipmentId })),
+    [conditionEntries, draft.equipmentId]);
   const count = filterProgressEntries(entries, draft).length;
   const periods: readonly [ProgressPeriod, string][] = [[0, 'Всё время'], [7, '7 дней'], [30, '30 дней'], [90, '90 дней'], [-1, 'Свои даты']];
 
@@ -123,6 +156,16 @@ export function ProgressFiltersSheet({ entries, value, onApply, onClose }: {
       <div className="progress-timeline-metrics" role="group" aria-label="Период">
         {periods.map(([period, title]) => <button type="button" key={period} aria-pressed={draft.period === period}
           data-testid={`analytics-period-${period}`} onClick={() => setDraft(current => ({ ...current, period }))}>{title}</button>)}
+      </div>
+      <div className="progress-filter-actions">
+        <button type="button" onClick={() => {
+          const year = new Date().getFullYear();
+          setDraft(current => ({ ...current, period: -1, from: `${year}-01-01`, to: `${year}-12-31` }));
+        }}>Текущий сезон</button>
+        <button type="button" onClick={() => {
+          const year = new Date().getFullYear() - 1;
+          setDraft(current => ({ ...current, period: -1, from: `${year}-01-01`, to: `${year}-12-31` }));
+        }}>Прошлый сезон</button>
       </div>
       {draft.period === -1 && <>
         <div className="progress-filter-dates">
@@ -133,6 +176,14 @@ export function ProgressFiltersSheet({ entries, value, onApply, onClose }: {
         </div>
         {!range.valid && <p className="progress-filter-error" role="alert">Укажи обе даты. Начало должно быть не позже окончания.</p>}
       </>}
+      {(equipment.size > 0 || draft.equipmentId) && <label>Комплект
+        <select className="progress-timeline-conditions" aria-label="Комплект" value={draft.equipmentId ?? ''}
+          onChange={event => setDraft(current => ({ ...current, equipmentId: event.target.value || null }))}>
+          <option value="">Все комплекты</option>
+          {draft.equipmentId && !equipment.has(draft.equipmentId) && <option value={draft.equipmentId}>Выбранный комплект · нет результатов</option>}
+          {[...equipment].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
+      </label>}
       <label>Сопоставимые условия
         <select className="progress-timeline-conditions" aria-label="Сопоставимые условия" value={draft.conditionKey ?? ''}
           data-testid="analytics-conditions" onChange={event => setDraft(current => ({ ...current, conditionKey: event.target.value || null }))}>

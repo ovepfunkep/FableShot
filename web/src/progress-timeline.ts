@@ -28,8 +28,9 @@ export type TimelinePoint = {
 };
 export type TimelineGroup = { key: string; label: string; comparable: boolean; points: TimelinePoint[] };
 export type ProgressPeriod = 0 | 7 | 30 | 90 | -1;
-export type ProgressFilters = { period: ProgressPeriod; from: string; to: string; sessionIds: readonly string[] | null; conditionKey: string | null };
-export const DEFAULT_PROGRESS_FILTERS: ProgressFilters = { period: 0, from: '', to: '', sessionIds: null, conditionKey: null };
+export type ProgressFilters = { period: ProgressPeriod; from: string; to: string; sessionIds: readonly string[] | null;
+  conditionKey: string | null; equipmentId: string | null };
+export const DEFAULT_PROGRESS_FILTERS: ProgressFilters = { period: 0, from: '', to: '', sessionIds: null, conditionKey: null, equipmentId: null };
 
 function localToday(): string {
   const date = new Date();
@@ -60,13 +61,26 @@ export function filterProgressEntries(entries: readonly DiaryEntry[], filters: P
     if (entry.deletedAt || entry.practice.savedAt === null || selected && !selected.has(entry.id)) return [];
     const date = timelineDate(entry);
     if (range.from !== null && (!date || date < range.from || date > range.to!)) return [];
-    if (filters.conditionKey === null) return [entry];
+    if (filters.conditionKey === null && filters.equipmentId === null) return [entry];
     const rounds = entry.practice.rounds.flatMap(round => {
-      const series = round.series.filter(item => item.shots.length && timelineConditionKey(entry, item) === filters.conditionKey);
+      const series = round.series.filter(item => item.shots.length &&
+        (filters.conditionKey === null || timelineConditionKey(entry, item) === filters.conditionKey) &&
+        (filters.equipmentId === null || item.conditions.equipment?.id === filters.equipmentId));
       return series.length ? [{ ...round, series }] : [];
     });
     return rounds.length ? [{ ...entry, practice: { ...entry.practice, rounds } }] : [];
   });
+}
+
+export function timelineComparison(group: TimelineGroup, metric: 'average' | 'rms') {
+  if (!group.comparable) return null;
+  const latest = group.points.at(-1);
+  const current = latest?.values[metric];
+  if (!latest || current == null) return null;
+  const earlier = group.points.filter(point => point.day < latest.day && point.values[metric] !== null).slice(-5);
+  if (earlier.length < 3) return null;
+  const baseline = earlier.reduce((sum, point) => sum + point.values[metric]!, 0) / earlier.length;
+  return { latest, earlier, baseline, current, delta: current - baseline };
 }
 
 /** Unknown import dates remain unknown; imported local dates take precedence over noon placeholders. */

@@ -78,6 +78,7 @@ public class LocalRoomProbePlugin extends Plugin {
         boolean opened = false;
         try {
             createdStore.loadAcceptedCount();
+            createdStore.restoreFinalization(savedRoom().getLong("finalizedAt", 0));
             boolean preview = (getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
             try {
                 created = new LocalRoomProbe(address, secret, createdStore::receive, preview, port);
@@ -160,9 +161,20 @@ public class LocalRoomProbePlugin extends Plugin {
 
     private JSObject roomStatus() {
         if (room != null) return new JSObject().put("invitation", invitation).put("checks", room.checks())
-            .put("acceptedSeries", store.acceptedSeries()).put("roomName", roomName).put("cg3", true).put("pg1", true);
+            .put("acceptedSeries", store.acceptedSeries()).put("roomName", roomName).put("cg3", true).put("pg1", true)
+            .put("finalizedAt", savedRoom().getLong("finalizedAt", 0));
         SharedPreferences saved = savedRoom();
         return saved.contains("secret") ? new JSObject().put("restorable", true).put("roomName", saved.getString("name", "")) : new JSObject();
+    }
+
+    @PluginMethod
+    public synchronized void finalizeResults(PluginCall call) {
+        if (store == null) { call.reject("Сначала восстановите комнату."); return; }
+        try {
+            call.resolve(JSObject.fromJSONObject(store.finalizeResults(savedRoom())));
+        } catch (IOException | org.json.JSONException | android.database.sqlite.SQLiteException error) {
+            call.reject("Не удалось сохранить итоги комнаты.");
+        }
     }
 
     @PluginMethod

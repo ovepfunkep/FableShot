@@ -3,7 +3,7 @@ import { exchangeBrowserRoom } from './browser-room-probe.ts';
 import type { GroupSeriesRevision, GroupSeriesTransport } from './group-series.ts';
 
 type RoomCapabilities = { cg3?: boolean; pg1?: boolean };
-export type RoomStatus = RoomCapabilities & { invitation?: string; checks?: number; acceptedSeries?: number; roomName?: string; restorable?: boolean };
+export type RoomStatus = RoomCapabilities & { invitation?: string; checks?: number; acceptedSeries?: number; roomName?: string; restorable?: boolean; finalizedAt?: number };
 export type RoomMembership = RoomCapabilities & { roomId: string; entryId: string; invitation: string; publicKey: string; privateKey: string; displayName?: string; roomName?: string };
 
 export const roomBridge = registerPlugin<{
@@ -12,6 +12,7 @@ export const roomBridge = registerPlugin<{
   status(): Promise<RoomStatus>;
   check(options: { invitation: string }): Promise<{ milliseconds: number }>;
   stop(): Promise<void>;
+  finalizeResults(): Promise<unknown>;
   publish(options: { invitation: string; payload: string; publicKey: string; signature: string }): Promise<unknown>;
   snapshot(options: { invitation: string }): Promise<unknown>;
 }>('LocalRoomProbe');

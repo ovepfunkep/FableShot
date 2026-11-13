@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { BOW_CATEGORIES } from './equipment.ts';
-import { groupStandings, readRoomParticipants, readRoomSeries, roomConditionChoices } from './group-leaderboard.ts';
+import { groupStandings, readRoomHistory, roomConditionChoices } from './group-leaderboard.ts';
 import type { GroupScoring, RoomHistory } from './group-leaderboard.ts';
 import { MIN_SCORED_ARROWS } from './progress-scoring.ts';
 import type { ProgressResult } from './progress-scoring.ts';
@@ -10,6 +10,8 @@ import { displayCompositeScore } from './composite-scoring.ts';
 import type { CompositeScore } from './composite-scoring.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
+import { shareReport } from './share-report.ts';
+import { roomResultCard } from './room-result-card.ts';
 
 function CompositeBreakdown({ score }: { score: CompositeScore }) {
   if (score.total === undefined) return <small>{{
@@ -31,9 +33,10 @@ function CompositeBreakdown({ score }: { score: CompositeScore }) {
   </details>;
 }
 
-export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, archived, onRefresh }: {
+export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, archived, onRefresh, onFinalSnapshot }: {
   entryId?: string; mySeries: number; onClose: () => void; saved?: RoomHistory; title?: string; archived?: boolean;
   onRefresh?: () => Promise<RoomHistory>;
+  onFinalSnapshot?: (history: RoomHistory, name?: string) => void;
 }) {
   const [live, setLive] = useState<RoomHistory>();
   const [selected, setSelected] = useState<number | null>(null);
@@ -46,9 +49,12 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
   const [refreshing, setRefreshing] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [shareStatus, setShareStatus] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const persistFinalSnapshot = useEffectEvent((history: RoomHistory, name?: string) => onFinalSnapshot?.(history, name));
 
   useEffect(() => {
-    if (archived || !entryId) return;
+    if (archived || saved?.finalizedAt || live?.finalizedAt || !entryId) return;
     const id = entryId;
     let cancelled = false;
     let loading = false;
@@ -59,8 +65,12 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
         const membership = loadRoomMembership(id);
         if (!membership) throw new Error('Приглашение в комнату недоступно.');
         const snapshot = await roomSnapshot(membership.invitation);
-        const results = { receivedAt: Date.now(), series: readRoomSeries(snapshot), participants: readRoomParticipants(snapshot) };
-        if (!cancelled) { setLive(results); setRoomName(readRoomName(snapshot) ?? membership.roomName ?? title); setError(''); }
+        const results = readRoomHistory(snapshot);
+        if (!cancelled) {
+          const name = readRoomName(snapshot) ?? membership.roomName ?? title;
+          if (results.finalizedAt) persistFinalSnapshot(results, name);
+          setLive(results); setRoomName(name); setError('');
+        }
       } catch {
         if (!cancelled) setError('Связь с комнатой потеряна.');
       } finally { loading = false; }
@@ -68,12 +78,13 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
     void refresh();
     const timer = window.setInterval(() => void refresh(), 4000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [archived, entryId, title]);
+  }, [archived, entryId, title, saved?.finalizedAt, live?.finalizedAt]);
 
-  const history = live ?? saved;
+  const history = saved?.finalizedAt ? saved : live ?? saved;
+  const finalizedAt = history?.finalizedAt;
   const { series = [], participants = [] } = history ?? {};
   const received = !!history;
-  const latest = archived ? series.reduce((max, end) => Math.max(max, end.ordinal), 1) : mySeries;
+  const latest = archived || finalizedAt ? series.reduce((max, end) => Math.max(max, end.result ? end.ordinal : 0), 1) : mySeries;
   const ordinal = selected ?? latest;
   const choices = [...new Set([latest, ...(selected === null ? [] : [selected]), ...series.map(end => end.ordinal)])].sort((a, b) => a - b);
   const conditions = roomConditionChoices(series);
@@ -112,12 +123,27 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
     <div className="room-leaderboard">
       <div className="room-toolbar">
         <div className="room-status" role="status" data-offline={!!error}>
-          <Icon name="group" /><span>{error ? archived ? 'Обновление недоступно' : 'Нет связи' : archived ? 'Сохранённая таблица'
+          <Icon name="group" /><span>{finalizedAt ? 'Итоги зафиксированы' : error ? archived ? 'Обновление недоступно' : 'Нет связи' : archived ? 'Сохранённая таблица'
             : received ? `Участники · ${count}` : 'Подключаемся…'}</span>
         </div>
+        {finalizedAt && ordinal === latest && rows.some(row => row.arrows) && <button type="button" className="room-pill" disabled={sharing} onClick={async () => {
+          setSharing(true);
+          setShareStatus('');
+          try {
+            const label = { classic: 'Классика', cg3: 'Общие очки', pg1: 'Прогресс' }[mode];
+            const scope = [conditionFilter && conditions.get(conditionFilter), category !== 'all' &&
+              (BOW_CATEGORIES.find(item => item.value === category)?.label ?? 'Без категории')].filter(Boolean).join(' · ');
+            const file = roomResultCard(roomName || 'Групповая тренировка', finalizedAt, label, ordinal, scope,
+              rows.filter(row => row.arrows).map(row => ({ name: name(row), bow: bow(row), place: row.place, score: total(row) })));
+            const result = await shareReport([file], 'FableShot — итоги комнаты');
+            if (result === 'downloaded') setShareStatus('Карточка скачана.');
+          } catch { setShareStatus('Не удалось подготовить карточку. Попробуйте ещё раз.'); }
+          finally { setSharing(false); }
+        }}>{sharing ? 'Готовим…' : 'Поделиться итогами'}</button>}
       </div>
+      {shareStatus && <small role="status">{shareStatus}</small>}
       {history && (archived || error) && <small>Получено {new Date(history.receivedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</small>}
-      {onRefresh && <button type="button" className="room-pill" disabled={refreshing} onClick={async () => {
+      {onRefresh && !finalizedAt && <button type="button" className="room-pill" disabled={refreshing} onClick={async () => {
         setRefreshing(true);
         setError('');
         try { setLive(await onRefresh()); }
@@ -130,7 +156,7 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
       </div>
       <div className="room-toolbar">
         <select className="room-pill" aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">{archived ? 'Последняя' : 'Моя серия'} · {latest}</option>
+          <option value="">{finalizedAt ? 'Итоги' : archived ? 'Последняя' : 'Моя серия'} · {latest}</option>
           {choices.map(value => <option value={value} key={value}>Серия {value}</option>)}
         </select>
         <button type="button" className="icon-button room-filter-button" data-active={filtersActive} aria-haspopup="dialog"
