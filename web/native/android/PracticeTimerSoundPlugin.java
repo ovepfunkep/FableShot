@@ -35,7 +35,7 @@ public class PracticeTimerSoundPlugin extends Plugin {
             try {
                 PowerManager power = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
                 wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FableShot:PracticeTimer");
-                wakeLock.acquire(delay + 1500L);
+                wakeLock.acquire(delay + 2500L);
                 signals.postDelayed(() -> play("Series".equals(phase)), delay);
                 call.resolve();
             } catch (RuntimeException error) {
@@ -52,12 +52,12 @@ public class PracticeTimerSoundPlugin extends Plugin {
 
     private void play(boolean series) {
         try {
-            tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
-            tone.startTone(series ? ToneGenerator.TONE_DTMF_9 : ToneGenerator.TONE_DTMF_1, series ? 480 : 160);
+            tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
+            tone.startTone(series ? ToneGenerator.TONE_DTMF_9 : ToneGenerator.TONE_DTMF_1, series ? 1800 : 650);
             if (!series) signals.postDelayed(() -> {
-                if (tone != null) tone.startTone(ToneGenerator.TONE_DTMF_3, 200);
-            }, 270);
-            signals.postDelayed(this::clear, 550);
+                if (tone != null) tone.startTone(ToneGenerator.TONE_DTMF_3, 950);
+            }, 850);
+            signals.postDelayed(this::clear, 1900);
         } catch (RuntimeException error) {
             Log.w("FableShotTimer", "Timer audio unavailable", error);
             clear();

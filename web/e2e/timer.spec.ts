@@ -25,16 +25,27 @@ test('start schedules distinct sounds and pausing cancels the pending signal', a
       state = 'running';
       currentTime = 0;
       destination = {};
-      createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+      createGain() {
+        return { gain: { setValueAtTime() {}, linearRampToValueAtTime(value: number) {
+          const root = document.documentElement;
+          root.dataset.peakGain = String(Math.max(Number(root.dataset.peakGain ?? 0), value));
+        } }, connect() {}, disconnect() {} };
+      }
       createOscillator() {
         return {
           frequency: { value: 0 }, connect() {}, disconnect() {},
-          start() {
+          start(at: number) {
+            this.startedAt = at;
             const root = document.documentElement;
             root.dataset.sounds = [root.dataset.sounds, this.frequency.value].filter(Boolean).join(',');
           },
+          startedAt: 0,
           stop(at?: number) {
             if (at === undefined) document.documentElement.dataset.cancelledSound = 'yes';
+            else {
+              const root = document.documentElement;
+              root.dataset.soundDurations = [root.dataset.soundDurations, Math.round((at - this.startedAt) * 1000)].filter(Boolean).join(',');
+            }
           },
         };
       }
@@ -60,6 +71,8 @@ test('start schedules distinct sounds and pausing cancels the pending signal', a
   await page.getByTestId('timer-toggle').click();
   await expect(face).toHaveAttribute('data-timer-tone', 'rest');
   await expect(root).toHaveAttribute('data-sounds', '880,540,680');
+  await expect(root).toHaveAttribute('data-sound-durations', '1800,650,950');
+  await expect(root).toHaveAttribute('data-peak-gain', '0.9');
   await page.clock.runFor(1300);
   await expect(face).toHaveAttribute('data-timer-tone', 'finished');
 });

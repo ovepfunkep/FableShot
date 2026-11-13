@@ -112,7 +112,8 @@ function Glyph({ name }: { name: keyof typeof glyphs }) {
 function Received({ grant, precise = false }: { grant: AchievementGalleryGrant; precise?: boolean }) {
   return <span className={`achievement-state ${grant.valid === false ? 'achievement-state-unconfirmed' : 'achievement-state-earned'}`} data-testid={`${precise ? 'achievement-moment' : 'achievement-earned'}-${grant.id}`}>
     <Glyph name="check" />
-    <span>Получено <time dateTime={grant.earnedAt}>{(precise ? moment : day).format(new Date(grant.earnedAt))}</time>{grant.valid === false && ' · сейчас не подтверждено'}</span>
+    <span>Получено <time dateTime={grant.earnedAt}>{(precise ? moment : day).format(new Date(grant.earnedAt))}</time>
+      {precise && grant.valid === false && <small> · Текущие записи больше не подтверждают условие</small>}</span>
   </span>;
 }
 

@@ -44,16 +44,16 @@ export function createTimerSound() {
         const remaining = deadline - Date.now();
         if (ticket !== sequence || remaining < -1000) return;
         const start = context.currentTime + Math.max(0, remaining) / 1000;
-        const pattern = phase === 'Series' ? [{ offset: 0, hz: 880, seconds: .48 }]
-          : [{ offset: 0, hz: 540, seconds: .16 }, { offset: .27, hz: 680, seconds: .2 }];
+        const pattern = phase === 'Series' ? [{ offset: 0, hz: 880, seconds: 1.8 }]
+          : [{ offset: 0, hz: 540, seconds: .65 }, { offset: .85, hz: 680, seconds: .95 }];
         for (const { offset, hz, seconds } of pattern) {
           const at = start + offset;
           const tone = context.createOscillator(), gain = context.createGain();
           tone.frequency.value = hz;
           tone.connect(gain); gain.connect(context.destination);
           gain.gain.setValueAtTime(0, at);
-          gain.gain.linearRampToValueAtTime(.5, at + .015);
-          gain.gain.setValueAtTime(.5, at + seconds - .035);
+          gain.gain.linearRampToValueAtTime(.9, at + .02);
+          gain.gain.setValueAtTime(.9, at + seconds - .06);
           gain.gain.linearRampToValueAtTime(0, at + seconds);
           tone.onended = () => { tone.disconnect(); gain.disconnect(); };
           tone.start(at); tone.stop(at + seconds);

@@ -37,12 +37,18 @@ test('the first completed barebow series awards a rank-pace group and keeps its 
   await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
   await page.getByTestId('training-confirm').click();
   const achievements = page.getByTestId('session-achievements');
-  await achievements.getByRole('button', { name: /Коротко, на мировом/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Достижения тренировки' })).toContainText('порог 553 из 600');
+  await expect(achievements).not.toContainText('Коротко, на мировом');
+  await achievements.getByRole('button', { name: /Получено достижений:/ }).click();
+  const details = page.getByRole('dialog', { name: 'Достижения тренировки' });
+  const mythic = details.locator('[data-rarity="Mythic"]').filter({ hasText: 'Коротко, на мировом' });
+  await expect(mythic).toContainText('порог 553 из 600');
+  await expect(details.locator('[data-rarity="Legendary"]').filter({ hasText: 'Мастер короткого метра' })).toBeVisible();
+  expect(await mythic.evaluate(node => getComputedStyle(node).borderInlineStartColor)).not.toBe(
+    await details.locator('[data-rarity="Legendary"]').first().evaluate(node => getComputedStyle(node).borderInlineStartColor));
   await page.keyboard.press('Escape');
   await page.reload();
   await openHistoryEntry(page);
-  await expect(achievements).toContainText('Коротко, на мировом');
+  await expect(achievements.getByRole('button', { name: /Получено достижений:/ })).toBeVisible();
   expect(await stageAwards()).toHaveLength(6);
 });
 
@@ -62,7 +68,10 @@ test('deleting and restoring achievement evidence updates its status without a s
   await page.getByRole('button', { name: 'В корзину', exact: true }).click();
   await page.getByTestId('open-profile').click();
   await page.getByRole('button', { name: 'Все достижения', exact: true }).click();
-  await expect(page.getByTestId('achievement-earned-START01')).toContainText('сейчас не подтверждено');
+  await expect(page.getByTestId('achievement-earned-START01')).toHaveClass(/achievement-state-unconfirmed/);
+  await page.getByTestId('achievement-START01').click();
+  await expect(page.getByTestId('achievement-moment-START01')).toContainText('Текущие записи больше не подтверждают условие');
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('nav-history').click();
@@ -73,7 +82,7 @@ test('deleting and restoring achievement evidence updates its status without a s
   await page.getByRole('button', { name: 'Восстановить тренировку', exact: true }).click();
   await page.getByTestId('open-profile').click();
   await page.getByRole('button', { name: 'Все достижения', exact: true }).click();
-  await expect(page.getByTestId('achievement-earned-START01')).not.toContainText('сейчас не подтверждено');
+  await expect(page.getByTestId('achievement-earned-START01')).toHaveClass(/achievement-state-earned/);
   await expect(page.getByTestId('achievement-notice')).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).achievementLedger.grants)).toHaveLength(1);
 });
@@ -162,13 +171,13 @@ test('new performance earns grouped notices, persists in report/gallery, and res
   await expect(notice).toHaveCount(0);
   await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
   await page.getByTestId('training-confirm').click();
-  await expect(page.getByTestId('session-achievements')).toContainText('Начало пути');
+  await expect(page.getByTestId('session-achievements')).toContainText('Получено достижений:');
   await expect(notice).toContainText('Начало пути');
   await page.clock.fastForward(4001);
   await page.screenshot({ path: '../artifacts/web-0.19.0-achievement-report.png', fullPage: true });
   await page.reload();
   await openHistoryEntry(page);
-  await expect(page.getByTestId('session-achievements')).toContainText('Начало пути');
+  await expect(page.getByTestId('session-achievements')).toContainText('Получено достижений:');
   await expect(notice).toHaveCount(0);
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('open-profile').click();

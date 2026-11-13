@@ -2,14 +2,38 @@
 .achievement-notice button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; text-align: start; width: 100%; min-height: 62px; padding: 10px 14px; background: none; border: 0; color: inherit; touch-action: none; }
 .achievement-notice button > svg, .achievement-notice button b { color: var(--achievement-tint, var(--accent)); }
 .achievement-notice button div { display: grid; gap: 2px; }
-.achievement-notice button span, .achievement-earned-row span, .achievement-earned-list span { color: var(--muted); font-size: 12px; }
+.achievement-rarity-label { color: var(--achievement-tint, var(--muted)); font-size: .75rem; font-weight: 750; }
 .achievement-notice-clock { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; fill: none; stroke: var(--achievement-tint, var(--accent)); stroke-width: 1.5px; stroke-dasharray: 1; vector-effect: non-scaling-stroke; animation: achievement-time 4s linear forwards; }
 @keyframes achievement-time { to { stroke-dashoffset: 1; } }
 [data-motion='off'] .achievement-notice-clock { animation: none; }
 @media (prefers-reduced-motion: reduce) { .achievement-notice-clock { animation: none; } }
-.achievement-earned-row { display: flex; align-items: baseline; gap: 8px; padding: 8px; min-height: 44px; border: 0; border-radius: 12px; background: var(--raised); text-align: start; }
-.achievement-earned-row b { color: var(--accent); margin-left: auto; }
+.report-metrics-card:has(> .achievement-earned-summary) { padding: 0; }
+.achievement-earned-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 8px 12px; border: 0; border-radius: inherit; background: transparent; text-align: start; font-size: .875rem; }
+.achievement-earned-summary > svg { width: 18px; color: var(--muted); }
+.achievement-earned-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--achievement-tint, var(--accent)); background: color-mix(in srgb, currentColor 13%, transparent); }
+.achievement-earned-icon svg { width: 19px; height: 19px; }
 .achievement-earned-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-.achievement-earned-list li { display: grid; gap: 4px; }
+.achievement-earned-card {
+  display: grid; gap: 8px; padding: 12px; border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--achievement-tint) 38%, var(--edge));
+  border-inline-start: 3px solid var(--achievement-tint);
+  background: color-mix(in srgb, var(--achievement-tint) 8%, var(--surface));
+}
+.achievement-earned-card:is([data-rarity="Epic"], [data-rarity="Legendary"], [data-rarity="Mythic"]) {
+  background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--achievement-tint) 19%, transparent), transparent 66%), var(--surface);
+}
+.achievement-earned-card:is([data-rarity="Legendary"], [data-rarity="Mythic"]) { box-shadow: inset 0 1px 14px color-mix(in srgb, var(--achievement-tint) 13%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="on"] .achievement-earned-card:is([data-rarity="Epic"], [data-rarity="Legendary"], [data-rarity="Mythic"]) {
+    animation: achievement-glow-in 440ms ease-out;
+  }
+}
+@keyframes achievement-glow-in {
+  from { box-shadow: inset 0 0 24px color-mix(in srgb, var(--achievement-tint) 33%, transparent); }
+}
+.achievement-earned-card header { display: flex; align-items: center; gap: 10px; }
+.achievement-earned-card header > div { display: grid; gap: 2px; }
+.achievement-earned-card small { color: var(--muted); }
+.achievement-earned-card .achievement-evidence-note { padding-block-start: 7px; border-top: 1px solid var(--edge); }
 .achievement-earned-list p { margin: 0; }
 .achievement-notice-setting { display: flex; align-items: center; gap: 8px; min-height: 44px; }

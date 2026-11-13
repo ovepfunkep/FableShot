@@ -4,11 +4,25 @@ import { ACHIEVEMENT_RARITY_LABELS, achievementRarityFor, achievementScopeLabel,
 import { stageRankBasisLabel } from './stage-rank-achievements.ts';
 import { groupAchievementGrants } from './achievement-ledger.ts';
 import type { AchievementGrant, AchievementGroup } from './achievement-ledger.ts';
+import { Icon } from './TrainingChrome.tsx';
 import './achievement-notices.css';
 
+const rarity = (grant: AchievementGrant) => achievementRarityFor(getAchievementDefinition(grant.id)!, grant.scope);
+
 function GrantTitle({ grant }: { grant: AchievementGrant }) {
-  const rule = getAchievementDefinition(grant.id)!;
-  return <><strong>{rule.title}</strong><span>{grant.valid === false ? 'Сейчас не подтверждено' : ACHIEVEMENT_RARITY_LABELS[achievementRarityFor(rule, grant.scope)]}</span></>;
+  return <><strong>{getAchievementDefinition(grant.id)!.title}</strong><span className="achievement-rarity-label">{ACHIEVEMENT_RARITY_LABELS[rarity(grant)]}</span></>;
+}
+
+function GrantList({ grants, flavor = false }: { grants: readonly AchievementGrant[]; flavor?: boolean }) {
+  return <ul className="achievement-earned-list">{grants.map(grant => {
+    const rule = getAchievementDefinition(grant.id)!;
+    return <li key={`${grant.id}:${grant.scope}`} className="achievement-earned-card" data-rarity={rarity(grant)}>
+      <header><span className="achievement-earned-icon"><Icon name="trophy" /></span><div><GrantTitle grant={grant} /></div></header>
+      <p>{flavor ? rule.flavor : rule.description}</p>
+      {grant.stageRank && <small>{achievementScopeLabel(grant.scope)} · {stageRankBasisLabel(grant.stageRank)}</small>}
+      {grant.valid === false && <small className="achievement-evidence-note">Награда получена раньше. Текущие записи больше не подтверждают её условие.</small>}
+    </li>;
+  })}</ul>;
 }
 
 export function AchievementNotice({ group, onNext, onShown }: { group: AchievementGroup; onNext: () => void; onShown: () => void }) {
@@ -25,7 +39,7 @@ export function AchievementNotice({ group, onNext, onShown }: { group: Achieveme
   }, [expanded]);
   return <>
     <aside className="achievement-notice" aria-label="Новое достижение" data-testid="achievement-notice"
-      data-rarity={achievementRarityFor(getAchievementDefinition(group.leading.id)!, group.leading.scope)}>
+      data-rarity={rarity(group.leading)}>
       <button type="button" aria-label="Подробнее о достижении" onClick={() => { if (!swiped.current) setExpanded(true); swiped.current = false; }}
         onPointerDown={event => { swiped.current = false; start.current = { x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); }}
         onPointerUp={event => {
@@ -42,28 +56,24 @@ export function AchievementNotice({ group, onNext, onShown }: { group: Achieveme
       </svg>}
     </aside>
     {expanded && <BottomSheet title="Полученные достижения" onClose={onNext}>
-      <ul className="achievement-earned-list">{[group.leading, ...group.additional].map(grant => <li key={grant.id}>
-        <GrantTitle grant={grant} /><p>{getAchievementDefinition(grant.id)?.flavor}</p>
-      </li>)}</ul>
+      <GrantList grants={[group.leading, ...group.additional]} flavor />
       <button type="button" className="primary" onClick={onNext}>Дальше</button>
     </BottomSheet>}
   </>;
 }
 
 export function SessionAchievements({ grants }: { grants: readonly AchievementGrant[] }) {
-  const [expanded, setExpanded] = useState<AchievementGroup | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const groups = groupAchievementGrants(grants);
   if (!groups.length) return null;
+  const earned = groups.flatMap(group => [group.leading, ...group.additional]);
   return <section className="report-metrics-card" data-testid="session-achievements">
-    <h3>Достижения тренировки</h3>
-    {groups.map(group => <button type="button" className="achievement-earned-row" key={group.key} onClick={() => setExpanded(group)}>
-      <GrantTitle grant={group.leading} />{!!group.additional.length && <b>+{group.additional.length}</b>}
-    </button>)}
-    {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(null)}>
-      <ul className="achievement-earned-list">{[expanded.leading, ...expanded.additional].map(grant => <li key={grant.id}>
-        <GrantTitle grant={grant} /><p>{getAchievementDefinition(grant.id)?.description}</p>
-        {grant.stageRank && <small>{achievementScopeLabel(grant.scope)} · {stageRankBasisLabel(grant.stageRank)}</small>}
-      </li>)}</ul>
+    <button type="button" className="achievement-earned-summary" aria-haspopup="dialog" onClick={() => setExpanded(true)}>
+      <span className="achievement-earned-icon"><Icon name="trophy" /></span>
+      <strong>Получено достижений: {earned.length}</strong><Icon name="right" />
+    </button>
+    {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(false)}>
+      <GrantList grants={earned} />
     </BottomSheet>}
   </section>;
 }
