@@ -62,7 +62,11 @@ import { MyTargetsImport } from './MyTargetsImport.tsx';
 import { withStorageOwner } from './storage-owner.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
-import { loadDiary, saveDiary } from './persistence.ts';
+import { loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
+import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
+import { roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
+import type { RoomMembership } from './group-room-membership.ts';
+import { GroupLeaderboard } from './GroupLeaderboard.tsx';
 import type { Diary, DiaryEntry } from './persistence.ts';
 import { advanceSeries, appendShot, applyConditions, attachProgressBaseline, bindTechnique, completePractice, currentSeries, deleteRound, deleteSeries,
   emptyPractice, findSeries, isRoundFull, removeShot, replaceShot, resumePractice,
@@ -115,7 +119,10 @@ function App() {
   const [reportBack, setReportBack] = useState<'journal' | 'training' | 'profile' | 'records' | 'best-ranks' | 'notebook' | 'tournaments'>('journal');
   const [ranksBack, setRanksBack] = useState<'records' | 'profile'>('records');
   const [reportTrail, setReportTrail] = useState<string[]>([]);
-  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report'>('training');
+  const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report' | 'settings'>('training');
+  const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
+  const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
+  const syncingRoom = useRef(false);
   const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
   const [setupMemo, setSetupMemo] = useState<TechniqueSelection | null>(null);
   const [historyFilters, setHistoryFilters] = useState(DEFAULT_HISTORY_FILTERS);
@@ -199,6 +206,25 @@ function App() {
     writeDiary(previous => awardServiceAction(previous, id, new Date().toISOString(), trainingId));
   }
 
+  useEffect(() => {
+    if (!supportsLocalRoom()) return;
+    const retry = async () => {
+      if (syncingRoom.current || document.visibilityState !== 'visible') return;
+      const pending = diaryRef.current?.groupSeries?.filter(journal => pendingGroupSeries(journal).length) ?? [];
+      if (!pending.length) return;
+      syncingRoom.current = true;
+      try {
+        for (const journal of pending) {
+          try { await sendPendingGroupSeries(journal.entryId, roomTransport(journal.entryId), () => diaryRef.current, writeDiary); }
+          catch { /* No receipt was stored. The next attempt will retry the latest revision. */ }
+        }
+      } finally { syncingRoom.current = false; }
+    };
+    const timer = window.setInterval(() => void retry(), 4000);
+    window.addEventListener('online', retry);
+    return () => { window.clearInterval(timer); window.removeEventListener('online', retry); };
+  }, []);
+
   async function recordPublication({ documentId, content }: { documentId: string; content: string }) {
     const epoch = diaryRef.current?.achievementLedger?.epoch;
     try {
@@ -229,7 +255,7 @@ function App() {
         ? startTrainingTime(Date.now(), entry.trainingTime, true)
         : practice.savedAt !== null && entry.practice.savedAt === null && entry.trainingTime
           ? stopTrainingTime(entry.trainingTime, Date.parse(practice.savedAt)) : entry.trainingTime;
-      return { ...previous, ...(rememberSetup && { lastSetup: trainingSetup(practice) }), entries: previous.entries.flatMap(item => item.id !== entry.id ? [item]
+      return { ...updateGroupSeriesInDiary(previous, entry.id, practice), ...(rememberSetup && { lastSetup: trainingSetup(practice) }), entries: previous.entries.flatMap(item => item.id !== entry.id ? [item]
         : remove && !notes?.length ? [] : [{ ...item, practice,
           ...(entry.practice.savedAt !== null && practice.savedAt === null && item.personalRecords === undefined ? { personalRecords: [] } : {}),
           ...(notes ? { notes } : {}), ...(trainingTime ? { trainingTime } : {}) }]) };
@@ -265,6 +291,8 @@ function App() {
   const entries = state.diary?.entries ?? [];
   const tournaments = state.diary?.tournaments ?? [];
   const entry = entries.find(item => item.id === sessionId);
+  const roomJournal = state.diary?.groupSeries?.find(item => item.trainingId === sessionId);
+  const pendingRoomCount = roomJournal ? pendingGroupSeries(roomJournal).length : 0;
   const ongoing = entries.find(item => item.practice.savedAt === null && !item.paused && !item.deletedAt);
   const paused = entries.filter(item => item.paused && !item.deletedAt).sort(compareDiaryDate)[0];
   const recent = useMemo(() => entries.filter(item => item.practice.savedAt !== null && !item.deletedAt)
@@ -324,12 +352,18 @@ function App() {
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
       achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
         stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION } };
+    if (roomSetup) {
+      try { saveRoomMembership(roomSetup); }
+      catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
+    }
     if (!writeDiary(previous => {
       const draft = { ...previous, achievementLedger, lastSetup: trainingSetup(next), entries: [...previous.entries, item] };
+      if (roomSetup) draft.groupSeries = [...(previous.groupSeries ?? []), { ...newGroupSeriesJournal(roomSetup.roomId, roomSetup.entryId, item.practice), trainingId: id }];
       return tournament ? linkTournamentSession(draft, tournament, id) : draft;
     })) return false;
     setSetupMemo(null);
     setRepeatSetup(null);
+    setRoomSetup(null);
     selectEntry(item, 'training');
     return true;
   }
@@ -650,6 +684,7 @@ function App() {
   function leaveConditions() {
     setSetupMemo(null);
     setRepeatSetup(null);
+    setRoomSetup(null);
     setPage(conditionsBack);
   }
   useAppBack(showingOnboarding || page !== 'journal' || tab !== 'home', () => {
@@ -763,8 +798,12 @@ function App() {
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
-    localRoom={Capacitor.isPluginAvailable('LocalRoomProbe') || window.location.origin === 'https://ovepfunkep.github.io'
-      ? <Suspense fallback={<p>Открываем проверку связи…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')} /></Suspense> : undefined}
+    localRoom={supportsLocalRoom()
+      ? <Suspense fallback={<p>Открываем проверку связи…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
+        onTraining={!ongoing && state.diary ? membership => {
+          setRoomSetup(membership); setSetupMemo(null); setRepeatSetup(null); setSessionId(null);
+          setConditionsBack('settings'); setPage('conditions');
+        } : undefined} /></Suspense> : undefined}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
@@ -902,7 +941,12 @@ function App() {
       {seriesEditor ? <div className="series-editor-heading">
         <h1>{editing ? `Стрела ${editing.index + 1}` : 'Редактор серии'}</h1>
         <span>Раунд {practice.rounds.indexOf(round) + 1} · серия {round.series.indexOf(series) + 1}</span>
-      </div> : <h1>{editing ? `Стрела ${editing.index + 1}` : 'Тренировка'}</h1>}
+      </div> : <div className="series-editor-heading">
+        <h1>{editing ? `Стрела ${editing.index + 1}` : 'Тренировка'}</h1>
+        {roomJournal && <output className="room-sync-status" aria-live="polite" data-testid="room-sync-status">
+          {pendingRoomCount ? `В очереди · ${pendingRoomCount}` : 'Групповая'}
+        </output>}
+      </div>}
       {seriesEditor && <button type="button" className="icon-button" aria-label="Заметки серии"
         onClick={() => { if (saveEdit(true)) setNotesScope({ seriesId: series.id }); }}><Icon name="notes" /></button>}
       {!seriesEditor && <>
@@ -914,6 +958,13 @@ function App() {
         onClick={() => { if (saveEdit()) { if (!completed) setReportBack('training'); setPage('report'); } }}><Icon name="stats" /></button>
       </>}
     </header>
+    {roomJournal && !seriesEditor && <button type="button" className="secondary room-leaderboard-open" onClick={() => {
+      if (saveEdit()) setRoomLeaderboardOpen(true);
+    }}>Таблица комнаты</button>}
+    {roomJournal && roomLeaderboardOpen && <GroupLeaderboard key={roomJournal.entryId} entryId={roomJournal.entryId}
+      mySeries={roomJournal.ends.find(end => end.endId === series.id)?.ordinal ??
+        Math.max(1, roomJournal.ends.length + Number(series.shots.length > 0))}
+      onClose={() => setRoomLeaderboardOpen(false)} />}
     {!seriesEditor && <TrainingSummary roundNumber={practice.rounds.indexOf(round) + 1}
       seriesNumber={`${round.series.indexOf(series) + 1}${practice.roundRule.unit === 'series' ? `/${practice.roundRule.limit}` : ''}`}
       roundShots={roundShown} seriesShots={shots} onRound={() => openPicker('round')} onSeries={() => openPicker('series')}

@@ -1,18 +1,11 @@
-import { registerPlugin } from '@capacitor/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import qrCode from 'qrcode-generator';
 import jsQR from 'jsqr';
 import { checkBrowserRoom } from './browser-room-probe.ts';
+import { createRoomMembership, roomBridge as probe } from './group-room-membership.ts';
+import type { RoomMembership, RoomStatus } from './group-room-membership.ts';
 import './local-room-probe.css';
 
-type RoomStatus = { invitation?: string; checks?: number };
-const probe = registerPlugin<{
-  addresses(): Promise<{ addresses: string[] }>;
-  start(options: { address: string }): Promise<RoomStatus>;
-  status(): Promise<RoomStatus>;
-  check(options: { invitation: string }): Promise<{ milliseconds: number }>;
-  stop(): Promise<void>;
-}>('LocalRoomProbe');
 
 function InviteScanner({ onScan, onError }: { onScan: (value: string) => void; onError: (message: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -64,11 +57,12 @@ function InvitationQr({ invitation }: { invitation: string }) {
   return <img className="room-probe-qr" src={qr.createDataURL(5, 20)} alt="QR приглашения в комнату" />;
 }
 
-export default function LocalRoomProbe({ native }: { native: boolean }) {
+export default function LocalRoomProbe({ native, onTraining }: { native: boolean; onTraining?: (membership: RoomMembership) => void }) {
   const [addresses, setAddresses] = useState<string[]>([]);
   const [address, setAddress] = useState('');
   const [room, setRoom] = useState<RoomStatus>({});
   const [invitation, setInvitation] = useState('');
+  const [verified, setVerified] = useState('');
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -86,7 +80,10 @@ export default function LocalRoomProbe({ native }: { native: boolean }) {
 
   useEffect(() => {
     alive.current = true;
-    return () => { alive.current = false; if (native) void probe.stop().catch(() => undefined); };
+    if (native) void probe.status().then(result => { if (alive.current) setRoom(result); }, () => {
+      if (alive.current) setError('Не удалось прочитать состояние комнаты.');
+    });
+    return () => { alive.current = false; };
   }, [native]);
 
   useEffect(() => {
@@ -119,6 +116,11 @@ export default function LocalRoomProbe({ native }: { native: boolean }) {
         <InvitationQr invitation={room.invitation} />
         <label>Код приглашения<input readOnly value={room.invitation} onFocus={event => event.currentTarget.select()} /></label>
         <p>Успешных проверок · {room.checks ?? 0}</p>
+        <p>Принято серий · {room.acceptedSeries ?? 0}</p>
+        {onTraining && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+          const membership = await createRoomMembership(room.invitation!);
+          if (alive.current) onTraining(membership);
+        })}>Начать групповую тренировку</button>}
         <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => { await probe.stop(); setRoom({}); })}>Закрыть комнату</button>
       </> : <>
         <p>Включите точку доступа в настройках телефона и вернитесь сюда.</p>
@@ -152,10 +154,16 @@ export default function LocalRoomProbe({ native }: { native: boolean }) {
         setScanning(false);
         void run(async () => {
           const code = invitation.trim();
+          setVerified('');
           const result = await (native ? probe.check({ invitation: code }) : checkBrowserRoom(code));
+          setVerified(code);
           setMessage(`Комната ответила за ${result.milliseconds} мс.`);
         });
       }}>Проверить связь</button>
+      {onTraining && verified && verified === invitation.trim() && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
+        const membership = await createRoomMembership(verified);
+        if (alive.current) onTraining(membership);
+      })}>Начать групповую тренировку</button>}
     </div>}
     {message && <p role="status">{message}</p>}
     {error && <p role="alert" className="room-probe-error">{error}</p>}

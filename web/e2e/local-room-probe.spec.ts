@@ -1,15 +1,68 @@
 import { expect, test } from '@playwright/test';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac, createPublicKey, verify } from 'node:crypto';
+
+test('Android group training keeps its series queued during an outage and sends it after reconnecting', async ({ page }) => {
+  const invitation = 'FS1:192.168.43.1:25000:' + 'a'.repeat(32);
+  const uploads: { endId: number; revision: number; result: { scores: string } }[] = [];
+  await page.exposeFunction('acceptGroupSeries', ({ payload, publicKey, signature }: { payload: string; publicKey: string; signature: string }) => {
+    const operation = JSON.parse(payload);
+    const key = Buffer.from(publicKey, 'base64');
+    expect(operation.entryId).toBe(createHash('sha256').update(key).digest('hex'));
+    expect(verify('sha256', Buffer.from(payload), createPublicKey({ key, format: 'der', type: 'spki' }), Buffer.from(signature, 'base64'))).toBe(true);
+    uploads.push(operation);
+    if (uploads.length === 1) return null;
+    return { endId: operation.endId, revision: operation.revision };
+  });
+  await page.addInitScript(invite => {
+    Object.assign(window, { androidBridge: {}, Capacitor: {
+      PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'publish', 'snapshot'].map(name => ({ name, rtype: 'promise' })) }],
+      nativePromise: async (_plugin: string, method: string, options?: { payload: string; publicKey: string; signature: string }) => {
+        if (method === 'status') return { invitation: invite, checks: 1 };
+        if (method === 'snapshot') return { series: [
+          { entryId: 'a'.repeat(64), ordinal: 1, result: { points: 22, arrows: 3, bowCategory: 'barebow' } },
+          { entryId: 'a'.repeat(64), ordinal: 2, result: { points: 25, arrows: 3, bowCategory: 'barebow' } },
+        ] };
+        const result = await (window as unknown as { acceptGroupSeries(operation: typeof options): Promise<unknown> }).acceptGroupSeries(options);
+        if (!result) throw new Error('Нет связи');
+        return result;
+      },
+    } });
+  }, invitation);
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-local-room').click();
+  await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+  await page.getByTestId('start-training').click();
+  await page.getByRole('button', { name: 'Отметить промах' }).click();
+  await page.getByTestId('next-end').click();
+  const status = page.getByTestId('room-sync-status');
+  await expect(status).toHaveText('В очереди · 1');
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => uploads.length).toBe(1);
+  await expect(status).toHaveText('В очереди · 1');
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(status).toHaveText('Групповая');
+  expect(uploads).toHaveLength(2);
+  expect(uploads[0]).toEqual(uploads[1]);
+  expect(uploads[0].result.scores).toBe('0');
+  await page.getByRole('button', { name: 'Таблица комнаты' }).click();
+  await expect(page.getByRole('cell', { name: '22/30', exact: true })).toHaveCount(2);
+  await page.getByLabel('Серия', { exact: true }).selectOption('2');
+  await expect(page.getByRole('cell', { name: '47/60' })).toBeVisible();
+});
 
 test('Android probe exposes a QR and supports retrying a failed invitation', async ({ page }) => {
   const invitation = 'FS1:192.168.43.1:25000:' + 'a'.repeat(32);
   await page.addInitScript(invite => {
+    let created = false;
     Object.assign(window, { androidBridge: {}, Capacitor: {
       PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['addresses', 'start', 'status', 'stop', 'check']
         .map(name => ({ name, rtype: 'promise' })) }],
       nativePromise: async (_plugin: string, method: string, options?: { invitation?: string }) => {
         if (method === 'addresses') return { addresses: ['192.168.43.1'] };
-        if (method === 'start' || method === 'status') return { invitation: invite, checks: 1 };
+        if (method === 'start') created = true;
+        if (method === 'stop') created = false;
+        if (method === 'start' || method === 'status') return created ? { invitation: invite, checks: 1 } : {};
         if (method === 'check') {
           if (options?.invitation !== invite) throw new Error('Нет ответа от комнаты.');
           return { milliseconds: 42 };

@@ -95,7 +95,7 @@ try {
 $nativeSource = Join-Path $webRoot 'native/android'
 $nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.Replace('.', '/'))
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
-foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java')) {
+foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java', 'LocalRoomSeriesStore.java')) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
     $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")

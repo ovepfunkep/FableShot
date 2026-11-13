@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,7 +24,8 @@ import java.util.concurrent.Executors;
 public class LocalRoomProbePlugin extends Plugin {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private LocalRoomProbe room;
-    private String invitation;
+    private LocalRoomSeriesStore store;
+    private volatile String invitation;
 
     @PluginMethod
     public void addresses(PluginCall call) {
@@ -51,7 +53,10 @@ public class LocalRoomProbePlugin extends Plugin {
             InetAddress address = parseAddress(call.getString("address"));
             if (NetworkInterface.getByInetAddress(address) == null) throw new IOException("Address is no longer assigned");
             byte[] secret = LocalRoomProbe.randomBytes(24);
-            LocalRoomProbe created = new LocalRoomProbe(address, secret);
+            LocalRoomSeriesStore createdStore = new LocalRoomSeriesStore(getContext(), secret);
+            boolean preview = (getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+            LocalRoomProbe created = new LocalRoomProbe(address, secret, createdStore::receive, preview);
+            store = createdStore;
             room = created;
             invitation = "FS1:" + address.getHostAddress() + ":" + created.port() + ":"
                 + Base64.encodeToString(secret, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
@@ -63,8 +68,42 @@ public class LocalRoomProbePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void publish(PluginCall call) {
+        exchange(call, false);
+    }
+
+    @PluginMethod
+    public void snapshot(PluginCall call) {
+        exchange(call, true);
+    }
+
+    private void exchange(PluginCall call, boolean snapshot) {
+        worker.execute(() -> {
+            String value = call.getString("invitation", "");
+            if (!value.matches("FS1:[0-9.]{7,15}:[1-9][0-9]{0,4}:[A-Za-z0-9_-]{32}")) {
+                call.reject("Приглашение в комнату недоступно.");
+                return;
+            }
+            String[] fields = value.split(":");
+            int port = Integer.parseInt(fields[2]);
+            try (Socket socket = value.equals(invitation) ? new Socket() : wifiSocket()) {
+                if (port > 65535) throw new IOException("Invalid port");
+                JSObject frame = snapshot ? new JSObject().put("action", "snapshot") : new JSObject()
+                    .put("payload", call.getString("payload", ""))
+                    .put("publicKey", call.getString("publicKey", "")).put("signature", call.getString("signature", ""));
+                byte[] request = frame.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] reply = LocalRoomProbe.exchange(socket, parseAddress(fields[1]), port, Base64.decode(fields[3], Base64.URL_SAFE), request);
+                call.resolve(new JSObject(new String(reply, StandardCharsets.UTF_8)));
+            } catch (IOException | org.json.JSONException error) {
+                call.reject(snapshot ? "Комната недоступна. Проверьте Wi-Fi." : "Комната не подтвердила сохранение. Серия осталась в очереди.");
+            }
+        });
+    }
+
+    @PluginMethod
     public synchronized void status(PluginCall call) {
-        call.resolve(room == null ? new JSObject() : new JSObject().put("invitation", invitation).put("checks", room.checks()));
+        call.resolve(room == null ? new JSObject() : new JSObject().put("invitation", invitation).put("checks", room.checks())
+            .put("acceptedSeries", store.acceptedSeries()));
     }
 
     @PluginMethod
@@ -133,7 +172,9 @@ public class LocalRoomProbePlugin extends Plugin {
 
     private synchronized void closeRoom() {
         if (room != null) room.close();
+        if (store != null) store.close();
         room = null;
+        store = null;
         invitation = null;
     }
 

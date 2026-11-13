@@ -21,6 +21,8 @@ import { isTechniqueSelection } from './technique.ts';
 import { isTechniqueReflections } from './technique-reflection.ts';
 import { validNumberedCount } from './equipment.ts';
 import { isProgressBaseline, progressConditionKey } from './progress-scoring.ts';
+import { acknowledgeGroupSeries, flushGroupSeries, isGroupSeriesJournal, trackGroupSeries } from './group-series.ts';
+import type { GroupSeriesJournal, GroupSeriesTransport } from './group-series.ts';
 
 const legacyPracticeKey = 'app.fableshot.practice-pilot.v1';
 const previousPracticeKey = 'app.fableshot.practice-pilot.v2';
@@ -33,7 +35,7 @@ export type NativeArchiveReference = { sha256: string; bytes: number };
 export const NATIVE_ARCHIVE_BYTE_LIMIT = 64 * 1024 * 1024;
 export type TrainingSetup = { conditions: Conditions; rule: RoundRule; numberedArrows: boolean | null };
 export type Diary = { version: 1; entries: DiaryEntry[]; achievementLedger?: AchievementLedger; nativeArchive?: NativeArchiveReference;
-  notes?: DiaryNote[]; lastSetup?: TrainingSetup; tournaments?: Tournament[] };
+  notes?: DiaryNote[]; lastSetup?: TrainingSetup; tournaments?: Tournament[]; groupSeries?: GroupSeriesJournal[] };
 
 type LegacyPractice = {
   shots: Shot[];
@@ -175,8 +177,11 @@ export function savePractice(value: Practice): void {
 
 export function isDiary(value: unknown): value is Diary {
   if (!value || typeof value !== 'object') return false;
-  const { version, entries, achievementLedger, nativeArchive, notes, lastSetup, tournaments } = value as Partial<Diary>;
+  const { version, entries, achievementLedger, nativeArchive, notes, lastSetup, tournaments, groupSeries } = value as Partial<Diary>;
   if (version !== 1 || !Array.isArray(entries) || achievementLedger !== undefined && !isAchievementLedger(achievementLedger)) return false;
+  if (groupSeries !== undefined && (!Array.isArray(groupSeries) || !groupSeries.every(isGroupSeriesJournal) ||
+    new Set(groupSeries.map(journal => journal.trainingId ?? journal.entryId)).size !== groupSeries.length ||
+    new Set(groupSeries.map(journal => journal.entryId)).size !== groupSeries.length)) return false;
   if (lastSetup !== undefined && (!lastSetup || !isConditions(lastSetup.conditions) || !isRoundRule(lastSetup.rule) ||
     (lastSetup.numberedArrows !== null && typeof lastSetup.numberedArrows !== 'boolean'))) return false;
   if (notes !== undefined && (!isDiaryNotes(notes) || notes.some(note => note.seriesId !== undefined || note.conditionKey !== undefined))) return false;
@@ -232,4 +237,30 @@ export function saveDiary(next: Diary, previous: Diary): void {
   const current = loadDiary(previous.entries.find(entry => entry.id === 'pilot')?.startedAt);
   if (JSON.stringify(current) !== JSON.stringify(previous)) throw new Error('Дневник изменён в другом окне. Открой приложение заново.');
   appStorage.setItem(DIARY_KEY, JSON.stringify(next));
+}
+
+/** Outbox changes are committed atomically with the practice edit that produced them. */
+export function updateGroupSeriesInDiary(diary: Diary, entryId: string, practice: Practice): Diary {
+  const journal = diary.groupSeries?.find(item => (item.trainingId ?? item.entryId) === entryId);
+  if (!journal) return diary;
+  const updated = trackGroupSeries(journal, practice);
+  if (updated === journal) return diary;
+  return { ...diary, groupSeries: diary.groupSeries!.map(item => item === journal ? updated : item) };
+}
+
+/** Use the current diary for each receipt so an edit made during upload stays queued. */
+export async function sendPendingGroupSeries(entryId: string, transport: GroupSeriesTransport,
+  read: () => Diary | null, write: (change: (diary: Diary) => Diary) => boolean): Promise<void> {
+  const journal = read()?.groupSeries?.find(item => item.entryId === entryId);
+  if (!journal) return;
+  await flushGroupSeries(journal, transport, receipt => {
+    const saved = write(diary => {
+      const current = diary.groupSeries?.find(item => item.entryId === entryId && item.roomId === journal.roomId);
+      if (!current) return diary;
+      const updated = acknowledgeGroupSeries(current, receipt);
+      if (updated === current) return diary;
+      return { ...diary, groupSeries: diary.groupSeries!.map(item => item === current ? updated : item) };
+    });
+    if (!saved) throw new Error('Не удалось сохранить подтверждение комнаты.');
+  });
 }

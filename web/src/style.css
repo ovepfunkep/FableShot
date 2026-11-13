@@ -147,3 +147,18 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   .arrow-entering, .score-change { animation: none; }
 }
+.room-sync-status {
+  display: block;
+  color: var(--muted);
+  font-size: .75rem;
+}
+.room-leaderboard-open { align-self: end; margin: 0 12px 6px; }
+.room-leaderboard { display: grid; gap: 12px; }
+.room-leaderboard-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.room-leaderboard-filters label { display: grid; gap: 4px; }
+.room-leaderboard-filters select { min-width: 0; min-height: 44px; background: var(--surface); color: var(--text); }
+.room-leaderboard table { border-collapse: collapse; text-align: end; }
+.room-leaderboard th:first-child { text-align: start; }
+.room-leaderboard td, .room-leaderboard th { padding: 8px 5px; border-bottom: 1px solid var(--edge); }
+.room-leaderboard small { display: block; color: var(--muted); font-weight: normal; }
+.room-leaderboard tr[data-own="true"] { color: var(--accent); }

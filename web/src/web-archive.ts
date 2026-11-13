@@ -82,7 +82,8 @@ export function validateArchiveRecords(records: unknown): ArchiveSummary {
 export function captureArchiveRecords(): DataRecords {
   const records = Object.fromEntries(DATA_KEYS.map(key => [key, appStorage.getItem(key)]));
   // Normalize the read-only legacy fallback, without modifying its original key.
-  records[DIARY_KEY] = JSON.stringify(loadDiary());
+  const { groupSeries: _pendingRoomOperations, ...diary } = loadDiary();
+  records[DIARY_KEY] = JSON.stringify(diary);
   validateArchiveRecords(records);
   return records;
 }
