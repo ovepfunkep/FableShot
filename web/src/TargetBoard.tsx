@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput } from './target.ts';
-import type { Point, Shot, TargetSpec } from './target.ts';
-import { clampTargetZoom, MAX_TARGET_ZOOM, TargetZoom } from './TargetZoom.tsx';
+import type { Point, Shot, TargetSpec, TargetSpot } from './target.ts';
+import { clampTargetZoom, MAX_TARGET_ZOOM, MovableTargetZoom, TargetZoom } from './TargetZoom.tsx';
 
 type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
 type ZoomScope = 'training' | 'editor';
-type Aim = { point: Point; screen: Point; radius: number };
+type Aim = { point: Point; spot?: TargetSpot; screen: Point };
 type Gesture = { pointers: Map<number, Point>; aimId: number | null; multi: boolean; timer: number | null;
   blocked: { id: number; origin: Point } | null };
 
@@ -59,6 +59,57 @@ function paintFace(ctx: CanvasRenderingContext2D, center: Point, radius: number,
   }
 }
 
+function paintSeries(ctx: CanvasRenderingContext2D, center: Point, radius: number, spec: TargetSpec,
+  shots: readonly Shot[], selectedIndex?: number | null, realArrowDiameter?: number) {
+  const profile = getTargetProfile(spec.profileId)!;
+  for (const offset of spotOffsets(profile)) paintFace(ctx, { x: center.x, y: center.y + offset * radius }, radius, spec, true);
+
+  function paintShot(shot: Shot, index: number, selected: boolean) {
+    const local = shot.point ?? shot.missPoint;
+    if (!local) return;
+    const position = spotPoint(local, shot.spot);
+    const x = center.x + position.x * radius;
+    const y = center.y + position.y * radius;
+    if (realArrowDiameter && !shot.missPoint) {
+      const footprint = radius * realArrowDiameter / spec.diameterMm;
+      if (selected) {
+        circle(ctx, x, y, Math.max(8, footprint + 3));
+        ctx.strokeStyle = '#c6f43d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      circle(ctx, x, y, footprint);
+      ctx.fillStyle = '#14200d';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = Math.min(1, footprint / 2);
+      ctx.stroke();
+      return;
+    }
+    if (selected) {
+      circle(ctx, x, y, 13);
+      ctx.fillStyle = '#101510';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    circle(ctx, x, y, 9);
+    ctx.fillStyle = shot.missPoint ? '#536052' : '#14200d';
+    ctx.fill();
+    ctx.lineWidth = selected ? 3 : 2;
+    ctx.strokeStyle = selected ? '#c6f43d' : '#fff';
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(index + 1), x, y);
+  }
+  shots.forEach((shot, index) => { if (index !== selectedIndex) paintShot(shot, index, false); });
+  if (selectedIndex != null && shots[selectedIndex]) paintShot(shots[selectedIndex], selectedIndex, true);
+}
+
 function canvasContext(canvas: HTMLCanvasElement, width: number, height: number) {
   const ratio = Math.min(window.devicePixelRatio || 1, 3);
   const pixelWidth = Math.max(1, Math.round(width * ratio));
@@ -83,15 +134,20 @@ export function TargetPreview({ profileId }: { profileId: string }) {
   return <canvas ref={canvas} className="target-preview" aria-hidden="true" />;
 }
 
-function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
+function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }: {
+  aim: Aim; baseRadius: number; spec: TargetSpec; shots: readonly Shot[];
+  selectedIndex?: number | null; realArrowDiameter?: number;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const hit = scorePoint(aim.point, spec);
   const scale = Number(document.documentElement.style.getPropertyValue('--app-scale')) || 1;
   useLayoutEffect(() => {
     const ctx = canvas.current && canvasContext(canvas.current, 124, 112);
     if (!ctx) return;
-    const radius = aim.radius * 2.5 / scale;
-    paintFace(ctx, { x: 62 - aim.point.x * radius, y: 56 - aim.point.y * radius }, radius, spec, true);
+    const radius = baseRadius * 2.5 / scale;
+    const point = spotPoint(aim.point, aim.spot);
+    const center = { x: 62 - point.x * radius, y: 56 - point.y * radius };
+    paintSeries(ctx, center, radius, spec, shots, selectedIndex, realArrowDiameter);
     circle(ctx, 62, 56, radius * shaftRadius(spec));
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#152016';
@@ -99,7 +155,7 @@ function Lens({ aim, spec }: { aim: Aim; spec: TargetSpec }) {
     ctx.lineWidth = 1.3;
     ctx.strokeStyle = '#fff';
     ctx.stroke();
-  }, [aim, scale, spec]);
+  }, [aim, baseRadius, scale, spec, shots, selectedIndex, realArrowDiameter]);
   const left = clamp(aim.screen.x / scale - 62, 8, Math.max(8, window.innerWidth / scale - 132));
   const top = Math.max(8, aim.screen.y / scale - 176);
   const color = zoneColor(hit.points);
@@ -153,52 +209,8 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     if (!ctx) return;
     const radius = baseRadius * view.zoom;
     const center = { x: size.width / 2 + view.x, y: size.height / 2 + view.y };
-    for (const offset of spotOffsets(profile)) paintFace(ctx, { x: center.x, y: center.y + offset * radius }, radius, spec, true);
-    function paintShot(shot: Shot, index: number, selected: boolean) {
-      const local = shot.point ?? shot.missPoint;
-      if (!local || !ctx) return;
-      const position = spotPoint(local, shot.spot);
-      const x = center.x + position.x * radius;
-      const y = center.y + position.y * radius;
-      if (realArrowDiameter && !shot.missPoint) {
-        const footprint = radius * realArrowDiameter / spec.diameterMm;
-        if (selected) {
-          circle(ctx, x, y, Math.max(8, footprint + 3));
-          ctx.strokeStyle = '#c6f43d';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-        circle(ctx, x, y, footprint);
-        ctx.fillStyle = '#14200d';
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = Math.min(1, footprint / 2);
-        ctx.stroke();
-        return;
-      }
-      if (selected) {
-        circle(ctx, x, y, 13);
-        ctx.fillStyle = '#101510';
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      circle(ctx, x, y, 9);
-      ctx.fillStyle = shot.missPoint ? '#536052' : '#14200d';
-      ctx.fill();
-      ctx.lineWidth = selected ? 3 : 2;
-      ctx.strokeStyle = selected ? '#c6f43d' : '#fff';
-      ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.font = '700 11px system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(index + 1), x, y);
-    }
-    shots.forEach((shot, index) => { if (index !== selectedIndex) paintShot(shot, index, false); });
-    if (selectedIndex != null && shots[selectedIndex]) paintShot(shots[selectedIndex], selectedIndex, true);
-  }, [size, view, shots, selectedIndex, spec, realArrowDiameter, baseRadius, profile]);
+    paintSeries(ctx, center, radius, spec, shots, selectedIndex, realArrowDiameter);
+  }, [size, view, shots, selectedIndex, spec, realArrowDiameter, baseRadius]);
 
   function changeView(zoom: number, x: number, y: number) {
     const limit = baseRadius * (panOnly ? zoom : zoom - 1);
@@ -235,10 +247,10 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
   }
 
   function showAim(position: Point) {
-    const { point } = normalized(position);
+    const { point, spot } = normalized(position);
     const rect = surface.current?.getBoundingClientRect();
     setAim(rect && isOnTargetInput(point, spec)
-      ? { point, screen: { x: rect.left + position.x, y: rect.top + position.y }, radius: baseRadius * viewRef.current.zoom } : null);
+      ? { point, spot, screen: { x: rect.left + position.x, y: rect.top + position.y } } : null);
   }
 
   function start(event: ReactPointerEvent<HTMLDivElement>) {
@@ -319,14 +331,21 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, naviga
     rememberZoom();
   }
 
+  function resetZoom() {
+    changeView(1, 0, 0);
+    rememberZoom();
+  }
+
+  const Zoom = zoomScope ? MovableTargetZoom : TargetZoom;
   return <section className="target-stage" aria-label="Отметка попаданий">
     <div ref={surface} className="target-surface" data-testid="target" data-target-profile={spec.profileId}
       onPointerDown={start} onPointerMove={move} onPointerUp={event => end(event, true)}
       onPointerCancel={event => end(event, false)} onLostPointerCapture={event => end(event, false)}>
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
     </div>
-    <TargetZoom zoom={view.zoom} onStep={zoomBy} onReset={() => { changeView(1, 0, 0); rememberZoom(); }} />
+    <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />
     {navigation}
-    {aim && <Lens aim={aim} spec={spec} />}
+    {aim && <Lens aim={aim} baseRadius={baseRadius} spec={spec} shots={shots}
+      selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;
 }

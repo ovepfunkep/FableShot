@@ -8,7 +8,7 @@ import { acceptsDiameter, getTargetProfile, summarize } from './target.ts';
 export type PersonalRecordEvent = {
   id: string;
   sessionId: string;
-  kind: 'series' | 'volume' | 'rank';
+  kind: 'series' | 'round' | 'volume' | 'rank';
   ruleVersion: 1;
   label: string;
   previousValue: number;
@@ -34,6 +34,7 @@ export type PersonalSeriesRecord = {
 };
 
 type SeriesCandidate = PersonalSeriesRecord & { key: string; sourceOrder: number };
+export type PersonalRoundRecord = Omit<PersonalSeriesRecord, 'seriesId' | 'seriesNumber'> & { roundId: number; key: string; format: string };
 type VolumeRecord = { entry: DiaryEntry; count: number };
 const compareText = (a: string, b: string) => a < b ? -1 : Number(a > b);
 const compareDates = (a: string | null, b: string | null) =>
@@ -50,7 +51,7 @@ export function isPersonalRecordEvent(value: unknown): value is PersonalRecordEv
   const event = value as Partial<PersonalRecordEvent>;
   return identifier(event.id) && identifier(event.sessionId) && identifier(event.previousSessionId) &&
     event.sessionId !== event.previousSessionId && event.ruleVersion === 1 &&
-    (event.kind === 'series' || event.kind === 'volume' || event.kind === 'rank') &&
+    (event.kind === 'series' || event.kind === 'round' || event.kind === 'volume' || event.kind === 'rank') &&
     typeof event.label === 'string' && event.label.trim().length > 0 && event.label.length <= 5000 &&
     score(event.previousValue) && score(event.value) && event.value > event.previousValue &&
     timestamp(event.recordedAtMs) && (event.notifiedAtMs === null || timestamp(event.notifiedAtMs)) &&
@@ -100,6 +101,39 @@ function bestSeries(records: readonly SeriesCandidate[]): SeriesCandidate[] {
 
 export function personalSeriesRecords(entries: readonly DiaryEntry[]): PersonalSeriesRecord[] {
   return bestSeries(entries.flatMap(fullSeries)).map(({ key: _key, sourceOrder: _order, ...record }) => record);
+}
+
+export function fullRoundRecords(entry: DiaryEntry): PersonalRoundRecord[] {
+  if (entry.deletedAt || entry.practice.savedAt === null) return [];
+  const { unit, limit } = entry.practice.roundRule;
+  if (unit === 'unlimited' || !limit) return [];
+  return entry.practice.rounds.flatMap((round, index) => {
+    const series = round.series.filter(item => item.shots.length);
+    const conditions = series[0]?.conditions;
+    const profile = conditions && getTargetProfile(conditions.targetProfileId);
+    if (!conditions || !profile || !acceptsDiameter(profile, conditions.targetDiameterMm) ||
+      !conditions.equipment?.bow.category) return [];
+    const shots = series.flatMap(item => item.shots);
+    if ((unit === 'arrows' ? shots.length : series.length) !== limit) return [];
+    const key = snapshotKey(conditions, shots.length);
+    if (series.some(item => snapshotKey(item.conditions, shots.length) !== key ||
+      unit === 'series' && item.shots.length !== (item.plannedCount ?? Math.max(3, item.shots.length)))) return [];
+    return [{ sessionId: entry.id, roundId: round.id, roundNumber: index + 1, date: timelineDate(entry),
+      points: summarize(shots).points, maximum: shots.length * Math.max(...profile.zones.map(zone => zone.points)),
+      conditions, arrows: shots.length, targetTitle: profile.title, equipmentTitle: conditions.equipment.name,
+      key: JSON.stringify([key, unit, limit]), format: unit === 'series' ? `${limit} сер. · ${shots.length} стрел` : `${limit} стрел` }];
+  });
+}
+
+export function personalRoundRecords(entries: readonly DiaryEntry[]): PersonalRoundRecord[] {
+  const winners = new Map<string, PersonalRoundRecord>();
+  for (const record of entries.flatMap(fullRoundRecords)) {
+    const best = winners.get(record.key);
+    if (!best || (best.points - record.points || compareDates(record.date, best.date) ||
+      compareText(record.sessionId, best.sessionId) || record.roundNumber - best.roundNumber) < 0) winners.set(record.key, record);
+  }
+  return [...winners.values()].sort((a, b) => a.conditions.distanceMeters - b.conditions.distanceMeters ||
+    a.arrows - b.arrows || compareText(a.equipmentTitle, b.equipmentTitle));
 }
 
 function volume(entry: DiaryEntry): number {
@@ -167,6 +201,17 @@ export function calculatePersonalRecordEvents(candidate: DiaryEntry, history: re
   }
   const previousVolume = personalVolumeRecord(previous);
   if (previousVolume) improve('volume', 'Стрел за тренировку', count, previousVolume.count, previousVolume.entry.id);
+
+  const rounds = personalRoundRecords([candidate]);
+  if (rounds.length) {
+    const previousRounds = new Map(personalRoundRecords(previous).map(record => [record.key, record]));
+    for (const record of rounds) {
+      const best = previousRounds.get(record.key);
+      if (!best) continue;
+      improve('round', `Раунд · ${record.format} · ${measure(record.conditions.distanceMeters)} м · ${record.targetTitle} · ${record.equipmentTitle}`,
+        record.points, best.points, best.sessionId);
+    }
+  }
 
   const rank = exerciseRank(candidate.practice, category);
   if (!rank.finalResult || !rank.evaluation) return events;

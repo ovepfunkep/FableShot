@@ -8,6 +8,22 @@ async function targetBounds(page: Page) {
   return bounds;
 }
 
+async function lensPixel(page: Page, x: number, y: number) {
+  return page.getByTestId('lens').locator('canvas').evaluate((canvas: HTMLCanvasElement, point) => {
+    const pixel = canvas.getContext('2d')!.getImageData(
+      Math.round(point.x * canvas.width / canvas.clientWidth),
+      Math.round(point.y * canvas.height / canvas.clientHeight), 1, 1,
+    ).data;
+    return Array.from(pixel.slice(0, 3));
+  }, { x, y });
+}
+
+async function cancelAim(page: Page) {
+  await page.getByTestId('target').dispatchEvent('pointercancel', { pointerId: 1 });
+  await page.mouse.up();
+  await expect(page.getByTestId('lens')).toHaveCount(0);
+}
+
 test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
@@ -113,6 +129,68 @@ test('lens follows aim and the target stays inside the screen layout', async ({ 
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
 });
 
+test('the lens keeps its scale after zooming and shows only current series hits', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const bounds = await targetBounds(page);
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  await page.mouse.click(x - 12, y);
+  await page.getByRole('button', { name: 'Отметить промах' }).click();
+  await page.mouse.click(x + 12, y);
+  await expect(page.getByTestId('series-score')).toHaveText('20/30');
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  const marker = [20, 32, 13];
+  expect(await lensPixel(page, 32, 62)).toEqual(marker);
+  expect(await lensPixel(page, 92, 62)).toEqual(marker);
+  await cancelAim(page);
+
+  await page.getByRole('button', { name: 'Увеличить' }).click();
+  await page.getByRole('button', { name: 'Увеличить' }).click();
+  await expect(page.getByRole('button', { name: 'Сбросить приближение' })).toHaveText('2,3×');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  expect(await lensPixel(page, 32, 62)).toEqual(marker);
+  expect(await lensPixel(page, 92, 62)).toEqual(marker);
+  await cancelAim(page);
+
+  await page.getByTestId('next-end').click();
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  expect(await lensPixel(page, 32, 62)).not.toEqual(marker);
+  expect(await lensPixel(page, 92, 62)).not.toEqual(marker);
+  await cancelAim(page);
+});
+
+test('the lens keeps hits on their own spot of a traffic-light target', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('home-change-conditions').click();
+  await page.getByTestId('target-profile-choice').click();
+  await page.getByTestId('target-profile-wa-indoor-triple-outer-v1').click();
+  await page.getByTestId('start-training').click();
+  const bounds = await targetBounds(page);
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const radius = Math.min(bounds.width / 1.32, bounds.height / 3.8);
+  const top = y - radius * 1.2;
+  await page.mouse.click(x - 12, top);
+  await expect(page.getByTestId('series-score')).toHaveText(/\/10$/);
+
+  const marker = [20, 32, 13];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  expect(await lensPixel(page, 32, 62)).not.toEqual(marker);
+  await cancelAim(page);
+
+  await page.mouse.move(x, top);
+  await page.mouse.down();
+  expect(await lensPixel(page, 32, 62)).toEqual(marker);
+  await cancelAim(page);
+});
+
 test('training and series editor remember independent zoom levels across openings', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
@@ -137,6 +215,81 @@ test('training and series editor remember independent zoom levels across opening
   await page.reload();
   await openTraining(page);
   await expect(zoom).toHaveText('1,5×');
+});
+
+test('the zoom panel can be moved outside the target and remembers its position', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const panel = page.getByRole('group', { name: 'Приближение мишени' });
+  const handle = panel.getByRole('button', { name: 'Переместить панель масштаба' });
+  const zoom = panel.getByRole('button', { name: 'Сбросить приближение' });
+  const viewport = page.viewportSize()!;
+  const start = (await handle.boundingBox())!;
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(40, viewport.height - 36, { steps: 8 });
+  await page.mouse.up();
+  await expect(zoom).toHaveText('1,0×');
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  const target = await targetBounds(page);
+  const moved = (await panel.boundingBox())!;
+  expect(moved.y).toBeGreaterThan(target.y + target.height);
+  expect(moved.x).toBeCloseTo(40 - start.width / 2, 0);
+
+  await handle.press('ArrowRight');
+  const saved = (await panel.boundingBox())!;
+  expect(saved.x).toBeCloseTo(moved.x + 16, 0);
+  await panel.getByRole('button', { name: 'Увеличить' }).click();
+  await expect(zoom).toHaveText('1,5×');
+  await panel.getByRole('button', { name: 'Уменьшить' }).click();
+  await expect(zoom).toHaveText('1,0×');
+  await panel.getByRole('button', { name: 'Увеличить' }).click();
+  await zoom.click();
+  await expect(zoom).toHaveText('1,0×');
+
+  await page.reload();
+  await openTraining(page);
+  await expect(panel).toBeVisible();
+  expect(await panel.boundingBox()).toEqual(saved);
+  await page.setViewportSize({ width: 720, height: 390 });
+  await expect(panel).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize(viewport);
+  expect(await panel.boundingBox()).toEqual(saved);
+
+  await page.getByTestId('target').click();
+  await page.getByRole('button', { name: 'Завершить тренировку' }).click();
+  await page.getByTestId('training-confirm').click();
+  await page.locator('[data-testid^="report-end-"]').first().click();
+  expect(await panel.boundingBox()).toEqual(saved);
+});
+
+test('touch can move the zoom panel at the Android layout scale and cancel another drag', async ({ page, context }) => {
+  await page.goto('./');
+  await page.locator('html').evaluate(root => root.style.setProperty('--app-scale', '.8'));
+  await openTraining(page);
+  const panel = page.getByRole('group', { name: 'Приближение мишени' });
+  const handle = panel.getByRole('button', { name: 'Переместить панель масштаба' });
+  const client = await context.newCDPSession(page);
+  const holdHandle = async () => {
+    const box = (await handle.boundingBox())!;
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
+    });
+  };
+  await holdHandle();
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 36, y: 32 }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const moved = (await handle.boundingBox())!;
+  expect(moved.x + moved.width / 2).toBeCloseTo(36, 0);
+  expect(moved.y + moved.height / 2).toBeCloseTo(32, 0);
+  await expect(panel).toBeInViewport({ ratio: 1 });
+
+  await holdHandle();
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 230, y: 410 }] });
+  expect((await handle.boundingBox())!.y).toBeGreaterThan(moved.y + 300);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  expect(await handle.boundingBox()).toEqual(moved);
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
 });
 
 test('previous series edits are saved when selecting another shot, and deletion shrinks its maximum', async ({ page }) => {

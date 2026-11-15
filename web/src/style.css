@@ -80,6 +80,20 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .zoom { top: 0; right: 0; }
 .zoom button { border: 0; background: none; width: 48px; min-height: 48px; color: var(--accent); font-weight: 700; }
 .zoom .zoom-value { width: 58px; font-variant-numeric: tabular-nums; }
+.zoom-movable { width: max-content; max-width: 100%; }
+.zoom .zoom-handle {
+  width: 44px; border-inline-end: 1px solid var(--edge); border-radius: 28px 0 0 28px;
+  color: var(--muted); font-size: 1.25rem; touch-action: none; cursor: grab;
+}
+.zoom .zoom-handle:active { cursor: grabbing; color: var(--accent); }
+.zoom-move-limits, .zoom-move-layer {
+  position: fixed; pointer-events: none;
+  inset: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right))
+    max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+}
+.zoom-move-limits { visibility: hidden; }
+.zoom-move-layer { z-index: 3; }
+.zoom-move-layer .zoom { right: auto; pointer-events: auto; }
 .series-navigation { top: 2px; left: 16px; }
 .series-navigation .icon-button { width: 44px; height: 44px; }
 .lens {

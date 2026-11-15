@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
-import { calculatePersonalRecordEvents, isPersonalRecordEvent, personalSeriesRecords, personalVolumeRecord } from '../src/personal-record-events.ts';
+import { calculatePersonalRecordEvents, isPersonalRecordEvent, personalRoundRecords, personalSeriesRecords, personalVolumeRecord } from '../src/personal-record-events.ts';
 import type { DiaryEntry } from '../src/persistence.ts';
 
 const at = Date.parse('2026-11-11T12:00:00Z');
@@ -79,4 +79,25 @@ test('supported exercises compare complete totals across series formats and choo
     [['rank', 'earlier', 240, 270, 'КЛ(М) · 18 м · 30 стрел']]);
   current.practice.rounds[0].series[0].plannedCount = 6;
   assert.deepEqual(calculate(current, [earlier], 'male'), []);
+});
+
+test('round records compare only full rounds with matching limits and conditions', () => {
+  const old = training('old', [[8, 8, 8], [8, 8, 8]], '2026-11-08');
+  const current = training('new', [[9, 9, 9], [9, 9, 9]], '2026-11-11');
+  const differentFormat = training('series-rule', [[10, 10, 10], [10, 10, 10]], '2026-11-09');
+  const incomplete = training('incomplete', [[10, 10, 10], [10, 10]], '2026-11-09');
+  const mixed = training('mixed', [[10, 10, 10], [10, 10, 10]], '2026-11-09');
+  for (const entry of [old, current, mixed]) entry.practice.roundRule = { unit: 'arrows', limit: 6 };
+  for (const entry of [differentFormat, incomplete]) entry.practice.roundRule = { unit: 'series', limit: 2 };
+  mixed.practice.rounds[0].series[1].conditions.distanceMeters = 30;
+
+  const history = [old, differentFormat, incomplete, mixed];
+  const records = personalRoundRecords([...history, current]);
+  assert.deepEqual(records.map(({ sessionId, points, maximum }) => [sessionId, points, maximum]).sort(),
+    [['new', 54, 60], ['series-rule', 60, 60]]);
+  const event = calculate(current, history).find(record => record.kind === 'round');
+  assert.ok(event && isPersonalRecordEvent(event));
+  assert.equal(event.previousSessionId, 'old');
+  assert.equal(event.previousValue, 48);
+  assert.equal(event.value, 54);
 });

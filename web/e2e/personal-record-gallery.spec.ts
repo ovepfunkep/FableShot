@@ -52,6 +52,14 @@ test('personal records filter by conditions and open the series and volume sourc
   await expect(page.getByTestId('journal-report').getByText('Длинная тренировка', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await ranks.getByRole('button', { name: 'Назад', exact: true }).click();
+  await gallery.getByTestId('records-rounds').click();
+  await gallery.getByTestId('records-search').fill('классический');
+  const rounds = gallery.locator('[data-testid^="round-record-"]');
+  await expect(rounds).toHaveCount(1);
+  await expect(rounds.first()).toContainText('270/300');
+  await rounds.first().click();
+  await expect(page.getByTestId('journal-report').getByText('Длинная тренировка', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await gallery.getByTestId('records-search').fill('неизвестная мишень');
   await expect(gallery.getByRole('status')).toHaveText('Ничего не найдено');
   await gallery.getByTestId('records-volume').click();
