@@ -73,7 +73,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .target-stage { position: relative; flex: 1; min-height: 0; }
 .target-surface { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
 .target-surface canvas { display: block; width: 100%; height: 100%; }
-.zoom, .series-navigation {
+.zoom {
   position: absolute; z-index: 1; display: flex; align-items: center;
   border-radius: 28px; background: #1a231cec;
 }
@@ -94,21 +94,17 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .zoom-move-limits { visibility: hidden; }
 .zoom-move-layer { z-index: 3; }
 .zoom-move-layer .zoom { right: auto; pointer-events: auto; }
-.series-navigation { top: 2px; left: 16px; }
-.series-navigation .icon-button { width: 44px; height: 44px; }
 .lens {
-  position: fixed; z-index: 4; width: 124px; overflow: hidden; pointer-events: none;
+  position: fixed; z-index: 4; overflow: hidden; pointer-events: none;
   border: 1px solid #637762; border-radius: 16px; background: #152016;
 }
 .lens-score { display: grid; place-items: center; height: 36px; }
 .lens-score strong { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 50%; border: 1px solid #ffffff80; font-size: 1.08rem; font-variant-numeric: tabular-nums; }
-.lens-canvas { width: 124px; height: 112px; display: block; }
+.lens-canvas { width: 100%; display: block; }
 
 .training-controls { flex: none; padding: 4px 16px; background: #18231b; }
 .training-tools { display: flex; align-items: center; justify-content: flex-end; min-height: 40px; }
-.training-hit-strip { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; align-items: center; height: 66px; }
-.training-timer-slot { display: grid; place-items: center; }
-.training-hit-strip > .icon-button { width: 44px; height: 44px; }
+.training-hit-strip { flex: none; padding-inline: 16px; }
 .arrow-panel { position: relative; }
 .arrow-list {
   display: flex; height: 66px; overflow: hidden;
@@ -143,9 +139,11 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .physical-arrow-option { min-height: 52px; border: 1px solid var(--edge); border-radius: 99px; background: var(--surface); font-size: 16px; font-weight: 700; }
 .physical-arrow-option[aria-pressed=true] { background: var(--accent); color: var(--on-accent); }
 .arrow-fade { position: absolute; inset-block: 0; width: 14px; pointer-events: none; }
-.fade-left { left: 0; background: linear-gradient(to right, #18231b, transparent); }
-.fade-right { right: 0; background: linear-gradient(to left, #18231b, transparent); }
-.training-actions { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; min-height: 64px; gap: 8px; }
+.fade-left { left: 0; background: linear-gradient(to right, var(--app-bg, #101610), transparent); }
+.fade-right { right: 0; background: linear-gradient(to left, var(--app-bg, #101610), transparent); }
+.training-actions { display: flex; align-items: center; min-height: 64px; gap: 4px; }
+.training-actions > :not(.primary) { flex: none; width: 44px; }
+.training-actions > .primary { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .primary, .miss, .confirm-actions button { min-height: 56px; border-radius: 18px; font-weight: 700; }
 .primary { border: 1px solid transparent; background: var(--accent); color: var(--on-accent); padding-inline: 8px; }
 .miss { border: 1px solid var(--edge); background: transparent; }

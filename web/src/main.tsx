@@ -16,7 +16,7 @@ import type { TechniqueSelection } from './technique.ts';
 import { TechniqueSettingsProvider } from './TechniqueSettings.tsx';
 import { StagePicker } from './StagePicker.tsx';
 import { TargetBoard } from './TargetBoard.tsx';
-import { Icon, TrainingFooter, TrainingSummary } from './TrainingChrome.tsx';
+import { Icon, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
 import { JournalHistory, JournalProgress } from './JournalTabs.tsx';
@@ -1043,12 +1043,6 @@ function App() {
     {rankWindow}
   </>;
 
-  const navigation = !seriesEditor && !editing && !pendingShot && seriesIds.length > 1 && <div className="series-navigation" aria-label="Навигация по сериям">
-    <button type="button" className="icon-button" aria-label="Предыдущая серия" disabled={position <= 0}
-      onClick={() => showSeries(seriesIds[position - 1])}><Icon name="left" /></button>
-    <button type="button" className="icon-button" aria-label="Вперёд по сериям" disabled={position >= seriesIds.length - 1}
-      onClick={() => showSeries(seriesIds[position + 1])}><Icon name="right" /></button>
-  </div>;
   const numberTarget = postHitReady ? pendingShot : numberEditOpen ? editing : null;
 
   return <main className="practice" data-testid={seriesEditor ? 'history-shot-editor' : 'training-screen'}>
@@ -1097,16 +1091,18 @@ function App() {
       roundShots={roundShown} seriesShots={shots} onRound={() => openPicker('round')} onSeries={() => openPicker('series')}
       roundRank={currentRanks && <RankTag rank={currentRanks.round} testId="rank-round" onOpen={() => setRankScope({ kind: 'round', id: round.id })} />}
       seriesRank={currentRanks && <RankTag rank={currentRanks.series} testId="rank-series" onOpen={() => setRankScope({ kind: 'series', id: series.id })} />} />}
+    <TrainingShotStrip key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
+      entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} arrowPanelRef={arrowPanel} />
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
       realArrowDiameter={preferences.realArrowDiameter ? series.conditions.equipment?.arrows.diameterMm ?? undefined : undefined}
       zoomScope={seriesEditor ? 'editor' : 'training'}
-      inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark} navigation={navigation}
+      inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}
-    <TrainingFooter key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
-      entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} mainText={mainText}
+    <TrainingFooter mainText={mainText} showPrevious={!seriesEditor}
+      onPrevious={!seriesEditor && !editing && !pendingShot && position > 0 ? () => showSeries(seriesIds[position - 1]) : undefined}
       mainEnabled={!!entry && !pendingShot && (seriesEditor ? dirty : editing !== null || completed || past || shots.length > 0 || roundFull)}
-      mainRef={primary} arrowPanelRef={arrowPanel} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}
+      mainRef={primary} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}
       timerBadge={!seriesEditor && !completed && <PracticeTimerBadge state={timer.state} onOpen={openTimer} />}
       status={seriesEditor ? editing ? `${editing.shot.points} очков` : 'Выбери стрелу' : undefined}
       arrowNumberChoice={editing && (arrowCount > 0 || editing.shot.physicalArrowNumber !== undefined) && <button type="button"

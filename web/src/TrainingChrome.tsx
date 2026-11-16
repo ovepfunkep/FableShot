@@ -69,14 +69,9 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
   </section>;
 }
 
-export function TrainingFooter({ shots, previousVolume, selected, entering, mainText, mainEnabled, mainRef,
-  missEnabled, undoEnabled, onPick, onMain, onMiss, onUndo, timerBadge, arrowNumberChoice, status, arrowPanelRef }: {
+export function TrainingShotStrip({ shots, previousVolume, selected, entering, onPick, arrowPanelRef }: {
   shots: readonly Shot[]; previousVolume: number; selected: number | null; entering: number | null;
-  mainText: string; mainEnabled: boolean; mainRef: Ref<HTMLButtonElement>; missEnabled: boolean; undoEnabled: boolean;
-  onPick: (index: number) => void; onMain: () => void; onMiss: () => void; onUndo: () => void;
-  timerBadge?: ReactNode;
-  arrowNumberChoice?: ReactNode;
-  status?: string;
+  onPick: (index: number) => void;
   arrowPanelRef?: Ref<HTMLDivElement>;
 }) {
   const { preferences } = useTrainingPreferences();
@@ -106,43 +101,54 @@ export function TrainingFooter({ shots, previousVolume, selected, entering, main
     return () => observer.disconnect();
   }, [focusedPage, pageCount, capacity]);
 
+  return <div className="training-hit-strip">
+    <div className="arrow-panel" data-testid="arrow-panel" ref={arrowPanelRef}>
+      <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
+        {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
+          aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>
+          {Array.from({ length: capacity }, (_, slot) => {
+            const index = page * capacity + slot;
+            const shot = shots[index];
+            const active = index === selected || index === entering;
+            const compact = capacity > 3;
+            const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
+            const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
+            return <li key={index}>
+              <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
+                style={{ background, color }} data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
+                aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
+                {!compact && <span className="arrow-number" aria-hidden="true">{index + 1}</span>}
+                <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
+                {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
+              </button>
+            </li>;
+          })}
+        </ol>)}
+      </div>
+      {scrollable && fade.left && <span className="arrow-fade fade-left" aria-hidden="true" />}
+      {scrollable && fade.right && <span className="arrow-fade fade-right" aria-hidden="true" />}
+    </div>
+  </div>;
+}
+
+export function TrainingFooter({ mainText, mainEnabled, mainRef, missEnabled, undoEnabled, showPrevious,
+  onMain, onMiss, onUndo, onPrevious, timerBadge, arrowNumberChoice, status }: {
+  mainText: string; mainEnabled: boolean; mainRef: Ref<HTMLButtonElement>; missEnabled: boolean; undoEnabled: boolean;
+  showPrevious: boolean; onPrevious?: () => void;
+  onMain: () => void; onMiss: () => void; onUndo: () => void;
+  timerBadge?: ReactNode; arrowNumberChoice?: ReactNode; status?: string;
+}) {
   return <footer className="training-controls">
     {(status || arrowNumberChoice) && <div className="training-tools">
       {status && <span className="series-editor-status">{status}</span>}
       {arrowNumberChoice}
     </div>}
-    <div className="training-hit-strip">
-      <div className="training-timer-slot">{timerBadge}</div>
-      <div className="arrow-panel" data-testid="arrow-panel" ref={arrowPanelRef}>
-        <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
-          {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
-            aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>
-            {Array.from({ length: capacity }, (_, slot) => {
-              const index = page * capacity + slot;
-              const shot = shots[index];
-              const active = index === selected || index === entering;
-              const compact = capacity > 3;
-              const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
-              const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
-              return <li key={index}>
-                <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
-                  style={{ background, color }} data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
-                  aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
-                  {!compact && <span className="arrow-number" aria-hidden="true">{index + 1}</span>}
-                  <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
-                  {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
-                </button>
-              </li>;
-            })}
-          </ol>)}
-        </div>
-        {scrollable && fade.left && <span className="arrow-fade fade-left" aria-hidden="true" />}
-        {scrollable && fade.right && <span className="arrow-fade fade-right" aria-hidden="true" />}
-      </div>
-      <button type="button" className="icon-button" aria-label="Отменить" disabled={!undoEnabled} onClick={onUndo}><Icon name="undo" /></button>
-    </div>
     <div className="training-actions">
+      {timerBadge}
       <button type="button" className="miss" aria-label="Отметить промах" disabled={!missEnabled} onClick={onMiss}>M</button>
+      <button type="button" className="icon-button" aria-label="Отменить" disabled={!undoEnabled} onClick={onUndo}><Icon name="undo" /></button>
+      {showPrevious && <button type="button" className="icon-button" aria-label="Предыдущая серия"
+        disabled={!onPrevious} onClick={onPrevious}><Icon name="left" /></button>}
       <button ref={mainRef} type="button" className="primary" data-testid="next-end" disabled={!mainEnabled} onClick={onMain}>{mainText}</button>
     </div>
   </footer>;

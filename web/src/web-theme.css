@@ -86,9 +86,7 @@ html[data-theme-appearance] .journal-timeline-point::before { background: var(--
 html[data-theme-appearance] :is(.journal-timeline-entry:last-child button, .stage-tile, .target-profile-option[aria-pressed="true"], .hit-map-series-controls select) { border-color: var(--accent-line); }
 
 html[data-theme-appearance] :is(.training-controls, .lens, .preference-switch, .condition-number-choices button[aria-pressed="true"], .condition-tabs button[aria-pressed="true"]) { background: var(--raised); }
-html[data-theme-appearance] .fade-left { background: linear-gradient(to right, var(--raised), transparent); }
-html[data-theme-appearance] .fade-right { background: linear-gradient(to left, var(--raised), transparent); }
-html[data-theme-appearance] :is(.zoom, .series-navigation) { background: color-mix(in srgb, var(--surface) 93%, transparent); }
+html[data-theme-appearance] .zoom { background: color-mix(in srgb, var(--surface) 93%, transparent); }
 html[data-theme-appearance] :is(.lens, .arrow-slot) { border-color: var(--edge); }
 html[data-theme-appearance] .arrow-entered { border-color: var(--muted); }
 html[data-theme-appearance] .arrow-entering { border-color: var(--accent); animation-name: theme-arrow-entering; }
