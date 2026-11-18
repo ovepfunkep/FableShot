@@ -99,7 +99,7 @@ test('the miss ring saves direction, stays out of grouping, and can be replaced 
   await expect(page.getByTestId('report-round-total-1')).toContainText('20/30');
 });
 
-test('lens follows aim and the target stays inside the screen layout', async ({ page }) => {
+test('the larger lens fits a narrow screen and follows slower aim', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 570 });
   await page.goto('./');
   await openTraining(page);
@@ -116,10 +116,13 @@ test('lens follows aim and the target stays inside the screen layout', async ({ 
   await expect(lens).toContainText('10');
   await expect(lens.locator('strong')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
   const lensBounds = await lens.boundingBox();
-  expect(lensBounds!.y + lensBounds!.height).toBeLessThan(y);
   const field = (await lens.locator('canvas').boundingBox())!;
-  expect(field.width * field.height / (124 * 112)).toBeCloseTo(2, 1);
-  await page.mouse.move(x + radius * .17 / 3, y);
+  expect(field.width).toBeCloseTo(302, 0);
+  expect(lensBounds!.x + lensBounds!.width).toBeLessThanOrEqual(320);
+  expect(lensBounds!.y + lensBounds!.height).toBeLessThanOrEqual(570);
+  await page.mouse.move(x + radius * .13 / 3, y);
+  await expect(lens.locator('strong')).toHaveText('10');
+  await page.mouse.move(x + radius * .17 / 2.4, y);
   await expect(lens).toContainText('9');
   await expect(lens.locator('.lens-score')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
   expect((await lens.boundingBox())?.width).toBe(lensBounds!.width);
@@ -147,6 +150,9 @@ test('the lens keeps its scale after zooming and shows only current series hits'
   await page.mouse.move(x, y);
   await page.mouse.down();
   const marker = [20, 32, 13];
+  const field = (await page.getByTestId('lens').locator('canvas').boundingBox())!;
+  expect(field.width).toBe(352);
+  expect(field.height).toBe(316);
   expect(await lensPixel(page, -30, 6)).toEqual(marker);
   expect(await lensPixel(page, 30, 6)).toEqual(marker);
   await cancelAim(page);
@@ -218,11 +224,11 @@ test('one hold reaches off-screen spots at 8× in training and in the series edi
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     await expect(lens).toHaveText('10');
     await client.send('Input.dispatchTouchEvent', {
-      type: 'touchMove', touchPoints: [{ x: x + radius * .25 / 3, y: y + direction * radius * .6 / 3 }],
+      type: 'touchMove', touchPoints: [{ x: x + radius * .25 / 2.4, y: y + direction * radius * .6 / 2.4 }],
     });
     await expect(lens).toHaveText('—');
     await client.send('Input.dispatchTouchEvent', {
-      type: 'touchMove', touchPoints: [{ x, y: y + direction * radius * (1.2 + ringFraction) / 3 }],
+      type: 'touchMove', touchPoints: [{ x, y: y + direction * radius * (1.2 + ringFraction) / 2.4 }],
     });
     await expect(lens).toHaveText(expected);
   }
@@ -382,7 +388,7 @@ test('previous series edits are saved when selecting another shot, and deletion 
   expect(back.x + back.width).toBeLessThan(forward.x);
   expect(back.y + back.height / 2).toBeCloseTo(forward.y + forward.height / 2, 0);
   await previous.click();
-  await expect(next).toHaveText('К текущей серии');
+  await expect(next).toHaveText('Следующая серия');
   await expect(page.getByRole('button', { name: 'Вперёд по сериям' })).toHaveCount(0);
   await next.click();
   await expect(next).toHaveText('Следующая серия');
@@ -406,15 +412,30 @@ test('previous series edits are saved when selecting another shot, and deletion 
   await expect(page.getByTestId('round-score')).toHaveText('0/0');
 });
 
-test('a full 30-arrow round keeps the next action pinned and requires an explicit transition', async ({ page }) => {
+test('next series advances one step through earlier series and into a new round', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
   const miss = page.getByRole('button', { name: 'Отметить промах' });
-  for (let i = 0; i < 30; i++) await miss.click();
+  const next = page.getByTestId('next-end');
+  const previous = page.getByRole('button', { name: 'Предыдущая серия', exact: true });
+  const series = page.getByTestId('training-series-open');
+  for (let i = 1; i <= 30; i++) {
+    await miss.click();
+    if (i === 1 || i === 2) await next.click();
+  }
+  await expect(series).toContainText('Серия 3');
+  await previous.click();
+  await previous.click();
+  await expect(series).toContainText('Серия 1');
+  await expect(next).toHaveText('Следующая серия');
+  await next.click();
+  await expect(series).toContainText('Серия 2');
+  await expect(next).toHaveText('Следующая серия');
+  await next.click();
+  await expect(series).toContainText('Серия 3');
   await expect(miss).toBeDisabled();
   await expect(page.getByTestId('round-score')).toHaveText('0/300');
-  const next = page.getByTestId('next-end');
-  await expect(next).toHaveText('Следующий раунд');
+  await expect(next).toHaveText('Следующая серия');
   await expect(next).toBeInViewport({ ratio: 1 });
   const target = await targetBounds(page);
   await page.touchscreen.tap(target.x + target.width / 2, target.y + target.height / 2);
@@ -422,6 +443,7 @@ test('a full 30-arrow round keeps the next action pinned and requires an explici
   await expect(page.getByTestId('round-score')).toHaveText('0/300');
   await next.click();
   await expect(page.getByTestId('training-rounds-open')).toContainText('Раунд 2');
+  await expect(series).toContainText('Серия 1');
   await expect(page.getByTestId('round-score')).toHaveText('0/0');
 });
 

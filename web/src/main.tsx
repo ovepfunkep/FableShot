@@ -548,8 +548,7 @@ function App() {
   const position = seriesIds.indexOf(series.id);
   const previousVolume = !seriesEditor && !past && !completed ? allSeries[position - 1]?.shots.length ?? 0 : 0;
   const hasHits = practice.rounds.some(item => item.series.some(end => end.shots.length));
-  const mainText = editing || seriesEditor ? 'Сохранить' : completed ? 'К статистике' : past ? 'К текущей серии'
-    : roundFull ? 'Следующий раунд' : 'Следующая серия';
+  const mainText = editing || seriesEditor ? 'Сохранить' : completed ? 'К статистике' : 'Следующая серия';
   const suggestRound = !seriesEditor && roundFull && !canAppend && !past && !editing && !completed;
   useEffect(() => {
     if (!suggestRound) pulse.current?.cancel();
@@ -615,7 +614,7 @@ function App() {
   function mainAction() {
     if (editing) saveEdit(seriesEditor);
     else if (completed) setPage('report');
-    else if (past) setSelection(null);
+    else if (past) showSeries(seriesIds[position + 1]);
     else if (update(advanceSeries)) setSelection(null);
   }
 

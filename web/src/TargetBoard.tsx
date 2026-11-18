@@ -14,11 +14,10 @@ type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | n
   blocked: { id: number; origin: Point } | null };
 
 const initialView: View = { zoom: 1, x: 0, y: 0 };
-const AIM_SPEED = 3;
+const AIM_SPEED = 2.4;
 const TAP_SLOP = 8;
-// Twice the drawing area, with the same proportions and magnification.
-const LENS_WIDTH = 176;
-const LENS_HEIGHT = 158;
+const LENS_WIDTH = 352;
+const LENS_HEIGHT = 316;
 const ringColors = ['#f6f5e9', '#242a2c', '#3295c7', '#e44c43', '#f4ce44'];
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const midpoint = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });

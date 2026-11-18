@@ -116,7 +116,7 @@ test('round options support series boundaries and saved presets with a pinned st
   await expect(page.getByTestId('training-series-open')).toContainText('Серия 1/1');
   await hit(page);
   await expect(page.getByTestId('shot-1')).toHaveText('1X');
-  await expect(page.getByTestId('next-end')).toHaveText('Следующий раунд');
+  await expect(page.getByTestId('next-end')).toHaveText('Следующая серия');
   await page.getByRole('button', { name: 'Отметить промах' }).click();
   await expect(page.getByTestId('series-score')).toHaveText('10/20');
   await page.getByTestId('next-end').click();
