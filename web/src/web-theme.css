@@ -79,7 +79,7 @@ html[data-theme-appearance] :is(.journal-home-eyebrow, .journal-home-conditions 
 html[data-theme-appearance] .journal-home-edit { color: var(--ink); }
 html[data-theme-appearance] .journal-home-edit:active { background: var(--accent-wash); }
 html[data-theme-appearance] :is(.tile-heading strong, .journal-home-totals strong, .journal-tab-card-result > span:first-child strong,
-  .practice-timer-badge .timer-clock, .report-metrics-score strong, .report-metrics-muted strong, .report-metrics-inline strong, .report-zone-column strong) { color: var(--ink); }
+  .practice-timer-badge .timer-clock, .report-metrics-score strong, .report-metrics-muted strong, .report-metrics-inline strong) { color: var(--ink); }
 html[data-theme-appearance] :is(.journal-timeline, .journal-timeline-point)::before { border-color: var(--accent-line); }
 html[data-theme-appearance] .journal-timeline::after { color: var(--accent-line); border-color: var(--accent-line); }
 html[data-theme-appearance] .journal-timeline-point::before { background: var(--accent-line); }

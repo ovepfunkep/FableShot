@@ -11,11 +11,15 @@ type Aim = { point: Point; spot?: TargetSpot; screen: Point };
 type AimAnchor = { position: Point; point: Point; screen: Point };
 type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | null;
   aim: { id: number; origin: Point; startsOnFace: boolean; anchor: AimAnchor | null } | null;
+  touchTap: { id: number; origin: Point; startedAt: number } | null;
+  panPointer: number | null;
   blocked: { id: number; origin: Point } | null };
 
 const initialView: View = { zoom: 1, x: 0, y: 0 };
 const AIM_SPEED = 2.4;
 const TAP_SLOP = 8;
+const DOUBLE_TAP_MS = 240;
+const DOUBLE_TAP_DISTANCE = 32;
 const LENS_WIDTH = 352;
 const LENS_HEIGHT = 316;
 const ringColors = ['#f6f5e9', '#242a2c', '#3295c7', '#e44c43', '#f4ce44'];
@@ -151,28 +155,30 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
     (window.innerHeight / scale - 54) / LENS_HEIGHT));
   const width = LENS_WIDTH * fit;
   const height = LENS_HEIGHT * fit;
+  const radius = baseRadius * 2.5 / scale;
+  const shaft = radius * shaftRadius(spec);
   useLayoutEffect(() => {
     const ctx = canvas.current && canvasContext(canvas.current, width, height);
     if (!ctx) return;
-    const radius = baseRadius * 2.5 / scale;
     const point = spotPoint(aim.point, aim.spot);
     const center = { x: width / 2 - point.x * radius, y: height / 2 - point.y * radius };
     paintSeries(ctx, center, radius, spec, shots, selectedIndex, realArrowDiameter);
-    circle(ctx, width / 2, height / 2, radius * shaftRadius(spec));
+    circle(ctx, width / 2, height / 2, shaft);
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#152016';
     ctx.stroke();
     ctx.lineWidth = 1.3;
     ctx.strokeStyle = '#fff';
     ctx.stroke();
-  }, [aim, baseRadius, scale, spec, shots, selectedIndex, realArrowDiameter, width, height]);
+  }, [aim, radius, shaft, spec, shots, selectedIndex, realArrowDiameter, width, height]);
   const left = clamp(aim.screen.x / scale - width / 2 - 1, 8, Math.max(8, window.innerWidth / scale - width - 10));
-  const top = Math.max(8, aim.screen.y / scale - height - 64);
+  const top = Math.max(8, aim.screen.y / scale - height - 28);
   const color = zoneColor(hit.points);
   const foreground = hit.points >= 3 && hit.points <= 4 ? '#fff' : '#101510';
   const inner = hit.code === 'X' || hit.points > 0 && hit.points % 2 === 0;
   return <div className="lens" data-testid="lens" aria-hidden="true" style={{ left, top, width: width + 2 }}>
-    <div className="lens-score" style={inner ? undefined : { backgroundColor: color }}>
+    <div className="lens-score" style={{ left: width / 2 + Math.min(Math.max(12, shaft + 7), Math.max(0, width / 2 - 38)),
+      backgroundColor: inner ? undefined : color }}>
       <strong style={{ backgroundColor: inner ? color : '#f2f6ee', color: inner ? foreground : '#101510' }}>{hit.code}</strong>
     </div>
     <canvas ref={canvas} className="lens-canvas" style={{ height }} />
@@ -192,8 +198,13 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
   const [view, setView] = useState(() => initialTargetView(zoomScope));
   const viewRef = useRef(view);
+  const movedManually = useRef(false);
   const [aim, setAim] = useState<Aim | null>(null);
-  const gesture = useRef<Gesture>({ pointers: new Map(), aim: null, multi: false, timer: null, blocked: null });
+  const gesture = useRef<Gesture>({ pointers: new Map(), aim: null, multi: false, timer: null,
+    touchTap: null, panPointer: null, blocked: null });
+  const pendingTap = useRef<{ timer: number; origin: Point; deliver: () => void } | null>(null);
+  const actions = useRef({ inputEnabled, panOnly, onShot, onBlockedTap });
+  useLayoutEffect(() => { actions.current = { inputEnabled, panOnly, onShot, onBlockedTap }; });
   const profile = getTargetProfile(spec.profileId)!;
   const baseRadius = profile.vertical ? Math.max(1, Math.min(size.width / 1.32, size.height / 3.8)) : radiusOf(size);
 
@@ -207,9 +218,20 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     observer.observe(element);
     measure();
     const track = gesture.current;
+    function finishTapOutsideTarget(event: PointerEvent) {
+      const tap = pendingTap.current;
+      if (!tap || event.composedPath().includes(element)) return;
+      window.clearTimeout(tap.timer);
+      pendingTap.current = null;
+      tap.deliver();
+    }
+    document.addEventListener('pointerdown', finishTapOutsideTarget, true);
     return () => {
       observer.disconnect();
+      document.removeEventListener('pointerdown', finishTapOutsideTarget, true);
       if (track.timer !== null) window.clearTimeout(track.timer);
+      if (pendingTap.current) window.clearTimeout(pendingTap.current.timer);
+      pendingTap.current = null;
     };
   }, []);
 
@@ -223,7 +245,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }, [size, view, shots, selectedIndex, spec, realArrowDiameter, baseRadius]);
 
   function changeView(zoom: number, x: number, y: number) {
-    const limit = baseRadius * (panOnly ? zoom : zoom - 1);
+    const limit = baseRadius * (panOnly || movedManually.current ? zoom : zoom - 1);
     const verticalLimit = limit * (profile.vertical ? 1.8 : 1);
     const next = { zoom, x: clamp(x, -limit, limit), y: clamp(y, -verticalLimit, verticalLimit) };
     viewRef.current = next;
@@ -289,11 +311,25 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     if (track.pointers.size > 1) {
       track.multi = true;
       track.blocked = null;
+      track.touchTap = null;
+      track.panPointer = null;
       clearAim();
       return;
     }
     track.multi = false;
     track.blocked = null;
+    const first = pendingTap.current;
+    if (first) {
+      window.clearTimeout(first.timer);
+      pendingTap.current = null;
+      if (event.pointerType === 'touch' && !panOnly && distance(first.origin, position) <= DOUBLE_TAP_DISTANCE) {
+        track.panPointer = event.pointerId;
+        return;
+      }
+      first.deliver();
+    }
+    track.touchTap = event.pointerType === 'touch' && !panOnly
+      ? { id: event.pointerId, origin: position, startedAt: event.timeStamp } : null;
     const startsOnFace = isOnTargetInput(targetInput(normalized(position), profile).point, spec);
     if (!inputEnabled || panOnly) {
       if (startsOnFace && onBlockedTap) track.blocked = { id: event.pointerId, origin: position };
@@ -306,6 +342,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       const current = track.pointers.get(id);
       const rect = surface.current?.getBoundingClientRect();
       if (!current || !rect || track.multi || track.aim?.id !== id) return;
+      track.touchTap = null;
       const anchor = { position: current, point: normalized(current),
         screen: { x: rect.left + current.x, y: rect.top + current.y } };
       track.aim.anchor = anchor;
@@ -318,6 +355,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     const previous = track.pointers.get(event.pointerId);
     if (!previous) return;
     const position = local(event);
+    if (track.touchTap && distance(position, track.touchTap.origin) > TAP_SLOP) track.touchTap = null;
     if (track.blocked && distance(position, track.blocked.origin) > TAP_SLOP) track.blocked = null;
     const before = [...track.pointers.values()];
     track.pointers.set(event.pointerId, position);
@@ -331,6 +369,11 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       changeView(zoom, to.x - size.width / 2 - (from.x - size.width / 2 - current.x) * ratio,
         to.y - size.height / 2 - (from.y - size.height / 2 - current.y) * ratio);
     } else if (!track.multi) {
+      if (track.panPointer === event.pointerId) {
+        if (distance(position, previous) > 0) movedManually.current = true;
+        changeView(current.zoom, current.x + position.x - previous.x, current.y + position.y - previous.y);
+        return;
+      }
       let panFrom = previous;
       if (track.aim?.id === event.pointerId) {
         const { anchor, origin, startsOnFace } = track.aim;
@@ -351,6 +394,9 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     if (!track.pointers.has(event.pointerId)) return;
     const position = local(event);
     const aiming = track.aim;
+    const tap = track.touchTap;
+    const touchTap = commit && tap?.id === event.pointerId && event.timeStamp - tap.startedAt < DOUBLE_TAP_MS
+      && distance(position, tap.origin) <= TAP_SLOP;
     const shouldScore = commit && inputEnabled && !panOnly && !track.multi && aiming?.id === event.pointerId
       && (aiming.startsOnFace || aiming.anchor !== null);
     const { point, spot } = targetInput(aiming?.anchor ? aimedPoint(position, aiming.anchor) : normalized(position), profile);
@@ -362,11 +408,22 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       clearAim();
       track.multi = false;
       track.blocked = null;
+      track.touchTap = null;
+      track.panPointer = null;
     }
-    if (shouldScore) {
-      const shot = markTargetPoint(point, spec);
-      if (shot) onShot(spot === undefined ? shot : { ...shot, spot });
-    } else if (shouldSuggest) onBlockedTap?.();
+    const shot = shouldScore ? markTargetPoint(point, spec) : null;
+    const deliver = () => {
+      const current = actions.current;
+      if (shot && current.inputEnabled && !current.panOnly) current.onShot(spot === undefined ? shot : { ...shot, spot });
+      else if (shouldSuggest && !current.inputEnabled) current.onBlockedTap?.();
+    };
+    if (touchTap) {
+      const timer = window.setTimeout(() => {
+        pendingTap.current = null;
+        deliver();
+      }, DOUBLE_TAP_MS);
+      pendingTap.current = { timer, origin: position, deliver };
+    } else deliver();
   }
 
   function zoomBy(factor: number) {
@@ -377,6 +434,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }
 
   function resetZoom() {
+    movedManually.current = false;
     changeView(1, 0, 0);
     rememberZoom();
   }

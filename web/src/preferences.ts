@@ -6,6 +6,8 @@ import type { RankAssignment } from './assigned-ranks.ts';
 import { isThemeMode, isThemeStyle } from './web-theme.ts';
 import type { ThemeMode, ThemeStyle } from './web-theme.ts';
 
+export const RECENT_PRACTICE_LIMIT = { min: 5, max: 20 };
+
 export type TrainingPreferences = {
   hideScores: boolean;
   averageHundredths: boolean;
@@ -17,6 +19,8 @@ export type TrainingPreferences = {
   realArrowDiameter?: boolean;
   rankCategory?: 'male' | 'female';
   disabledStatistics?: StatisticFeature[];
+  distributionShare?: '10' | '10+9';
+  recentPracticeLimit?: number;
   reportOrder?: ReportBlock[];
   displayName?: string;
   shootingBaseMinutes?: number;
@@ -41,6 +45,10 @@ export function valid(value: unknown): value is TrainingPreferences {
     (record.useSystemScale === undefined || typeof record.useSystemScale === 'boolean') &&
     (record.realArrowDiameter === undefined || typeof record.realArrowDiameter === 'boolean') &&
     (record.disabledStatistics === undefined || isDisabledStatistics(record.disabledStatistics)) &&
+    (record.distributionShare === undefined || record.distributionShare === '10' || record.distributionShare === '10+9') &&
+    (record.recentPracticeLimit === undefined || typeof record.recentPracticeLimit === 'number' &&
+      Number.isInteger(record.recentPracticeLimit) && record.recentPracticeLimit >= RECENT_PRACTICE_LIMIT.min &&
+      record.recentPracticeLimit <= RECENT_PRACTICE_LIMIT.max) &&
     (record.reportOrder === undefined || isReportOrder(record.reportOrder)) &&
     (record.displayName === undefined || typeof record.displayName === 'string' && record.displayName.length <= 40) &&
     (record.rankAssignments === undefined || isRankAssignments(record.rankAssignments)) &&

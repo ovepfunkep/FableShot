@@ -9,7 +9,7 @@ import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
 import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
-import { TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
+import { RecentPracticeLimitControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
 import { supportsAppScale } from './native-app-scale.ts';
 import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
@@ -920,6 +920,7 @@ function App() {
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
+      <RecentPracticeLimitControl />
       <div className="settings-panel"><TrainingPreferenceControls keys={['realArrowDiameter']} /></div>
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}

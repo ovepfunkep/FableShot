@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { DEFAULT_PREFERENCES, loadPreferences, savePreferences } from './preferences.ts';
+import { DEFAULT_PREFERENCES, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
 import type { TrainingPreferences } from './preferences.ts';
 import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
@@ -36,6 +36,36 @@ export function useTrainingPreferences(): PreferencesState {
   const value = useContext(PreferencesContext);
   if (!value) throw new Error('TrainingPreferencesProvider is required');
   return value;
+}
+
+export function RecentPracticeLimitControl() {
+  const { preferences, update, readable, error } = useTrainingPreferences();
+  const { min, max } = RECENT_PRACTICE_LIMIT;
+  const limit = preferences.recentPracticeLimit ?? min;
+  const [draft, setDraft] = useState<string | null>(null);
+  function commit(value: number) {
+    setDraft(null);
+    if (!Number.isFinite(value)) return;
+    const next = Math.max(min, Math.min(max, Math.trunc(value)));
+    if (next !== limit) update({ ...preferences, recentPracticeLimit: next });
+  }
+  return <div className="settings-panel recent-practice-limit">
+    <div className="preference-row">
+      <label className="preference-title" htmlFor="recent-practice-limit">Недавних тренировок на Главной</label>
+      <div className="recent-practice-stepper">
+        <button type="button" aria-label="Показывать на одну тренировку меньше" disabled={!readable || limit <= min}
+          onClick={() => commit(limit - 1)}>−</button>
+        <input id="recent-practice-limit" type="number" inputMode="numeric" min={min} max={max}
+          disabled={!readable} value={draft ?? limit} onChange={event => setDraft(event.currentTarget.value)}
+          onBlur={event => commit(event.currentTarget.valueAsNumber)}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} />
+        <button type="button" aria-label="Показывать на одну тренировку больше" disabled={!readable || limit >= max}
+          onClick={() => commit(limit + 1)}>+</button>
+      </div>
+    </div>
+    <small>Более ранние тренировки видны при прокрутке шкалы.</small>
+    {error && <p className="preferences-error" role="alert">{error}</p>}
+  </div>;
 }
 
 const switches = [

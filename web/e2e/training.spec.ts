@@ -117,6 +117,10 @@ test('the larger lens fits a narrow screen and follows slower aim', async ({ pag
   await expect(lens.locator('strong')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
   const lensBounds = await lens.boundingBox();
   const field = (await lens.locator('canvas').boundingBox())!;
+  const scoreBadge = (await lens.locator('.lens-score').boundingBox())!;
+  expect(scoreBadge.width).toBeLessThan(40);
+  expect(scoreBadge.x - (field.x + field.width / 2)).toBeLessThan(30);
+  expect(scoreBadge.y + scoreBadge.height / 2).toBeCloseTo(field.y + field.height / 2, 0);
   expect(field.width).toBeCloseTo(302, 0);
   expect(lensBounds!.x + lensBounds!.width).toBeLessThanOrEqual(320);
   expect(lensBounds!.y + lensBounds!.height).toBeLessThanOrEqual(570);
@@ -484,6 +488,25 @@ test('manual round transition drops the empty tail and keeps the earlier results
   await expect(page.getByTestId('series-score')).toHaveText('0/10');
   await page.getByTestId('next-end').click();
   await expect(page.getByTestId('training-rounds-open')).toContainText('Раунд 2');
+});
+
+test('the second touch drags the target until release, then single taps score again', async ({ page, context }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const bounds = await targetBounds(page);
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const client = await context.newCDPSession(page);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 60, y }] });
+  await expect(page.getByTestId('lens')).toHaveCount(0);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  await page.touchscreen.tap(x + 60, y);
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await client.detach();
 });
 
 test('two fingers change zoom without flashing the lens or adding a shot', async ({ page, context }) => {

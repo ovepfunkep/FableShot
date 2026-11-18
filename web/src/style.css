@@ -98,8 +98,8 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
   position: fixed; z-index: 4; overflow: hidden; pointer-events: none;
   border: 1px solid #637762; border-radius: 16px; background: #152016;
 }
-.lens-score { display: grid; place-items: center; height: 36px; }
-.lens-score strong { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 50%; border: 1px solid #ffffff80; font-size: 1.08rem; font-variant-numeric: tabular-nums; }
+.lens-score { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 30px; border: 1px solid #ffffff80; border-radius: 9px; background: #152016; }
+.lens-score strong { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; font-size: .875rem; font-variant-numeric: tabular-nums; }
 .lens-canvas { width: 100%; display: block; }
 
 .training-controls { flex: none; padding: 4px 16px; background: #18231b; }

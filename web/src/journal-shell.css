@@ -147,6 +147,29 @@
 .journal-timeline-entry:last-child button { border-color: #c6f43d8c; }
 .journal-timeline-month { position: absolute; z-index: 1; top: calc(var(--timeline-axis) - 7px); transform: translateX(-50%); padding: 0 3px; color: var(--muted); background: var(--surface); font-size: 9px; }
 
+.journal-timeline-frame { min-width: 0; position: relative; }
+.journal-timeline-viewport { container-type: inline-size; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--edge) var(--raised); }
+.journal-timeline-viewport .journal-timeline {
+  --timeline-card-width: min(100px, calc(100cqw / 3 - var(--card-gap)));
+  --timeline-step: calc((100cqw - 12px - var(--timeline-card-width)) / 4);
+  width: calc(var(--timeline-card-width) + var(--timeline-step) * var(--timeline-intervals));
+}
+.journal-timeline-frame::before, .journal-timeline-frame::after {
+  content: ''; position: absolute; z-index: 2; inset: 0 auto 8px 0; width: 14px; pointer-events: none;
+  background: linear-gradient(to right, var(--surface), transparent); opacity: 0;
+}
+.journal-timeline-frame::after { inset: 0 0 8px auto; transform: scaleX(-1); }
+.journal-timeline-frame[data-earlier="true"]::before, .journal-timeline-frame[data-later="true"]::after { opacity: 1; }
+.journal-timeline-position { display: none; }
+@media (pointer: coarse) {
+  .journal-timeline-viewport { scrollbar-width: none; }
+  .journal-timeline-position { display: block; position: relative; height: 3px; margin-top: 3px; border-radius: 3px; background: var(--raised); }
+  .journal-timeline-position::before {
+    content: ''; position: absolute; inset-block: 0; left: var(--timeline-thumb-offset); width: var(--timeline-thumb-width);
+    border-radius: inherit; background: var(--accent-line, #c6f43d8c);
+  }
+}
+
 @media (max-width: 359px) {
   .journal-home { gap: 16px; padding: 16px 16px 24px; }
   .journal-home-hero, .journal-home-card { padding: 14px; }

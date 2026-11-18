@@ -121,7 +121,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const titleId = useId();
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [mode, setMode] = useState<MapMode>('density');
+  const [mode, setMode] = useState<MapMode>('points');
   const [help, setHelp] = useState(false);
   const allShots = useMemo(() => series.flatMap(entry => entry.shots), [series]);
   const allPoints = useMemo(() => knownHitPoints(allShots, true), [allShots]);

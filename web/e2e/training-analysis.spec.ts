@@ -42,10 +42,10 @@ test('map and zone distribution share conditions while the map can isolate one s
   await openTraining(page);
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   const map = page.getByTestId('training-hit-map');
-  await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
+  await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 4 из 5');
-  await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('M: 1');
-  await expect(page.getByTestId('report-zone-10')).toHaveAccessibleName('10: 3');
+  await expect(page.getByTestId('report-zone-M')).toHaveText('M: 1');
+  await expect(page.getByTestId('report-zone-10')).toHaveText('10: 3');
   await expect(page.getByTestId('report-ten-share')).toHaveText('60,0%');
 
   await map.getByTestId('hit-map-next').click();
@@ -84,10 +84,13 @@ test('map and zone distribution share conditions while the map can isolate one s
   await cdp.detach();
   await expect(resetZoom).toHaveText('2,0×');
 
+  await map.getByTestId('hit-map-mode-density').click();
+  await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
+  await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 1 из 1');
   await expect(page.getByTestId('report-result-average')).toHaveText('10,0');
   await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
-  await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('M: 0');
+  await expect(page.getByTestId('report-zone-M')).toHaveCount(0);
   await expect(page.getByTestId('cg3-card')).toHaveCount(0);
 });

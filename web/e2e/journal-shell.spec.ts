@@ -4,6 +4,44 @@ import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
 import { appendShot, applyConditions, completePractice, emptyPractice } from '../src/practice.ts';
 import { conditionsKey } from '../src/composite-scoring.ts';
 
+test('home starts the expanded practice timeline at the newest training and opens older entries', async ({ page }) => {
+  const entries = Array.from({ length: 12 }, (_, index) => {
+    const day = String(index + 1).padStart(2, '0');
+    const localDate = `2026-01-${day}`;
+    const practice = completePractice(appendShot(emptyPractice(), { code: '10', points: 10, point: { x: 0, y: 0 } }),
+      `${localDate}T11:00:00Z`);
+    return { id: `practice-${day}`, title: `Практика ${day}`, startedAt: `${localDate}T10:00:00Z`, localDate, practice };
+  });
+  await page.addInitScript(entries => localStorage.setItem('app.fableshot.practice-diary.v1',
+    JSON.stringify({ version: 1, entries })), entries);
+  await page.setViewportSize({ width: 320, height: 660 });
+  await page.goto('./');
+  const sessions = page.getByTestId('home-practice-session');
+  await expect(sessions).toHaveCount(5);
+  await expect(page.getByTestId('home-practice-viewport')).toHaveCount(0);
+
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-appearance').click();
+  const limit = page.getByRole('spinbutton', { name: 'Недавних тренировок на Главной' });
+  await expect(limit).toHaveValue('5');
+  await page.getByRole('button', { name: 'Показывать на одну тренировку больше' }).click();
+  await expect(limit).toHaveValue('6');
+  await limit.fill('10');
+  await limit.press('Enter');
+  await page.reload();
+
+  await expect(sessions).toHaveCount(10);
+  const viewport = page.getByTestId('home-practice-viewport');
+  await viewport.scrollIntoViewIfNeeded();
+  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth - el.scrollLeft)).toBeLessThanOrEqual(2);
+  await expect(sessions.last()).toBeInViewport({ ratio: 1 });
+  await expect(sessions.first()).not.toBeInViewport();
+  await viewport.evaluate(el => { el.scrollLeft = 0; });
+  await expect(sessions.first()).toBeInViewport({ ratio: 1 });
+  await sessions.first().click();
+  await expect(page.getByRole('heading', { name: 'Практика 03' })).toBeVisible();
+});
+
 test('Home uses recorded dates and asks for a kit when the habitual kit is archived', async ({ page }) => {
   const kit = { id: 'kit', name: 'Старый комплект', bowId: 'bow', arrowsId: null };
   const bow = { id: 'bow', name: 'Лук', category: 'recurve' };

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { REPORT_BLOCKS, reportBlockOrder, STATISTIC_SECTIONS, statisticVisible } from './statistics-visibility.ts';
 import type { ReportBlock } from './statistics-visibility.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
@@ -53,13 +53,23 @@ export function StatisticsSettings() {
       <h3>{section.title}</h3>
       {section.items.map(([key, label]) => {
         const visible = statisticVisible(preferences, key);
-        return <div className="preference-row" key={key}>
-          <span className="preference-title">{label}</span>
-          <button type="button" role="switch" aria-label={label} aria-checked={visible} className="preference-switch"
-            data-testid={`statistic-${key}`} disabled={!!error} onClick={() => update({ ...preferences,
-              disabledStatistics: visible ? [...disabled, key] : disabled.filter(item => item !== key),
-            })}><span /></button>
-        </div>;
+        return <Fragment key={key}>
+          <div className="preference-row">
+            <span className="preference-title">{label}</span>
+            <button type="button" role="switch" aria-label={label} aria-checked={visible} className="preference-switch"
+              data-testid={`statistic-${key}`} disabled={!!error} onClick={() => update({ ...preferences,
+                disabledStatistics: visible ? [...disabled, key] : disabled.filter(item => item !== key),
+              })}><span /></button>
+          </div>
+          {key === 'zone_trend' && <label className="preference-row">
+            <span className="preference-title">Доля под диаграммой</span>
+            <select className="statistics-share-select" value={preferences.distributionShare ?? '10'} disabled={!!error}
+              onChange={event => update({ ...preferences, distributionShare: event.currentTarget.value === '10+9' ? '10+9' : '10' })}>
+              <option value="10">Доля 10</option>
+              <option value="10+9">Доля 10+9</option>
+            </select>
+          </label>}
+        </Fragment>;
       })}
     </section>)}
     {error && <p className="preferences-error" role="alert">{error}</p>}

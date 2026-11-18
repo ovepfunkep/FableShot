@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Conditions } from './conditions.ts';
-import { formatAverage } from './preferences.ts';
+import { formatAverage, RECENT_PRACTICE_LIMIT } from './preferences.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { getTargetProfile, summarize } from './target.ts';
 import { Icon } from './TrainingChrome.tsx';
@@ -88,6 +88,42 @@ function HomeConditions({ conditions }: { conditions: Conditions }) {
 const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'short' });
 const fullDate = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' });
 
+function PracticeTimelineViewport({ children }: { children: ReactNode }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const wrapper = frame.current!;
+    const scroll = viewport.current!;
+    let atNewest = true;
+    function update() {
+      wrapper.dataset.earlier = String(scroll.scrollLeft > 2);
+      atNewest = scroll.scrollWidth - scroll.clientWidth - scroll.scrollLeft <= 2;
+      wrapper.dataset.later = String(!atNewest);
+      wrapper.style.setProperty('--timeline-thumb-width', `${100 * scroll.clientWidth / scroll.scrollWidth}%`);
+      wrapper.style.setProperty('--timeline-thumb-offset', `${100 * scroll.scrollLeft / scroll.scrollWidth}%`);
+    }
+    const resize = new ResizeObserver(() => {
+      if (atNewest) scroll.scrollLeft = scroll.scrollWidth;
+      update();
+    });
+    scroll.scrollLeft = scroll.scrollWidth;
+    update();
+    resize.observe(scroll);
+    scroll.addEventListener('scroll', update, { passive: true });
+    return () => {
+      resize.disconnect();
+      scroll.removeEventListener('scroll', update);
+    };
+  }, []);
+  return <div className="journal-timeline-frame" ref={frame}>
+    <div className="journal-timeline-viewport" ref={viewport} role="region" aria-label="Шкала недавних тренировок"
+      tabIndex={0} data-testid="home-practice-viewport">
+      {children}
+    </div>
+    <div className="journal-timeline-position" aria-hidden="true" />
+  </div>;
+}
+
 function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; onOpen: (id: string) => void }) {
   const { preferences } = useTrainingPreferences();
   const showResult = statisticVisible(preferences, 'result');
@@ -104,25 +140,24 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
     })
     .sort((left, right) => right.localDate.localeCompare(left.localDate) ||
       Date.parse(right.startedAt) - Date.parse(left.startedAt) || right.id.localeCompare(left.id))
-    .slice(0, 5).reverse();
+    .slice(0, preferences.recentPracticeLimit ?? RECENT_PRACTICE_LIMIT.min).reverse();
   const monthName = (date: Date) => monthLabel.format(date).replace(/\.$/, '');
   const monthChanged = (index: number) => index > 0 && (
     ordered[index].date.getMonth() !== ordered[index - 1].date.getMonth() ||
     ordered[index].date.getFullYear() !== ordered[index - 1].date.getFullYear()
   );
   const hasTransition = ordered.some((_, index) => monthChanged(index));
+  const visibleCount = Math.min(ordered.length, RECENT_PRACTICE_LIMIT.min);
   const chartStyle = {
-    '--card-share': `${200 / (ordered.length + 1)}%`,
-    '--card-gap': `${8 * (ordered.length - 1) / (ordered.length + 1)}px`,
+    '--card-share': `${200 / (visibleCount + 1)}%`,
+    '--card-gap': `${8 * (visibleCount - 1) / (visibleCount + 1)}px`,
+    '--timeline-intervals': ordered.length - 1,
   } as CSSProperties;
   const position = (index: number) => {
     const fraction = ordered.length > 1 ? index / (ordered.length - 1) : .5;
     return `calc(${fraction * 100}% + var(--timeline-card-width) * ${.5 - fraction})`;
   };
-  return <section className="journal-home-card journal-home-practice" data-testid="home-week">
-    <h2>Твоя недавняя практика <JournalGlyph name="spark" /></h2>
-    {ordered.length === 0 ? <p data-testid="home-practice-empty">Пока нет завершённых тренировок со стрелами и известной датой.</p> :
-      <ol className={`journal-timeline${ordered.length === 1 ? ' journal-timeline-single' : ''}`} style={chartStyle}
+  const timeline = <ol className={`journal-timeline${ordered.length === 1 ? ' journal-timeline-single' : ''}`} style={chartStyle}
         data-testid="home-practice-horizontal" aria-label="Тренировки от старых к новым">
         {ordered.map((entry, index) => {
           const shots = entry.practice.rounds.flatMap(round => round.series.flatMap(series => series.shots));
@@ -147,7 +182,13 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
             </div>
           </li>;
         })}
-      </ol>}
+      </ol>;
+  return <section className="journal-home-card journal-home-practice" data-testid="home-week">
+    <h2>Твоя недавняя практика <JournalGlyph name="spark" /></h2>
+    {ordered.length === 0 ? <p data-testid="home-practice-empty">Пока нет завершённых тренировок со стрелами и известной датой.</p> :
+      ordered.length > RECENT_PRACTICE_LIMIT.min
+        ? <PracticeTimelineViewport key={`${ordered.length}:${ordered.at(-1)?.id}`}>{timeline}</PracticeTimelineViewport>
+        : timeline}
   </section>;
 }
 

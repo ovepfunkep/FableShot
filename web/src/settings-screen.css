@@ -56,6 +56,13 @@
 .settings-content .statistics-settings-section .preference-row + .preference-row { border-top: 1px solid var(--edge); }
 .settings-content .statistics-settings-section { padding-block: 12px 4px; }
 .settings-content .statistics-settings-section h3 { margin: 0; padding-block: 2px 6px; font-size: 1rem; }
+.statistics-share-select { min-height: 44px; padding: 4px 8px; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); color: inherit; font: inherit; }
 .settings-statistics-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
 .settings-statistics-heading h2 { margin: 0; font-size: 1rem; }
 .settings-statistics-heading button { min-height: 44px; }
+.recent-practice-limit > small { display: block; padding: 0 0 8px; color: var(--muted); }
+.recent-practice-stepper { display: flex; flex: none; align-items: center; padding: 2px; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); }
+.recent-practice-stepper button, .recent-practice-stepper input { min-height: 40px; border: 0; background: none; font: inherit; text-align: center; }
+.recent-practice-stepper button { width: 36px; color: var(--accent); font-size: 1rem; }
+.recent-practice-stepper input { appearance: textfield; width: 30px; padding: 0; color: inherit; font-weight: 800; }
+.recent-practice-stepper input::-webkit-inner-spin-button, .recent-practice-stepper input::-webkit-outer-spin-button { appearance: none; margin: 0; }
