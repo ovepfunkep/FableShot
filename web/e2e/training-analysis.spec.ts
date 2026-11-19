@@ -73,8 +73,10 @@ test('map and zone distribution share conditions while the map can isolate one s
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   const target = map.getByTestId('hit-map-plot');
   const resetZoom = map.getByRole('button', { name: 'Сбросить приближение' });
+  await expect(target).toHaveCSS('touch-action', 'pan-y');
   await map.getByRole('button', { name: 'Увеличить', exact: true }).click();
   await expect(resetZoom).toHaveText('1,5×');
+  await expect(target).toHaveCSS('touch-action', 'none');
   await target.scrollIntoViewIfNeeded();
   const box = (await target.boundingBox())!;
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
@@ -90,6 +92,7 @@ test('map and zone distribution share conditions while the map can isolate one s
   await expect(resetZoom).toHaveText('1,5×');
   await resetZoom.click();
   await expect(target).toHaveAttribute('viewBox', '0 0 260 260');
+  await expect(target).toHaveCSS('touch-action', 'pan-y');
 
   await target.scrollIntoViewIfNeeded();
   const pinchBox = (await target.boundingBox())!;
