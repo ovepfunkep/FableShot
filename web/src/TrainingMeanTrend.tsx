@@ -27,7 +27,18 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
   if (!selected) return null;
 
   const x = (i: number) => points.length === 1 ? width / 2 : top + i * (width - 2 * top) / (points.length - 1);
-  const y = (average: number) => bottom - average * (bottom - top) / 10;
+  const averages = points.map(point => point.average);
+  const minimum = Math.min(...averages);
+  const maximum = Math.max(...averages);
+  const padding = Math.max(.15, (maximum - minimum) * .1);
+  let lower = Math.max(0, Math.floor((minimum - padding) * 2) / 2);
+  let upper = Math.min(10, Math.ceil((maximum + padding) * 2) / 2);
+  if (upper - lower < 1) {
+    lower = Math.max(0, upper - 1);
+    upper = Math.min(10, lower + 1);
+  }
+  const ticks = [upper, (upper + lower) / 2, lower];
+  const y = (average: number) => bottom - (average - lower) * (bottom - top) / (upper - lower);
   const averageText = formatAverage(selected.average, preferences.averageHundredths);
   const seriesLabel = `Раунд ${selected.round} · серия ${selected.series}`;
 
@@ -42,18 +53,20 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
       <button type="button" className="training-mean-help" aria-label="О графике среднего балла" onClick={() => setHelp(true)}>?</button>
     </header>
     <div className="training-mean-chart">
-      <div className="training-mean-axis" aria-hidden="true"><span>10</span><span>5</span><span>0</span></div>
+      <div className="training-mean-axis" aria-hidden="true">
+        {ticks.map(value => <span key={value}>{formatAverage(value, false)}</span>)}
+      </div>
       <button type="button" className="icon-button training-mean-prev" data-testid="training-mean-prev"
         aria-label="Предыдущая серия на графике" disabled={index === 0} onClick={() => select(index - 1)}><Icon name="left" /></button>
       <svg viewBox={`0 0 ${width} 160`} preserveAspectRatio="none" role="img"
-        aria-label={`Средний балл от 0 до 10. ${seriesLabel}, средний ${averageText}`}
+        aria-label={`Средний балл от ${formatAverage(lower, false)} до ${formatAverage(upper, false)}. ${seriesLabel}, средний ${averageText}`}
         data-testid="training-mean-chart" onClick={event => {
           const rect = event.currentTarget.getBoundingClientRect();
           const relativeX = (event.clientX - rect.left) * width / rect.width;
           const i = Math.round((relativeX - top) * (points.length - 1) / (width - 2 * top));
           select(Math.max(0, Math.min(i, points.length - 1)));
         }}>
-        {[0, 5, 10].map(value => <line className="training-mean-guide" key={value} x1={0} x2={width} y1={y(value)} y2={y(value)} />)}
+        {ticks.map(value => <line className="training-mean-guide" key={value} x1={0} x2={width} y1={y(value)} y2={y(value)} />)}
         {points.map((point, i) => i > 0 && point.round !== points[i - 1].round &&
           <line key={point.id} className="training-mean-round" x1={(x(i - 1) + x(i)) / 2} x2={(x(i - 1) + x(i)) / 2} y1={top} y2={bottom} />)}
         <polyline className="training-mean-line" points={points.map((point, i) => `${x(i)},${y(point.average)}`).join(' ')} />
@@ -71,6 +84,7 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
     </div>
     {help && <BottomSheet title="Средний балл по сериям" onClose={() => setHelp(false)}>
       <p>Каждая точка — средний балл внесённых стрел одной серии, включая неполную. Промах считается за ноль. Пунктир разделяет раунды.</p>
+      <p>Вертикальная шкала подстраивается под результаты всей тренировки с небольшим запасом. Минимальный диапазон — один балл.</p>
     </BottomSheet>}
   </section>;
 }

@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
+import type { PointerEvent, ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { Conditions } from './conditions.ts';
 import { HIT_MAP_GRID_SIZE, hitCentroid, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, knownMissPoints } from './hit-map.ts';
@@ -24,7 +24,8 @@ const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const initialView = { zoom: 1, x: center, y: center };
 
-function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, arrowScale }: {
+function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, arrowScale, modeControls }: {
+  modeControls: ReactNode;
   points: readonly Point[];
   misses: readonly Point[];
   profile: TargetProfile;
@@ -84,9 +85,12 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
   }
 
   return <div className="hit-map-viewport">
-    <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
-      onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
-      onReset={() => changeView(1, center, center)} />
+    <div className="hit-map-toolbar">
+      {modeControls}
+      <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
+        onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
+        onReset={() => changeView(1, center, center)} />
+    </div>
     <svg viewBox={`${view.x - span / 2} ${view.y - span / 2} ${span} ${span}`} className="hit-map-plot" role="img"
     data-zoomed={view.zoom > 1}
     onPointerDown={trackPointer} onPointerMove={movePointer} onPointerUp={forgetPointer}
@@ -138,6 +142,12 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const density = hitDensity(points, limit);
   const geometry = hitGeometry(shots, conditions.targetDiameterMm);
   const arrowDiameter = preferences.realArrowDiameter && conditions.equipment?.arrows.diameterMm;
+  const modeControls = allPoints.length > 0 && <div className="hit-map-modes" role="group" aria-label="Вид карты">
+    <button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
+      data-testid="hit-map-mode-density">Плотность</button>
+    <button type="button" aria-pressed={mode === 'points'} onClick={() => setMode('points')}
+      data-testid="hit-map-mode-points">Попадания</button>
+  </div>;
 
   return <section className="training-hit-map" aria-labelledby={titleId} data-testid="training-hit-map">
     <header>
@@ -151,16 +161,10 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       {visible('result') && <span data-testid="hit-map-score">Очки <strong>{summarize(shots).points}</strong></span>}
       {visible('volume') && <span data-testid="hit-map-coverage">Координаты <strong>{points.length + misses.length} из {shots.length}</strong></span>}
     </div>}
-    {allPoints.length > 0 && <div className="hit-map-modes" role="group" aria-label="Вид карты">
-      <button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
-        data-testid="hit-map-mode-density">Плотность</button>
-      <button type="button" aria-pressed={mode === 'points'} onClick={() => setMode('points')}
-        data-testid="hit-map-mode-points">Попадания</button>
-    </div>}
     {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
-      showOffset={!profile.vertical && visible('offset')} arrowScale={arrowDiameter ? arrowDiameter / conditions.targetDiameterMm : undefined} />
-      : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
-        data-testid="hit-map-empty">Нет подтверждённых координат.</p>}
+      modeControls={modeControls} showOffset={!profile.vertical && visible('offset')} arrowScale={arrowDiameter ? arrowDiameter / conditions.targetDiameterMm : undefined} />
+      : <>{modeControls}<p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
+        data-testid="hit-map-empty">Нет подтверждённых координат.</p></>}
     <div className="hit-map-series-controls">
       <button type="button" className="icon-button" aria-label="Предыдущая серия на карте" data-testid="hit-map-previous"
         disabled={index < 0} onClick={() => setSelectedId(series[index - 1]?.id ?? null)}><Icon name="left" /></button>

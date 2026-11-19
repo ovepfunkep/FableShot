@@ -27,6 +27,24 @@ test('the report graphs all entered series while CG3 uses confirmed series only'
   await expect(page.getByTestId('cg3-formula')).toBeVisible();
 });
 
+test('series averages use a compact vertical range, including identical results', async ({ page }) => {
+  let practice = appendShot(emptyPractice(), { code: '10', points: 10, point: { x: 0, y: 0 } });
+  await page.addInitScript(data => {
+    if (!localStorage.getItem('app.fableshot.practice-pilot.v3')) localStorage.setItem('app.fableshot.practice-pilot.v3', JSON.stringify(data));
+  }, practice);
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  const trend = page.getByTestId('training-mean-trend');
+  await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '9,5', '9,0']);
+  await expect(trend.getByTestId('training-mean-chart')).toHaveAccessibleName(/от 9,0 до 10,0/);
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByTestId('next-end').click();
+  await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '5,0', '0,0']);
+});
+
 test('map and zone distribution share conditions while the map can isolate one series', async ({ page }) => {
   let practice = emptyPractice();
   for (const x of [.02, .04, .06]) practice = appendShot(practice, { code: 'X', points: 10, point: { x, y: 0 } });
