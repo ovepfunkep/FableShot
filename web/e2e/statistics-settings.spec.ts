@@ -70,7 +70,8 @@ test('dragging a report block persists its order in the report', async ({ page }
   await page.getByTestId('home-start-training').click();
   await page.getByTestId('target').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
-  await expect(page.locator('[data-report-block]').first()).toHaveAttribute('data-report-block', 'result');
+  await expect(page.locator('[data-report-block]').first()).toHaveAttribute('data-report-block', 'series');
+  await expect(page.locator('[data-report-block]').nth(1)).toHaveAttribute('data-report-block', 'result');
 });
 
 test('whole exercise uses two rounds and display switches persist without rewriting the diary', async ({ page }) => {

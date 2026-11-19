@@ -733,7 +733,8 @@ function App() {
     }))[0]);
   const activeNoticeIndex = pendingNotices.findIndex(Boolean);
   const activeNotice = pendingNotices[activeNoticeIndex];
-  const achievementNotice = activeNotice && preferences.showAchievementNotices !== false && !(page === 'training' && preferences.hideScores) &&
+  const inputNoticesHidden = (page === 'training' || page === 'editor') && preferences.showAchievementsDuringInput === false;
+  const achievementNotice = activeNotice && preferences.showAchievementNotices !== false && !inputNoticesHidden && !(page === 'training' && preferences.hideScores) &&
     <AchievementNotice key={`${activeNotice.leading.id}:${activeNotice.leading.scope}`} group={activeNotice}
       onShown={() => writeDiary(previous => {
         if (!previous.achievementLedger) return previous;
@@ -936,7 +937,7 @@ function App() {
             }
           }}><span /></button></div>
     </div>}
-    training={<div className="settings-panel"><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores']} /></div>}
+    training={<div className="settings-panel"><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
     statistics={<>
       <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths']} /></div>
       <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>

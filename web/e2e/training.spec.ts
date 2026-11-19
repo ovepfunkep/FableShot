@@ -126,7 +126,7 @@ test('the larger lens fits a narrow screen and follows slower aim', async ({ pag
   expect(lensBounds!.y + lensBounds!.height).toBeLessThanOrEqual(570);
   await page.mouse.move(x + radius * .13 / 3, y);
   await expect(lens.locator('strong')).toHaveText('10');
-  await page.mouse.move(x + radius * .17 / 2.4, y);
+  await page.mouse.move(x + radius * .17 / 1.92, y);
   await expect(lens).toContainText('9');
   await expect(lens.locator('.lens-score')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
   expect((await lens.boundingBox())?.width).toBe(lensBounds!.width);
@@ -228,11 +228,11 @@ test('one hold reaches off-screen spots at 8× in training and in the series edi
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     await expect(lens).toHaveText('10');
     await client.send('Input.dispatchTouchEvent', {
-      type: 'touchMove', touchPoints: [{ x: x + radius * .25 / 2.4, y: y + direction * radius * .6 / 2.4 }],
+      type: 'touchMove', touchPoints: [{ x: x + radius * .25 / 1.92, y: y + direction * radius * .6 / 1.92 }],
     });
     await expect(lens).toHaveText('—');
     await client.send('Input.dispatchTouchEvent', {
-      type: 'touchMove', touchPoints: [{ x, y: y + direction * radius * (1.2 + ringFraction) / 2.4 }],
+      type: 'touchMove', touchPoints: [{ x, y: y + direction * radius * (1.2 + ringFraction) / 1.92 }],
     });
     await expect(lens).toHaveText(expected);
   }

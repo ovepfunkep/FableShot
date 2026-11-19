@@ -35,10 +35,10 @@ export function statisticVisible(preferences: TrainingPreferences, feature: Stat
 }
 
 export const REPORT_BLOCKS = [
-  ['records', 'Личные рекорды'], ['series', 'Раунды и серии'], ['mean_trend', 'Средний балл по сериям'],
-  ['norms', 'Нормативы и разряд'], ['result', 'Результат'], ['general_score', 'Общие очки'],
-  ['progress_score', 'Прогрессивные очки'], ['hit_map', 'Карта попаданий'], ['numbered_arrows', 'По номерам стрел'],
-  ['distribution', 'Распределение попаданий'],
+  ['result', 'Результат'], ['series', 'Раунды и серии'], ['hit_map', 'Карта попаданий'],
+  ['distribution', 'Распределение попаданий'], ['norms', 'Нормативы и разряд'],
+  ['mean_trend', 'Средний балл по сериям'], ['general_score', 'Общие очки'],
+  ['records', 'Личные рекорды'], ['progress_score', 'Прогрессивные очки'], ['numbered_arrows', 'По номерам стрел'],
 ] as const;
 export type ReportBlock = typeof REPORT_BLOCKS[number][0];
 const reportKeys = REPORT_BLOCKS.map(([id]) => id);

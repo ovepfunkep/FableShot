@@ -30,6 +30,7 @@ export type TrainingPreferences = {
   themeStyle?: ThemeStyle;
   themeMode?: ThemeMode;
   showAchievementNotices?: boolean;
+  showAchievementsDuringInput?: boolean;
 };
 
 export const DEFAULT_PREFERENCES: TrainingPreferences = {
@@ -54,6 +55,7 @@ export function valid(value: unknown): value is TrainingPreferences {
     (record.rankAssignments === undefined || isRankAssignments(record.rankAssignments)) &&
     (record.onboardingSeen === undefined || typeof record.onboardingSeen === 'boolean') &&
     (record.showAchievementNotices === undefined || typeof record.showAchievementNotices === 'boolean') &&
+    (record.showAchievementsDuringInput === undefined || typeof record.showAchievementsDuringInput === 'boolean') &&
     (record.trainingOnLockScreen === undefined || typeof record.trainingOnLockScreen === 'boolean') &&
     (record.themeStyle === undefined || isThemeStyle(record.themeStyle)) &&
     (record.themeMode === undefined || isThemeMode(record.themeMode)) &&

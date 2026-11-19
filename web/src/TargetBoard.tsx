@@ -16,7 +16,7 @@ type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | n
   blocked: { id: number; origin: Point } | null };
 
 const initialView: View = { zoom: 1, x: 0, y: 0 };
-const AIM_SPEED = 2.4;
+const AIM_SPEED = 1.92;
 const TAP_SLOP = 8;
 const DOUBLE_TAP_MS = 240;
 const DOUBLE_TAP_DISTANCE = 32;

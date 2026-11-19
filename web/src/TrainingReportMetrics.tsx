@@ -52,15 +52,17 @@ function ResultCard({ shots, diameterMm }: { shots: readonly Shot[]; diameterMm:
   const showOffset = !visible('hit_map') && visible('offset');
   if (!(['result', 'average', 'volume', 'grouping'] as const).some(visible) && !showOffset) return null;
   return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result">
-    <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
+    <header className="report-result-header">
+      <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
+      <div className="report-metrics-inline">
+        {visible('average') && <span>Средний балл<strong data-testid="report-result-average">{formatAverage(average, preferences.averageHundredths)}</strong></span>}
+        {visible('grouping') && <span>Кучность<strong data-testid="report-result-grouping">{rms == null ? '—' : `${formatAverage(rms, false)} мм`}</strong></span>}
+        {showOffset && <span>Смещение<strong>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</strong></span>}
+      </div>
+    </header>
     {visible('result') && <><div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>
     <progress aria-label="Доля от максимума" value={points} max={maximum} /></>}
     {visible('volume') && <p className="report-metrics-muted">Стрел: {shots.length}</p>}
-    <div className="report-metrics-inline">
-      {visible('average') && <span>Средний балл<strong data-testid="report-result-average">{formatAverage(average, preferences.averageHundredths)}</strong></span>}
-      {visible('grouping') && <span>Кучность<strong data-testid="report-result-grouping">{rms == null ? '—' : `${formatAverage(rms, false)} мм`}</strong></span>}
-      {showOffset && <span>Смещение<strong>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</strong></span>}
-    </div>
   </section>;
 }
 
