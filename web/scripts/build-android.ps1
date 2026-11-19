@@ -30,6 +30,14 @@ if (!$JdkHome -or !(Test-Path -LiteralPath (Join-Path $JdkHome 'bin/java.exe')))
 $javaVersion = & (Join-Path $JdkHome 'bin/java.exe') -version 2>&1
 if (!($javaVersion -match 'version "21(?:\.|\")')) { throw 'This build requires JDK 21.' }
 
+Push-Location -LiteralPath $webRoot
+try {
+    $bundledNpm = Join-Path $repoRoot '.tools/web-npm/package/bin/npm-cli.js'
+    if (Test-Path -LiteralPath $bundledNpm) { & node $bundledNpm run build }
+    else { & npm run build }
+    if ($LASTEXITCODE) { throw 'Could not build the current web client for Android.' }
+} finally { Pop-Location }
+
 $dist = Join-Path $webRoot 'dist'
 $cliRelative = 'node_modules/@capacitor/cli/bin/capacitor'
 if (!(Test-Path -LiteralPath (Join-Path $dist 'index.html')) -or
