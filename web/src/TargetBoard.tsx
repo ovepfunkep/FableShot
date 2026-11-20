@@ -378,7 +378,18 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       if (track.aim?.id === event.pointerId) {
         const { anchor, origin, startsOnFace } = track.aim;
         if (anchor) { showAim(position, anchor); return; }
-        if (startsOnFace || distance(position, origin) <= TAP_SLOP) return;
+        if (startsOnFace && distance(position, origin) > 0) {
+          if (track.timer !== null) window.clearTimeout(track.timer);
+          track.timer = null;
+          track.touchTap = null;
+          const rect = event.currentTarget.getBoundingClientRect();
+          const immediateAnchor = { position: origin, point: normalized(origin),
+            screen: { x: rect.left + origin.x, y: rect.top + origin.y } };
+          track.aim.anchor = immediateAnchor;
+          showAim(position, immediateAnchor);
+          return;
+        }
+        if (distance(position, origin) <= TAP_SLOP) return;
         // A quick drag from outside the face still pans the zoomed view.
         panFrom = origin;
         clearAim();

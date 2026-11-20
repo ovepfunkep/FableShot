@@ -40,8 +40,10 @@ test('traffic-light target records and displays hits on all three spots', async 
   const hits = page.getByTestId('hit-map-plot').locator(':scope > circle[fill="#111811"]');
   const coordinates = await hits.evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('cy'))));
   expect(coordinates).toHaveLength(3);
-  expect(coordinates[0]).toBeLessThan(coordinates[1]);
-  expect(coordinates[1]).toBeLessThan(coordinates[2]);
+  expect(coordinates[0]).toBeCloseTo(coordinates[1], 4);
+  expect(coordinates[1]).toBeCloseTo(coordinates[2], 4);
+  await expect(hits.first()).toHaveAttribute('r', '1.8');
+  await expect(page.getByTestId('hit-map-plot').locator('circle[fill="#f4ce44"]')).toHaveCount(2);
 });
 
 test('new training remembers the last applied setup even if its empty series was trimmed', async ({ page }) => {

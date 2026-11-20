@@ -114,6 +114,8 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await rankTable.getByRole('button', { name: 'КМС', exact: true }).click();
   await page.getByTestId('report-exercise-rank').screenshot({ path: '../artifacts/web-0.13.0-exercise-rank.png' });
   await page.getByTestId('exercise-rank-open').click();
+  await expect(page.getByTestId('rank-details').getByRole('table')).toBeVisible();
+  await expect(page.getByTestId('rank-details').locator('.rank-scale')).toHaveCount(0);
   await expect(page.getByTestId('rank-progress')).toContainText('540 очков · 60 из 60 стрел');
   await page.getByTestId('rank-open-reference').click();
   await expect(page.getByTestId('rank-reference')).toBeVisible();

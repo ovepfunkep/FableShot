@@ -490,6 +490,23 @@ test('manual round transition drops the empty tail and keeps the earlier results
   await expect(page.getByTestId('training-rounds-open')).toContainText('Раунд 2');
 });
 
+test('aim reacts to the first movement without waiting for the hold timer', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await page.clock.pauseAt(new Date());
+  const bounds = await targetBounds(page);
+  const target = page.getByTestId('target');
+  const clientX = bounds.x + bounds.width / 2;
+  const clientY = bounds.y + bounds.height / 2;
+  await page.mouse.move(clientX, clientY);
+  await page.mouse.down();
+  await page.mouse.move(clientX + 2, clientY);
+  await expect(page.getByTestId('lens')).toHaveCount(1);
+  await target.dispatchEvent('pointercancel', { pointerId: 1, clientX, clientY });
+  await page.mouse.up();
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+});
+
 test('the second touch drags the target until release, then single taps score again', async ({ page, context }) => {
   await page.goto('./');
   await openTraining(page);
