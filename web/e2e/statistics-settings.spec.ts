@@ -104,6 +104,7 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await page.goto('./');
   await openHistoryEntry(page, 'stats');
   await expect(page.getByTestId('exercise-rank-level')).toHaveText('МС по очкам');
+  await expect(page.getByTestId('report-result-rank')).toHaveText('МС');
   const rankTable = page.getByRole('table', { name: 'Пороги нормативов за 60 стрел' });
   await expect(rankTable.getByRole('button', { name: 'МС', exact: true }).locator('..')).toHaveAttribute('data-rank-state', 'reached');
   await expect(rankTable.getByRole('button', { name: 'МСМК', exact: true }).locator('..')).toHaveAttribute('data-rank-state', 'next');
@@ -123,6 +124,8 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await openHistoryEntry(page, 'partial');
   await expect(page.getByTestId('exercise-rank-level')).toHaveText('Темп МС');
+  await expect(page.getByTestId('report-result-rank')).toHaveText('МС');
+  await expect(page.locator('.report-result-rank')).toContainText('Прогноз разряда');
   await expect(page.getByTestId('exercise-rank-progress')).toHaveText('57 из 60 стрел');
   await expect(page.getByTestId('exercise-rank-next')).toHaveText('МСМК · порог уже недостижим');
   await rankTable.getByRole('button', { name: 'МС', exact: true }).click();

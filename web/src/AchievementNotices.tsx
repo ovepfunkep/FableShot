@@ -67,13 +67,12 @@ export function SessionAchievements({ grants }: { grants: readonly AchievementGr
   const groups = groupAchievementGrants(grants);
   if (!groups.length) return null;
   const earned = groups.flatMap(group => [group.leading, ...group.additional]);
-  return <section className="report-metrics-card" data-testid="session-achievements">
-    <button type="button" className="achievement-earned-summary" aria-haspopup="dialog" onClick={() => setExpanded(true)}>
-      <span className="achievement-earned-icon"><Icon name="trophy" /></span>
-      <strong>Получено достижений: {earned.length}</strong><Icon name="right" />
+  return <span className="session-achievements-action" data-testid="session-achievements">
+    <button type="button" aria-haspopup="dialog" onClick={() => setExpanded(true)}>
+      <Icon name="trophy" /><span className="sr-only">Получено достижений: </span><strong>{earned.length}</strong>
     </button>
     {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(false)}>
       <GrantList grants={earned} />
     </BottomSheet>}
-  </section>;
+  </span>;
 }

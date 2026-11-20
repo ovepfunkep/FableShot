@@ -137,6 +137,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     <div className="report-body" data-testid="report-screen">
       <div className="report-title-row">
         <h2 className="report-title">{entry?.title || 'Тренировка'}</h2>
+        {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
         {entry?.trainingTime && visible('training_time') && <ReportDuration time={entry.trainingTime} />}
       </div>
       {onRoomLeaderboard && <button type="button" className="report-resume" onClick={onRoomLeaderboard}>{roomFinalized ? 'Итоги комнаты' : 'Таблица комнаты'}</button>}
@@ -147,7 +148,6 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {deleted && <button type="button" className="report-resume" onClick={() => { if (onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
-      {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
       <TrainingReportMetrics practice={practice} entries={entries} overview={{
       records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
@@ -155,16 +155,21 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       series: visible('series') && practice.rounds.map((round, roundIndex) => {
         const shots = roundShots(round);
         if (!shots.length) return null;
+        let cumulative = 0;
         return <section className="report-round" key={round.id} data-testid={`report-round-${roundIndex + 1}`}>
           <div className="report-round-heading">
             <h3 data-testid={`report-round-total-${roundIndex + 1}`}>Раунд {roundIndex + 1}{summary(shots) && ` · ${summary(shots)}`}</h3>
             {visible('norms') && <RankTag rank={roundRank(practice, round.id, preferences.rankCategory ?? null)} testId={`report-rank-${roundIndex + 1}`} onOpen={() => onRank(round.id)} />}
           </div>
-          {round.series.map((series, seriesIndex) => series.shots.length > 0 && <button type="button" className="report-series"
-            key={series.id} data-testid={`report-end-${series.id}`} disabled={deleted} onClick={() => onSelectSeries(series.id)}>
-            <SeriesResult number={seriesIndex + 1} shots={series.shots} summary={summary(series.shots)}
-              totalTestId={`report-series-total-${series.id}`} showHits={visible('result')} />
-          </button>)}
+          {round.series.map((series, seriesIndex) => {
+            cumulative += summarize(series.shots).points;
+            return series.shots.length > 0 && <button type="button" className="report-series"
+              key={series.id} data-testid={`report-end-${series.id}`} disabled={deleted} onClick={() => onSelectSeries(series.id)}>
+              <SeriesResult number={seriesIndex + 1} shots={series.shots} summary={summary(series.shots)}
+                totalTestId={`report-series-total-${series.id}`} showHits={visible('result')}
+                cumulative={visible('result') ? cumulative : undefined} />
+            </button>;
+          })}
         </section>;
       }),
       mean_trend: visible('mean_trend') && <TrainingMeanTrend practice={practice} />,

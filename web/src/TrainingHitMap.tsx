@@ -11,6 +11,8 @@ import './training-hit-map.css';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { clampTargetZoom, TargetZoom } from './TargetZoom.tsx';
+import { ReportRoundFilter } from './ReportRoundFilter.tsx';
+import { ZoneCounts } from './ZoneCounts.tsx';
 
 type MapSeries = { id: number; round: number; number: number; shots: readonly Shot[] };
 type MapMode = 'density' | 'points';
@@ -24,7 +26,8 @@ const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const initialView = { zoom: 1, x: center, y: center };
 
-function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, modeControls }: {
+function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, modeControls, counts }: {
+  counts: ReactNode;
   modeControls: ReactNode;
   points: readonly Point[];
   misses: readonly Point[];
@@ -90,6 +93,7 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
         onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
         onReset={() => changeView(1, center, center)} />
     </div>
+    <div className="hit-map-layout">
     <svg viewBox={`${view.x - span / 2} ${view.y - span / 2} ${span} ${span}`} className="hit-map-plot" role="img"
     data-zoomed={view.zoom > 1}
     onPointerDown={trackPointer} onPointerMove={movePointer} onPointerUp={forgetPointer}
@@ -103,8 +107,12 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
     {mode === 'density' ? density.cells.map(({ column, row, count }) => <rect key={`${column},${row}`}
       x={center - gridRadius + column * cellSize} y={center - gridRadius + row * cellSize} width={cellSize} height={cellSize}
       fill={densityColors[Math.ceil(count / density.peak * densityColors.length) - 1]} fillOpacity={densityOpacity} />)
-      : points.map(({ x, y }, index) => <circle key={index} cx={at(x)} cy={at(y)} r={1.8}
-        fill="#111811" stroke="white" strokeWidth={.6} />)}
+      : points.map(({ x, y }, index) => {
+        const zone = profile.zones.find(zone => Math.hypot(x, y) <= zone.outerRadius + 1e-9);
+        const light = zone !== undefined && zone.points >= 3 && zone.points <= 8;
+        return <circle key={index} data-testid="hit-map-hit" cx={at(x)} cy={at(y)} r={2.7}
+          fill={light ? '#fff' : '#111811'} stroke={light ? 'none' : '#fff'} strokeWidth={.6} />;
+      })}
     {misses.map(({ x, y }, index) => <g key={index} transform={`translate(${at(x)} ${at(y)})`} data-testid="hit-map-miss">
       <circle r={4} fill="#536052" stroke="white" strokeWidth={.8} />
       <path d="M-2-2 2 2 M2-2-2 2" fill="none" stroke="white" strokeWidth={1.1} />
@@ -114,6 +122,8 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="white" strokeWidth={1} />
     </g>}
     </svg>
+    {counts}
+    </div>
   </div>;
 }
 
@@ -121,23 +131,30 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const { preferences } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const titleId = useId();
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const rounds = useMemo(() => [...new Set(series.map(entry => entry.round))], [series]);
+  const round = selectedRound !== null && rounds.includes(selectedRound) ? selectedRound : null;
+  const roundSeries = useMemo(() => series.filter(entry => round === null || entry.round === round), [series, round]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mode, setMode] = useState<MapMode>('points');
   const [help, setHelp] = useState(false);
-  const allShots = useMemo(() => series.flatMap(entry => entry.shots), [series]);
+  const allShots = useMemo(() => roundSeries.flatMap(entry => entry.shots), [roundSeries]);
   const allPoints = useMemo(() => knownHitPoints(allShots), [allShots]);
   const allMisses = useMemo(() => knownMissPoints(allShots), [allShots]);
   const profile = getTargetProfile(conditions.targetProfileId);
   if (!series.length || !profile) return null;
 
-  const index = series.findIndex(entry => entry.id === selectedId);
-  const selected = series[index];
+  const index = roundSeries.findIndex(entry => entry.id === selectedId);
+  const selected = roundSeries[index];
   const shots = selected?.shots ?? allShots;
   const points = selected ? knownHitPoints(shots) : allPoints;
   const misses = selected ? knownMissPoints(shots) : allMisses;
   const limit = hitMapLimit([...allPoints, ...allMisses], profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH);
   const density = hitDensity(points, limit);
   const geometry = hitGeometry(shots, conditions.targetDiameterMm);
+  const counts = new Array<number>(11).fill(0);
+  for (const shot of shots) counts[shot.points]++;
+  const countList = visible('result') && <ZoneCounts counts={counts} testIdPrefix="hit-map-zone" showTotal />;
   const modeControls = allPoints.length > 0 && <div className="hit-map-modes" role="group" aria-label="Вид карты">
     <button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
       data-testid="hit-map-mode-density">Плотность</button>
@@ -153,24 +170,28 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       <h3 id={titleId}>Карта попаданий</h3>
       <button type="button" className="hit-map-help" aria-label="О карте попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
+    <ReportRoundFilter rounds={rounds} value={round} label="Раунд карты попаданий" onChange={value => {
+      setSelectedRound(value);
+      setSelectedId(null);
+    }} />
     {(visible('result') || visible('volume')) && <div className="hit-map-reading" aria-live="polite">
       {visible('result') && <span data-testid="hit-map-score">Очки <strong>{summarize(shots).points}</strong></span>}
       {visible('volume') && <span data-testid="hit-map-coverage">Координаты <strong>{points.length + misses.length} из {shots.length}</strong></span>}
     </div>}
     {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
-      modeControls={modeControls} showOffset={visible('offset')} />
-      : <>{modeControls}<p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
-        data-testid="hit-map-empty">Нет подтверждённых координат.</p></>}
+      modeControls={modeControls} counts={countList} showOffset={visible('offset')} />
+      : <>{modeControls}<div className="hit-map-layout"><p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
+        data-testid="hit-map-empty">Нет подтверждённых координат.</p>{countList}</div></>}
     <div className="hit-map-series-controls">
       <button type="button" className="icon-button" aria-label="Предыдущая серия на карте" data-testid="hit-map-previous"
-        disabled={index < 0} onClick={() => setSelectedId(series[index - 1]?.id ?? null)}><Icon name="left" /></button>
+        disabled={index < 0} onClick={() => setSelectedId(roundSeries[index - 1]?.id ?? null)}><Icon name="left" /></button>
       <select aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
         onChange={event => setSelectedId(event.target.value === '' ? null : Number(event.target.value))}>
         <option value="">Все серии</option>
-        {series.map(entry => <option key={entry.id} value={entry.id}>Раунд {entry.round} · Серия {entry.number}</option>)}
+        {roundSeries.map(entry => <option key={entry.id} value={entry.id}>Раунд {entry.round} · Серия {entry.number}</option>)}
       </select>
       <button type="button" className="icon-button" aria-label="Следующая серия на карте" data-testid="hit-map-next"
-        disabled={index >= series.length - 1} onClick={() => setSelectedId(series[index + 1].id)}><Icon name="right" /></button>
+        disabled={index >= roundSeries.length - 1} onClick={() => setSelectedId(roundSeries[index + 1].id)}><Icon name="right" /></button>
     </div>
     {mode === 'density' && density.peak > 0 && <div className="hit-map-legend">
       <div className="hit-map-density-bands" aria-hidden="true">

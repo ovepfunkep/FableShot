@@ -11,6 +11,7 @@ test('the report graphs all entered series while CG3 uses confirmed series only'
   await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
   await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await expect(page.getByTestId('report-round-1').locator('.report-series-cumulative')).toHaveText(['Итог 30', 'Итог 30']);
   const trend = page.getByTestId('training-mean-trend');
   await expect(trend.getByTestId('training-mean-value')).toHaveText('0,0 / 10');
   await expect(trend.getByText('Раунд 1 · серия 2', { exact: true })).toBeVisible();
@@ -62,11 +63,16 @@ test('map and zone distribution share conditions while the map can isolate one s
   const map = page.getByTestId('training-hit-map');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 4 из 5');
+  await expect(map.getByTestId('hit-map-zone-10')).toHaveText('10: 3');
+  await expect(map.getByTestId('hit-map-zone-9')).toHaveText('9: 1');
+  await expect(map.getByTestId('hit-map-zone-M')).toHaveText('M: 1');
+  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('4/1');
   await expect(page.getByTestId('report-zone-M')).toHaveText('M: 1');
   await expect(page.getByTestId('report-zone-10')).toHaveText('10: 3');
   await expect(page.getByTestId('report-ten-share')).toHaveText('60,0%');
 
   await map.getByTestId('hit-map-next').click();
+  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('3/0');
   await expect(map.getByTestId('hit-map-rms')).toHaveText('Разброс RMS 3,3 мм');
   await expect(map.getByTestId('hit-map-shift')).toHaveText('Смещение 8,0 мм');
   await map.getByTestId('hit-map-mode-points').click();
@@ -110,6 +116,7 @@ test('map and zone distribution share conditions while the map can isolate one s
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-coverage')).toHaveText('Координаты 1 из 1');
+  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('1/0');
   await expect(page.getByTestId('report-result-average')).toHaveText('10,0');
   await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
   await expect(page.getByTestId('report-zone-M')).toHaveCount(0);

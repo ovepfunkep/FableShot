@@ -245,7 +245,9 @@ test('one hold reaches off-screen spots at 8× in training and in the series edi
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
   await page.getByTestId('hit-map-mode-points').click();
-  const hit = page.getByTestId('hit-map-plot').locator(':scope > circle[fill="#111811"]');
+  const hit = page.getByTestId('hit-map-hit');
+  await expect(hit).toHaveAttribute('fill', '#fff');
+  await expect(hit).toHaveAttribute('stroke', 'none');
   const topY = Number(await hit.getAttribute('cy'));
 
   await page.locator('[data-testid^="report-end-"]').first().click();
@@ -439,7 +441,7 @@ test('next series advances one step through earlier series and into a new round'
   await expect(series).toContainText('Серия 3');
   await expect(miss).toBeDisabled();
   await expect(page.getByTestId('round-score')).toHaveText('0/300');
-  await expect(next).toHaveText('Следующая серия');
+  await expect(next).toHaveText('Следующий раунд');
   await expect(next).toBeInViewport({ ratio: 1 });
   const target = await targetBounds(page);
   await page.touchscreen.tap(target.x + target.width / 2, target.y + target.height / 2);
@@ -449,6 +451,7 @@ test('next series advances one step through earlier series and into a new round'
   await expect(page.getByTestId('training-rounds-open')).toContainText('Раунд 2');
   await expect(series).toContainText('Серия 1');
   await expect(page.getByTestId('round-score')).toHaveText('0/0');
+  await expect(next).toHaveText('Следующая серия');
 });
 
 test('a saved pilot 0.1 series remains readable and continues as a training', async ({ page }) => {

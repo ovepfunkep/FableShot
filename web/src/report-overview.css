@@ -16,6 +16,10 @@
 .report-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .report-title-row .report-title { min-width: 0; }
 .report-title-row .report-duration { flex: none; white-space: nowrap; }
+.report-title-row .report-title { margin-right: auto; }
+.session-achievements-action { display: inline-flex; flex: none; }
+.session-achievements-action > button { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding: 0 2px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; }
+.session-achievements-action > button svg { width: 20px; height: 20px; }
 .report-menu { position: fixed; inset: calc(env(safe-area-inset-top) + 52px) max(8px, calc((100% - 550px) / 2 + 8px)) auto auto; margin: 0; padding: 0; width: min(248px, calc(100% - 16px)); border: 1px solid var(--edge); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 30px #0004; }
 .report-menu::backdrop { background: #0002; }
 .report-menu-items { display: grid; padding: 4px; }

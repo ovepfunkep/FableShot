@@ -14,6 +14,9 @@ import { getTargetProfile, summarize } from './target.ts';
 import type { Shot } from './target.ts';
 import { TrainingHitMap } from './TrainingHitMap.tsx';
 import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
+import { ReportRoundFilter } from './ReportRoundFilter.tsx';
+import { ZoneCounts } from './ZoneCounts.tsx';
+import { exerciseRank } from './exercise-rank.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
 import type { ReportBlock } from './statistics-visibility.ts';
@@ -43,13 +46,14 @@ function scopeLabel(scope: Scope): string {
     equipment?.name].filter(Boolean).join(' · ');
 }
 
-function ResultCard({ shots, diameterMm }: { shots: readonly Shot[]; diameterMm: number }) {
+function ResultCard({ shots, diameterMm, practice }: { shots: readonly Shot[]; diameterMm: number; practice: Practice }) {
   const { preferences } = useTrainingPreferences();
   const { points, maximum, average } = summarize(shots);
   const geometry = hitGeometry(shots, diameterMm);
   const rms = geometry?.rmsMm;
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const showOffset = !visible('hit_map') && visible('offset');
+  const rank = useMemo(() => exerciseRank(practice, preferences.rankCategory ?? null), [practice, preferences.rankCategory]);
   if (!(['result', 'average', 'volume', 'grouping'] as const).some(visible) && !showOffset) return null;
   return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result">
     <header className="report-result-header">
@@ -60,8 +64,14 @@ function ResultCard({ shots, diameterMm }: { shots: readonly Shot[]; diameterMm:
         {showOffset && <span>Смещение<strong>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</strong></span>}
       </div>
     </header>
-    {visible('result') && <><div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>
-    <progress aria-label="Доля от максимума" value={points} max={maximum} /></>}
+    <div className="report-result-score-row">
+      {visible('result') && <div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>}
+      {visible('norms') && <span className="report-result-rank" title={rank.reason ?? 'Разряд по всей тренировке'}>
+        {rank.evaluation && !rank.finalResult ? 'Прогноз разряда' : 'Разряд'}
+        <strong data-testid="report-result-rank">{rank.label ?? '—'}</strong>
+      </span>}
+    </div>
+    {visible('result') && <progress aria-label="Доля от максимума" value={points} max={maximum} />}
     {visible('volume') && <p className="report-metrics-muted">Стрел: {shots.length}</p>}
   </section>;
 }
@@ -99,16 +109,16 @@ function ZonePie({ counts, total }: { counts: readonly number[]; total: number }
         <text key={score} x={x} y={y} textAnchor="middle" dominantBaseline="central"
           fill={score === 0 || score === 3 || score === 4 ? '#fff' : '#101510'}>{label}</text>)}
     </svg>
-    <ul className="report-zone-legend" aria-label="Попадания по зонам">
-      {zones.map(({ count, score, label }) => <li key={score} data-testid={`report-zone-${label}`}>
-        <strong data-zone={score} style={{ color: zoneColor(score) }}>{label}</strong>: {count}
-      </li>)}
-    </ul>
+    <ZoneCounts counts={counts} testIdPrefix="report-zone" />
   </div>;
 }
 
-function ZoneDistribution({ shots }: { shots: readonly Shot[] }) {
+function ZoneDistribution({ series }: { series: readonly ScopedSeries[] }) {
   const [help, setHelp] = useState(false);
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const rounds = [...new Set(series.map(entry => entry.round))];
+  const round = selectedRound !== null && rounds.includes(selectedRound) ? selectedRound : null;
+  const shots = series.filter(entry => round === null || entry.round === round).flatMap(entry => entry.shots);
   const { preferences } = useTrainingPreferences();
   const distribution = statisticVisible(preferences, 'distribution');
   const showShare = statisticVisible(preferences, 'zone_trend');
@@ -121,6 +131,7 @@ function ZoneDistribution({ shots }: { shots: readonly Shot[] }) {
     <header className="report-metrics-heading"><h3>{distribution ? 'Распределение попаданий' : `Доля ${shareMode}`}</h3>
       <button type="button" className="training-mean-help" aria-label="О распределении попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
+    <ReportRoundFilter rounds={rounds} value={round} onChange={setSelectedRound} label="Раунд распределения попаданий" />
     {distribution && <ZonePie counts={counts} total={shots.length} />}
     {showShare && <p className="report-metrics-muted">{distribution && `Доля ${shareMode} `}<strong data-testid="report-ten-share">{formatAverage(share, false)}%</strong></p>}
     {help && <BottomSheet title="Распределение попаданий" onClose={() => setHelp(false)}>
@@ -141,12 +152,12 @@ export function TrainingReportMetrics({ practice, entries, overview }: {
   const blocks = { ...overview };
   if (scope && (['result', 'average', 'volume', 'grouping', 'offset', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) {
     Object.assign(blocks, {
-      result: <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} />,
+      result: <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} practice={practice} />,
       general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
       hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,
       numbered_arrows: visible('numbered_arrows') && <NumberedArrowAnalysis key={`arrows:${scope.key}`} series={scope.series} />,
-      distribution: <ZoneDistribution shots={shots} />,
+      distribution: <ZoneDistribution key={`distribution:${scope.key}`} series={scope.series} />,
     });
   }
   const order = reportBlockOrder(preferences).filter(id => blocks[id]);

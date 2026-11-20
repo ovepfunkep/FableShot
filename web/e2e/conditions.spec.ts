@@ -37,12 +37,12 @@ test('traffic-light target records and displays hits on all three spots', async 
   await expect(page.getByTestId('series-score')).toHaveText('30/30');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await page.getByTestId('hit-map-mode-points').click();
-  const hits = page.getByTestId('hit-map-plot').locator(':scope > circle[fill="#111811"]');
+  const hits = page.getByTestId('hit-map-hit');
   const coordinates = await hits.evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('cy'))));
   expect(coordinates).toHaveLength(3);
   expect(coordinates[0]).toBeCloseTo(coordinates[1], 4);
   expect(coordinates[1]).toBeCloseTo(coordinates[2], 4);
-  await expect(hits.first()).toHaveAttribute('r', '1.8');
+  await expect(hits.first()).toHaveAttribute('r', '2.7');
   await expect(page.getByTestId('hit-map-plot').locator('circle[fill="#f4ce44"]')).toHaveCount(2);
 });
 
@@ -118,7 +118,7 @@ test('round options support series boundaries and saved presets with a pinned st
   await expect(page.getByTestId('training-series-open')).toContainText('Серия 1/1');
   await hit(page);
   await expect(page.getByTestId('shot-1')).toHaveText('1X');
-  await expect(page.getByTestId('next-end')).toHaveText('Следующая серия');
+  await expect(page.getByTestId('next-end')).toHaveText('Следующий раунд');
   await page.getByRole('button', { name: 'Отметить промах' }).click();
   await expect(page.getByTestId('series-score')).toHaveText('10/20');
   await page.getByTestId('next-end').click();
