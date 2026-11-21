@@ -155,11 +155,12 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const counts = new Array<number>(11).fill(0);
   for (const shot of shots) counts[shot.points]++;
   const countList = visible('result') && <ZoneCounts counts={counts} testIdPrefix="hit-map-zone" showTotal />;
-  const modeControls = allPoints.length > 0 && <div className="hit-map-modes" role="group" aria-label="Вид карты">
-    <button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
+  const modeControls = <div className="hit-map-modes" role="group" aria-label="Вид карты">
+    {visible('result') && <strong className="hit-map-score" data-testid="hit-map-score" aria-label={`Очки ${summarize(shots).points}`}>{summarize(shots).points}</strong>}
+    {allPoints.length > 0 && <><button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
       data-testid="hit-map-mode-density">Плотность</button>
     <button type="button" aria-pressed={mode === 'points'} onClick={() => setMode('points')}
-      data-testid="hit-map-mode-points">Попадания</button>
+      data-testid="hit-map-mode-points">Попадания</button></>}
   </div>;
 
   return <section className="training-hit-map" aria-labelledby={titleId} data-testid="training-hit-map">
@@ -170,19 +171,15 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       <h3 id={titleId}>Карта попаданий</h3>
       <button type="button" className="hit-map-help" aria-label="О карте попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
-    <ReportRoundFilter rounds={rounds} value={round} label="Раунд карты попаданий" onChange={value => {
-      setSelectedRound(value);
-      setSelectedId(null);
-    }} />
-    {(visible('result') || visible('volume')) && <div className="hit-map-reading" aria-live="polite">
-      {visible('result') && <span data-testid="hit-map-score">Очки <strong>{summarize(shots).points}</strong></span>}
-      {visible('volume') && <span data-testid="hit-map-coverage">Координаты <strong>{points.length + misses.length} из {shots.length}</strong></span>}
-    </div>}
     {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
       modeControls={modeControls} counts={countList} showOffset={visible('offset')} />
       : <>{modeControls}<div className="hit-map-layout"><p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
         data-testid="hit-map-empty">Нет подтверждённых координат.</p>{countList}</div></>}
     <div className="hit-map-series-controls">
+      <ReportRoundFilter rounds={rounds} value={round} label="Раунд карты попаданий" onChange={value => {
+        setSelectedRound(value);
+        setSelectedId(null);
+      }} />
       <button type="button" className="icon-button" aria-label="Предыдущая серия на карте" data-testid="hit-map-previous"
         disabled={index < 0} onClick={() => setSelectedId(roundSeries[index - 1]?.id ?? null)}><Icon name="left" /></button>
       <select aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
@@ -202,9 +199,8 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       </div>
       <span>Темнее — чаще.{visible('volume') && ` Максимум в ячейке ${density.peak}.`}</span>
     </div>}
-    {geometry && (visible('offset') || (selected && visible('grouping') && geometry.rmsMm !== null)) && <div className="hit-map-reading" aria-live="polite">
+    {geometry && selected && visible('grouping') && geometry.rmsMm !== null && <div className="hit-map-reading" aria-live="polite">
       {visible('grouping') && selected && geometry.rmsMm !== null && <span data-testid="hit-map-rms">Разброс RMS <strong>{millimeters.format(geometry.rmsMm)} мм</strong></span>}
-      {visible('offset') && <span data-testid="hit-map-shift">Смещение <strong>{millimeters.format(geometry.shiftMm)} мм</strong></span>}
     </div>}
     {help && <BottomSheet title="Карта попаданий" onClose={() => setHelp(false)}>
       <p>Крестики показывают промахи, отмеченные в кольце вокруг мишени. Они не входят в плотность, кучность и смещение.</p>

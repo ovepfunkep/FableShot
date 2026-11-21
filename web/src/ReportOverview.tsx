@@ -148,7 +148,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {deleted && <button type="button" className="report-resume" onClick={() => { if (onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
-      <TrainingReportMetrics practice={practice} entries={entries} overview={{
+      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} overview={{
       records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
         onSession={onOpenRecordSession} />,

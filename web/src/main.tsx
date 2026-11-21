@@ -824,6 +824,7 @@ function App() {
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
       conditions={homeConditions}
+      onHistory={() => setTab('history')}
       onGroup={supportsLocalRoom() ? () => setPage('group-room') : undefined}
       needsEquipment={!ongoing && !paused && needsHomeEquipment} onStart={() => startPractice()} onOpen={openSaved}
       onConditions={() => {
@@ -923,7 +924,6 @@ function App() {
     appearance={<>
       <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
       <RecentPracticeLimitControl />
-      <div className="settings-panel"><TrainingPreferenceControls keys={['realArrowDiameter']} /></div>
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}
     motion={<div className="settings-panel">
@@ -1096,7 +1096,7 @@ function App() {
     <TrainingShotStrip key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} arrowPanelRef={arrowPanel} />
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
-      realArrowDiameter={preferences.realArrowDiameter ? series.conditions.equipment?.arrows.diameterMm ?? undefined : undefined}
+      realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />

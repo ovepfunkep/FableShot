@@ -42,6 +42,33 @@ test('home starts the expanded practice timeline at the newest training and open
   await expect(page.getByRole('heading', { name: 'Практика 03' })).toBeVisible();
 });
 
+test('Home shows the current kit shaft diameter and its missing value', async ({ page }) => {
+  const conditions = { ...DEFAULT_CONDITIONS, equipment: {
+    id: 'kit', name: 'Основной', bow: { name: 'Баребоу', category: 'barebow' as const },
+    arrows: { name: 'Стрелы', diameterMm: 12 },
+  } };
+  await page.addInitScript(conditions => {
+    if (localStorage.getItem('app.fableshot.practice-diary.v1')) return;
+    localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries: [],
+      lastSetup: { conditions, rule: { unit: 'arrows', limit: 30 }, numberedArrows: null } }));
+    localStorage.setItem('app.fableshot.equipment.v1', JSON.stringify({
+      bows: [{ id: 'bow', name: 'Баребоу', category: 'barebow' }],
+      arrows: [{ id: 'arrows', name: 'Стрелы', diameterMm: 12 }],
+      kits: [{ id: 'kit', name: 'Основной', bowId: 'bow', arrowsId: 'arrows' }],
+    }));
+  }, conditions);
+  await page.goto('./');
+  await expect(page.getByLabel('Диаметр стрелы 12 мм')).toContainText('12 мм');
+  await page.evaluate(() => {
+    const key = 'app.fableshot.equipment.v1';
+    const equipment = JSON.parse(localStorage.getItem(key)!);
+    equipment.arrows[0].diameterMm = null;
+    localStorage.setItem(key, JSON.stringify(equipment));
+  });
+  await page.reload();
+  await expect(page.getByLabel('Диаметр стрелы не указан')).toContainText('???');
+});
+
 test('Home uses recorded dates and asks for a kit when the habitual kit is archived', async ({ page }) => {
   const kit = { id: 'kit', name: 'Старый комплект', bowId: 'bow', arrowsId: null };
   const bow = { id: 'bow', name: 'Лук', category: 'recurve' };
@@ -60,6 +87,9 @@ test('Home uses recorded dates and asks for a kit when the habitual kit is archi
   await expect(page.getByTestId('home-practice-horizontal').locator('time')).toHaveAttribute('datetime', '2026-01-05');
   await expect(page.getByTestId('home-all-time-totals')).toContainText('2Тренировок');
   await expect(page.getByTestId('home-conditions-grid')).not.toContainText('3 в серии');
+  await page.getByRole('button', { name: 'Открыть историю тренировок', exact: true }).click();
+  await expect(page.getByTestId('history-screen')).toBeVisible();
+  await page.getByTestId('nav-home').click();
   await expect(page.getByTestId('home-start-training')).toHaveText('Выбрать снаряжение');
   await page.getByTestId('home-start-training').click();
   await expect(page.getByTestId('conditions-equipment')).toContainText('Без комплекта');

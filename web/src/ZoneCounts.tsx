@@ -13,7 +13,6 @@ export function ZoneCounts({ counts, testIdPrefix, showTotal = false }: {
         </li>;
       })}
     {showTotal && <li className="zone-counts-total" data-testid={`${testIdPrefix}-total`}>
-      <span>Попадания/промахи</span>
       <b>{counts.slice(1).reduce((total, count) => total + count, 0)}/{counts[0] ?? 0}</b>
     </li>}
   </ul>;

@@ -17,6 +17,7 @@ import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
 import { ReportRoundFilter } from './ReportRoundFilter.tsx';
 import { ZoneCounts } from './ZoneCounts.tsx';
 import { exerciseRank } from './exercise-rank.ts';
+import { RankDetails } from './SportRanks.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
 import type { ReportBlock } from './statistics-visibility.ts';
@@ -46,8 +47,9 @@ function scopeLabel(scope: Scope): string {
     equipment?.name].filter(Boolean).join(' · ');
 }
 
-function ResultCard({ shots, diameterMm, practice }: { shots: readonly Shot[]; diameterMm: number; practice: Practice }) {
-  const { preferences } = useTrainingPreferences();
+function ResultCard({ shots, diameterMm, practice, onRankReference }: { shots: readonly Shot[]; diameterMm: number; practice: Practice; onRankReference: () => void }) {
+  const { preferences, update } = useTrainingPreferences();
+  const [rankOpen, setRankOpen] = useState(false);
   const { points, maximum, average } = summarize(shots);
   const geometry = hitGeometry(shots, diameterMm);
   const rms = geometry?.rmsMm;
@@ -66,13 +68,17 @@ function ResultCard({ shots, diameterMm, practice }: { shots: readonly Shot[]; d
     </header>
     <div className="report-result-score-row">
       {visible('result') && <div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>}
-      {visible('norms') && <span className="report-result-rank" title={rank.reason ?? 'Разряд по всей тренировке'}>
+      {visible('norms') && <button type="button" className="report-result-rank" title={rank.reason ?? 'Разряд по всей тренировке'}
+        aria-label="Разряд по всей тренировке" aria-haspopup="dialog" onClick={() => setRankOpen(true)}>
         {rank.evaluation && !rank.finalResult ? 'Прогноз разряда' : 'Разряд'}
         <strong data-testid="report-result-rank">{rank.label ?? '—'}</strong>
-      </span>}
+      </button>}
     </div>
     {visible('result') && <progress aria-label="Доля от максимума" value={points} max={maximum} />}
     {visible('volume') && <p className="report-metrics-muted">Стрел: {shots.length}</p>}
+    {rankOpen && <RankDetails rank={rank} onClose={() => setRankOpen(false)}
+      onCategory={category => update({ ...preferences, rankCategory: category })}
+      onOpenReference={() => { setRankOpen(false); onRankReference(); }} />}
   </section>;
 }
 
@@ -124,24 +130,27 @@ function ZoneDistribution({ series }: { series: readonly ScopedSeries[] }) {
   const showShare = statisticVisible(preferences, 'zone_trend');
   const counts = new Array<number>(11).fill(0);
   for (const shot of shots) counts[shot.points]++;
-  const shareMode = preferences.distributionShare ?? '10';
-  const share = 100 * (counts[10] + (shareMode === '10+9' ? counts[9] : 0)) / shots.length;
+  const tenShare = shots.length ? 100 * counts[10] / shots.length : null;
+  const topShare = shots.length ? 100 * (counts[10] + counts[9]) / shots.length : null;
   if (!distribution && !showShare) return null;
   return <section className="report-metrics-card" aria-label="Распределение попаданий" data-testid="report-zone-distribution">
-    <header className="report-metrics-heading"><h3>{distribution ? 'Распределение попаданий' : `Доля ${shareMode}`}</h3>
+    <header className="report-metrics-heading"><h3>{distribution ? 'Распределение попаданий' : 'Доля 10 и 10+9'}</h3>
       <button type="button" className="training-mean-help" aria-label="О распределении попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
     <ReportRoundFilter rounds={rounds} value={round} onChange={setSelectedRound} label="Раунд распределения попаданий" />
     {distribution && <ZonePie counts={counts} total={shots.length} />}
-    {showShare && <p className="report-metrics-muted">{distribution && `Доля ${shareMode} `}<strong data-testid="report-ten-share">{formatAverage(share, false)}%</strong></p>}
+    {showShare && <div className="report-zone-shares">
+      <p className="report-metrics-muted">Доля 10 <strong data-testid="report-ten-share">{formatAverage(tenShare, false)}%</strong></p>
+      <p className="report-metrics-muted">Доля 10+9 <strong data-testid="report-top-share">{formatAverage(topShare, false)}%</strong></p>
+    </div>}
     {help && <BottomSheet title="Распределение попаданий" onClose={() => setHelp(false)}>
       <p>Размер сектора показывает долю стрел с этой оценкой. Справа указано их количество. M — промах, X входит в десятки. Координаты для расчёта не нужны.</p>
     </BottomSheet>}
   </section>;
 }
 
-export function TrainingReportMetrics({ practice, entries, overview }: {
-  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>;
+export function TrainingReportMetrics({ practice, entries, overview, onRankReference }: {
+  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void;
 }) {
   const { preferences } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
@@ -152,7 +161,7 @@ export function TrainingReportMetrics({ practice, entries, overview }: {
   const blocks = { ...overview };
   if (scope && (['result', 'average', 'volume', 'grouping', 'offset', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) {
     Object.assign(blocks, {
-      result: <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} practice={practice} />,
+      result: <ResultCard shots={shots} diameterMm={scope.conditions.targetDiameterMm} practice={practice} onRankReference={onRankReference} />,
       general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
       hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,

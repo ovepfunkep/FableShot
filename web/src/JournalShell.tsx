@@ -29,6 +29,7 @@ const paths = {
   spark: 'M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z',
   start: 'M4 20 20 4m-6 0h6v6M5 13v6h6m-3-9v6h6',
   edit: 'm4 16 12-12 4 4L8 20H4zm9-9 4 4',
+  diameter: 'M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0ZM4 20 20 4',
 };
 
 function JournalGlyph({ name }: { name: keyof typeof paths }) {
@@ -81,7 +82,12 @@ function HomeConditions({ conditions }: { conditions: Conditions }) {
   return <dl className="journal-home-conditions" data-testid="home-conditions-grid">
     <div><dt><JournalGlyph name="target" /><span className="sr-only">Мишень</span></dt><dd>{centimeters} см{profile && ` · ${profile}`}</dd></div>
     <div><dt><JournalGlyph name="distance" /><span className="sr-only">Дистанция</span></dt><dd>{distance}</dd></div>
-    {equipment && <div><dt><JournalGlyph name="equipment" /><span className="sr-only">Комплект</span></dt><dd>{equipment.name}</dd></div>}
+    {equipment && <div><dt><JournalGlyph name="equipment" /><span className="sr-only">Комплект</span></dt>
+      <dd className="home-kit-info"><span>{equipment.name}</span>
+        <span className="home-arrow-diameter" aria-label={`Диаметр стрелы ${equipment.arrows.diameterMm == null ? 'не указан' : `${equipment.arrows.diameterMm} мм`}`}>
+          <JournalGlyph name="diameter" />{equipment.arrows.diameterMm == null ? '???' : `${equipment.arrows.diameterMm.toLocaleString('ru-RU')} мм`}
+        </span>
+      </dd></div>}
   </dl>;
 }
 
@@ -192,7 +198,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   </section>;
 }
 
-export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup }: {
+export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup, onHistory }: {
   active: boolean;
   paused?: boolean;
   recent: readonly DiaryEntry[];
@@ -204,6 +210,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
   onConditions: () => void;
   onOpen: (id: string) => void;
   onGroup?: () => void;
+  onHistory: () => void;
 }) {
   const { preferences } = useTrainingPreferences();
   return <div className="journal-home" data-testid="home-screen">
@@ -224,7 +231,9 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
     </section>
     {statisticVisible(preferences, 'volume') && <section className="journal-home-totals" data-testid="home-all-time-totals" aria-label="Всего за всё время">
       <div className="journal-home-card"><JournalGlyph name="target" /><span><strong>{arrowCount.toLocaleString('ru-RU')}</strong>Стрел</span></div>
-      <div className="journal-home-card"><JournalGlyph name="calendar" /><span><strong>{practiceCount.toLocaleString('ru-RU')}</strong>Тренировок</span></div>
+      <button type="button" className="journal-home-card journal-home-history" onClick={onHistory} aria-label="Открыть историю тренировок">
+        <JournalGlyph name="calendar" /><span><strong>{practiceCount.toLocaleString('ru-RU')}</strong>Тренировок</span>
+      </button>
     </section>}
     <PracticeTimeline recent={recent} onOpen={onOpen} />
   </div>;

@@ -61,14 +61,7 @@ export function StatisticsSettings() {
                 disabledStatistics: visible ? [...disabled, key] : disabled.filter(item => item !== key),
               })}><span /></button>
           </div>
-          {key === 'zone_trend' && <label className="preference-row">
-            <span className="preference-title">Доля под диаграммой</span>
-            <select className="statistics-share-select" value={preferences.distributionShare ?? '10'} disabled={!!error}
-              onChange={event => update({ ...preferences, distributionShare: event.currentTarget.value === '10+9' ? '10+9' : '10' })}>
-              <option value="10">Доля 10</option>
-              <option value="10+9">Доля 10+9</option>
-            </select>
-          </label>}
+
         </Fragment>;
       })}
     </section>)}

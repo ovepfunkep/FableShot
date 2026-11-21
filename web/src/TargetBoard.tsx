@@ -70,7 +70,7 @@ function paintFace(ctx: CanvasRenderingContext2D, center: Point, radius: number,
 }
 
 function paintSeries(ctx: CanvasRenderingContext2D, center: Point, radius: number, spec: TargetSpec,
-  shots: readonly Shot[], selectedIndex?: number | null, realArrowDiameter?: number) {
+  shots: readonly Shot[], selectedIndex?: number | null, realArrowDiameter = spec.shaftDiameterMm) {
   const profile = getTargetProfile(spec.profileId)!;
   for (const offset of spotOffsets(profile)) paintFace(ctx, { x: center.x, y: center.y + offset * radius }, radius, spec, true);
 
@@ -458,7 +458,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
     </div>
     <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />
-    {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius} spec={spec} shots={shots}
+    {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;
 }

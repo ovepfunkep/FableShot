@@ -140,7 +140,7 @@ test('the larger lens fits a narrow screen and follows slower aim', async ({ pag
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
 });
 
-test('the lens keeps its scale after zooming and shows only current series hits', async ({ page }) => {
+test('the lens scales physical hits with target zoom and shows only current series hits', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
   const bounds = await targetBounds(page);
@@ -157,8 +157,8 @@ test('the lens keeps its scale after zooming and shows only current series hits'
   const field = (await page.getByTestId('lens').locator('canvas').boundingBox())!;
   expect(field.width).toBe(352);
   expect(field.height).toBe(316);
-  expect(await lensPixel(page, -30, 6)).toEqual(marker);
-  expect(await lensPixel(page, 30, 6)).toEqual(marker);
+  expect(await lensPixel(page, -30, 0)).toEqual(marker);
+  expect(await lensPixel(page, 30, 0)).toEqual(marker);
   await cancelAim(page);
 
   await page.getByRole('button', { name: 'Увеличить' }).click();
@@ -166,16 +166,16 @@ test('the lens keeps its scale after zooming and shows only current series hits'
   await expect(page.getByRole('button', { name: 'Сбросить приближение' })).toHaveText('2,3×');
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 6)).toEqual(marker);
-  expect(await lensPixel(page, 30, 6)).toEqual(marker);
+  expect(await lensPixel(page, -67.5, 0)).toEqual(marker);
+  expect(await lensPixel(page, 67.5, 0)).toEqual(marker);
   await cancelAim(page);
 
   await page.getByTestId('next-end').click();
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 6)).not.toEqual(marker);
-  expect(await lensPixel(page, 30, 6)).not.toEqual(marker);
+  expect(await lensPixel(page, -67.5, 0)).not.toEqual(marker);
+  expect(await lensPixel(page, 67.5, 0)).not.toEqual(marker);
   await cancelAim(page);
 });
 
@@ -196,12 +196,12 @@ test('the lens keeps hits on their own spot of a traffic-light target', async ({
   const marker = [20, 32, 13];
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 6)).not.toEqual(marker);
+  expect(await lensPixel(page, -30, 0)).not.toEqual(marker);
   await cancelAim(page);
 
   await page.mouse.move(x, top);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 6)).toEqual(marker);
+  expect(await lensPixel(page, -30, 0)).toEqual(marker);
   await cancelAim(page);
 });
 

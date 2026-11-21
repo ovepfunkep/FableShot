@@ -45,7 +45,7 @@ test('hit distribution shows proportional sectors and a count list beside them',
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-statistics').click();
-  await page.getByLabel('Доля под диаграммой').selectOption('10+9');
+  await expect(page.getByLabel('Доля под диаграммой')).toHaveCount(0);
   await page.reload();
   await openHistoryEntry(page, 'distribution');
   await expect(distribution).toContainText('Доля 10+9 95,0%');
@@ -114,7 +114,7 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await expect(page.getByTestId('exercise-rank-next')).toHaveText('КМС · на 38 очков выше порога');
   await rankTable.getByRole('button', { name: 'КМС', exact: true }).click();
   await page.getByTestId('report-exercise-rank').screenshot({ path: '../artifacts/web-0.13.0-exercise-rank.png' });
-  await page.getByTestId('exercise-rank-open').click();
+  await page.getByRole('button', { name: 'Разряд по всей тренировке', exact: true }).click();
   await expect(page.getByTestId('rank-details').getByRole('table')).toBeVisible();
   await expect(page.getByTestId('rank-details').locator('.rank-scale')).toHaveCount(0);
   await expect(page.getByTestId('rank-progress')).toContainText('540 очков · 60 из 60 стрел');

@@ -16,7 +16,7 @@ export function SeriesResult({ number, shots, summary, totalTestId, showHits, cu
     </span>}
     {summary && <span className="report-series-summary"><strong data-testid={totalTestId}>{summary}</strong></span>}
     {cumulative !== undefined && <span className="report-series-cumulative" aria-label={`Итог с начала раунда ${cumulative} очков`}>
-      Итог <strong>{cumulative}</strong>
+      <strong>{cumulative}</strong>
     </span>}
   </>;
 }
