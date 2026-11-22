@@ -3,16 +3,15 @@ import type { PointerEvent, ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { Conditions } from './conditions.ts';
 import { HIT_MAP_GRID_SIZE, hitCentroid, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, knownMissPoints } from './hit-map.ts';
-import { zoneColor } from './TargetBoard.tsx';
+import { zoneColor } from './target.ts';
 import { getTargetProfile, MISS_RING_WIDTH, summarize } from './target.ts';
-import type { Point, Shot, TargetProfile } from './target.ts';
+import type { Point, Shot, TargetProfile, TargetSpot } from './target.ts';
 import { Icon } from './TrainingChrome.tsx';
 import './training-hit-map.css';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { clampTargetZoom, TargetZoom } from './TargetZoom.tsx';
 import { ReportRoundFilter } from './ReportRoundFilter.tsx';
-import { ZoneCounts } from './ZoneCounts.tsx';
 
 type MapSeries = { id: number; round: number; number: number; shots: readonly Shot[] };
 type MapMode = 'density' | 'points';
@@ -26,9 +25,7 @@ const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const initialView = { zoom: 1, x: center, y: center };
 
-function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, modeControls, counts }: {
-  counts: ReactNode;
-  modeControls: ReactNode;
+function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset }: {
   points: readonly Point[];
   misses: readonly Point[];
   profile: TargetProfile;
@@ -87,13 +84,6 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
   }
 
   return <div className="hit-map-viewport">
-    <div className="hit-map-toolbar">
-      {modeControls}
-      <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
-        onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
-        onReset={() => changeView(1, center, center)} />
-    </div>
-    <div className="hit-map-layout">
     <svg viewBox={`${view.x - span / 2} ${view.y - span / 2} ${span} ${span}`} className="hit-map-plot" role="img"
     data-zoomed={view.zoom > 1}
     onPointerDown={trackPointer} onPointerMove={movePointer} onPointerUp={forgetPointer}
@@ -122,7 +112,10 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="white" strokeWidth={1} />
     </g>}
     </svg>
-    {counts}
+    <div className="hit-map-zoom-row"><span>Масштаб мишени</span>
+      <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
+        onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
+        onReset={() => changeView(1, center, center)} />
     </div>
   </div>;
 }
@@ -136,6 +129,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const round = selectedRound !== null && rounds.includes(selectedRound) ? selectedRound : null;
   const roundSeries = useMemo(() => series.filter(entry => round === null || entry.round === round), [series, round]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedSpot, setSelectedSpot] = useState<TargetSpot | null>(null);
   const [mode, setMode] = useState<MapMode>('points');
   const [help, setHelp] = useState(false);
   const allShots = useMemo(() => roundSeries.flatMap(entry => entry.shots), [roundSeries]);
@@ -146,17 +140,16 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
 
   const index = roundSeries.findIndex(entry => entry.id === selectedId);
   const selected = roundSeries[index];
-  const shots = selected?.shots ?? allShots;
-  const points = selected ? knownHitPoints(shots) : allPoints;
-  const misses = selected ? knownMissPoints(shots) : allMisses;
+  const baseShots = selected?.shots ?? allShots;
+  const shots = profile.vertical && selectedSpot !== null ? baseShots.filter(shot => shot.spot === selectedSpot) : baseShots;
+  const points = knownHitPoints(shots);
+  const misses = knownMissPoints(shots);
   const limit = hitMapLimit([...allPoints, ...allMisses], profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH);
   const density = hitDensity(points, limit);
   const geometry = hitGeometry(shots, conditions.targetDiameterMm);
-  const counts = new Array<number>(11).fill(0);
-  for (const shot of shots) counts[shot.points]++;
-  const countList = visible('result') && <ZoneCounts counts={counts} testIdPrefix="hit-map-zone" showTotal />;
+  const score = summarize(shots);
+  const millimeterValue = (value?: number | null) => value == null ? '—' : `${millimeters.format(value)} мм`;
   const modeControls = <div className="hit-map-modes" role="group" aria-label="Вид карты">
-    {visible('result') && <strong className="hit-map-score" data-testid="hit-map-score" aria-label={`Очки ${summarize(shots).points}`}>{summarize(shots).points}</strong>}
     {allPoints.length > 0 && <><button type="button" aria-pressed={mode === 'density'} onClick={() => setMode('density')}
       data-testid="hit-map-mode-density">Плотность</button>
     <button type="button" aria-pressed={mode === 'points'} onClick={() => setMode('points')}
@@ -171,25 +164,37 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       <h3 id={titleId}>Карта попаданий</h3>
       <button type="button" className="hit-map-help" aria-label="О карте попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
-    {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
-      modeControls={modeControls} counts={countList} showOffset={visible('offset')} />
-      : <>{modeControls}<div className="hit-map-layout"><p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
-        data-testid="hit-map-empty">Нет подтверждённых координат.</p>{countList}</div></>}
+    {profile.vertical && <div className="hit-map-spots" role="group" aria-label="Мишени светофора">
+      {([null, 0, 1, 2] as const).map(spot => <button type="button" key={spot ?? 'all'} aria-pressed={selectedSpot === spot}
+        data-testid={`hit-map-spot-${spot ?? 'all'}`} onClick={() => setSelectedSpot(spot)}>
+        {spot === null ? 'Все вместе' : ['Верхняя', 'Средняя', 'Нижняя'][spot]}</button>)}
+    </div>}
     <div className="hit-map-series-controls">
       <ReportRoundFilter rounds={rounds} value={round} label="Раунд карты попаданий" onChange={value => {
         setSelectedRound(value);
         setSelectedId(null);
       }} />
-      <button type="button" className="icon-button" aria-label="Предыдущая серия на карте" data-testid="hit-map-previous"
-        disabled={index < 0} onClick={() => setSelectedId(roundSeries[index - 1]?.id ?? null)}><Icon name="left" /></button>
-      <select aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
+      <select className="report-scope-select" aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
         onChange={event => setSelectedId(event.target.value === '' ? null : Number(event.target.value))}>
         <option value="">Все серии</option>
-        {roundSeries.map(entry => <option key={entry.id} value={entry.id}>Раунд {entry.round} · Серия {entry.number}</option>)}
+        {roundSeries.map(entry => <option key={entry.id} value={entry.id}>{round === null ? `Р${entry.round} · ` : ''}Серия {entry.number}</option>)}
       </select>
+    </div>
+    {(visible('result') || visible('grouping') || visible('offset')) && <dl className="report-metric-grid hit-map-readings" aria-live="polite">
+      {visible('result') && <div><dt>Очки</dt><dd data-testid="hit-map-score">{score.points}/{score.maximum}</dd></div>}
+      {visible('grouping') && <div><dt>Разброс</dt><dd data-testid="hit-map-rms">{millimeterValue(geometry?.rmsMm)}</dd></div>}
+      {visible('offset') && <div><dt>Смещение</dt><dd data-testid="hit-map-shift">{millimeterValue(geometry?.shiftMm)}</dd></div>}
+    </dl>}
+    <div className="hit-map-actions">
+      <button type="button" className="icon-button" aria-label="Предыдущая серия на карте" data-testid="hit-map-previous"
+        disabled={index < 0} onClick={() => setSelectedId(roundSeries[index - 1]?.id ?? null)}><Icon name="left" /></button>
+      {modeControls}
       <button type="button" className="icon-button" aria-label="Следующая серия на карте" data-testid="hit-map-next"
         disabled={index >= roundSeries.length - 1} onClick={() => setSelectedId(roundSeries[index + 1].id)}><Icon name="right" /></button>
     </div>
+    {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
+      showOffset={visible('offset')} /> : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
+      data-testid="hit-map-empty">Нет подтверждённых координат.</p>}
     {mode === 'density' && density.peak > 0 && <div className="hit-map-legend">
       <div className="hit-map-density-bands" aria-hidden="true">
         {densityColors.map((color, index) => <span key={color}>
@@ -199,13 +204,10 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
       </div>
       <span>Темнее — чаще.{visible('volume') && ` Максимум в ячейке ${density.peak}.`}</span>
     </div>}
-    {geometry && selected && visible('grouping') && geometry.rmsMm !== null && <div className="hit-map-reading" aria-live="polite">
-      {visible('grouping') && selected && geometry.rmsMm !== null && <span data-testid="hit-map-rms">Разброс RMS <strong>{millimeters.format(geometry.rmsMm)} мм</strong></span>}
-    </div>}
     {help && <BottomSheet title="Карта попаданий" onClose={() => setHelp(false)}>
       <p>Крестики показывают промахи, отмеченные в кольце вокруг мишени. Они не входят в плотность, кучность и смещение.</p>
       <p>Измерения используют зачётные попадания с известными координатами.
-        {profile.vertical && ' Попадания всех трёх кругов светофора совмещены относительно их центров на одной мишени.'}
+        {profile.vertical && ' «Все вместе» совмещает три круга относительно их центров. При выборе одного круга карта и показатели учитывают только его стрелы. Записи без номера круга доступны в общей выборке.'}
         {' Белое кольцо отмечает среднюю точку. Смещение — расстояние от центра мишени до средней точки.'}
         RMS измеряет разброс вокруг средней точки и рассчитывается при наличии трёх или более координат.</p>
       <p>Плотность показывает количество отмеченных попаданий в ячейках сетки {HIT_MAP_GRID_SIZE} × {HIT_MAP_GRID_SIZE}.

@@ -9,15 +9,15 @@ import type { Practice, Series } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { ProgressScoreCard } from './ProgressScoreCard.tsx';
 import { formatAverage } from './preferences.ts';
-import { zoneColor } from './TargetBoard.tsx';
 import { getTargetProfile, summarize } from './target.ts';
 import type { Shot } from './target.ts';
 import { TrainingHitMap } from './TrainingHitMap.tsx';
 import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
 import { ReportRoundFilter } from './ReportRoundFilter.tsx';
-import { ZoneCounts } from './ZoneCounts.tsx';
+import { ShotDistribution } from './ShotDistribution.tsx';
+import type { DistributionView } from './ShotDistribution.tsx';
 import { exerciseRank } from './exercise-rank.ts';
-import { RankDetails } from './SportRanks.tsx';
+import { RankDetails, RankMedal } from './SportRanks.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
 import type { ReportBlock } from './statistics-visibility.ts';
@@ -56,70 +56,36 @@ function ResultCard({ shots, diameterMm, practice, onRankReference }: { shots: r
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const showOffset = !visible('hit_map') && visible('offset');
   const rank = useMemo(() => exerciseRank(practice, preferences.rankCategory ?? null), [practice, preferences.rankCategory]);
-  if (!(['result', 'average', 'volume', 'grouping'] as const).some(visible) && !showOffset) return null;
+  if (!(['result', 'average', 'volume', 'grouping', 'norms'] as const).some(visible) && !showOffset) return null;
+  const hasMetrics = visible('average') || visible('grouping') || visible('volume') || showOffset;
   return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result">
-    <header className="report-result-header">
-      <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
-      <div className="report-metrics-inline">
-        {visible('average') && <span>Средний балл<strong data-testid="report-result-average">{formatAverage(average, preferences.averageHundredths)}</strong></span>}
-        {visible('grouping') && <span>Кучность<strong data-testid="report-result-grouping">{rms == null ? '—' : `${formatAverage(rms, false)} мм`}</strong></span>}
-        {showOffset && <span>Смещение<strong>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</strong></span>}
-      </div>
-    </header>
     <div className="report-result-score-row">
-      {visible('result') && <div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>}
-      {visible('norms') && <button type="button" className="report-result-rank" title={rank.reason ?? 'Разряд по всей тренировке'}
-        aria-label="Разряд по всей тренировке" aria-haspopup="dialog" onClick={() => setRankOpen(true)}>
-        {rank.evaluation && !rank.finalResult ? 'Прогноз разряда' : 'Разряд'}
-        <strong data-testid="report-result-rank">{rank.label ?? '—'}</strong>
+      <div className="report-result-main">
+        <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
+        {visible('result') && <div className="report-metrics-score"><strong>{points}</strong><span>/ {maximum}</span></div>}
+      </div>
+      {visible('norms') && <button type="button" className="report-result-rank" title={rank.reason ?? (rank.finalResult ? 'Разряд по всей тренировке' : 'Прогноз по среднему баллу')}
+        aria-label="Разряд по всей тренировке" aria-haspopup="dialog" onClick={() => setRankOpen(true)}
+        data-forecast={!!rank.evaluation && !rank.finalResult}>
+        <span>Разряд</span><strong><RankMedal /><span data-testid="report-result-rank">{rank.label ?? '—'}</span></strong>
       </button>}
     </div>
     {visible('result') && <progress aria-label="Доля от максимума" value={points} max={maximum} />}
-    {visible('volume') && <p className="report-metrics-muted">Стрел: {shots.length}</p>}
+    {hasMetrics && <dl className="report-metric-grid report-result-metrics">
+      {visible('average') && <div><dt>Средний</dt><dd data-testid="report-result-average">{formatAverage(average, preferences.averageHundredths)}</dd></div>}
+      {visible('grouping') && <div><dt>Кучность</dt><dd data-testid="report-result-grouping">{rms == null ? '—' : `${formatAverage(rms, false)} мм`}</dd></div>}
+      {visible('volume') && <div><dt>Стрел</dt><dd>{shots.length}</dd></div>}
+      {showOffset && <div><dt>Смещение</dt><dd>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</dd></div>}
+    </dl>}
     {rankOpen && <RankDetails rank={rank} onClose={() => setRankOpen(false)}
       onCategory={category => update({ ...preferences, rankCategory: category })}
       onOpenReference={() => { setRankOpen(false); onRankReference(); }} />}
   </section>;
 }
 
-const pieCenter = 80;
-const pieRadius = 78;
-
-function piePoint(angle: number, radius: number) {
-  return [pieCenter + Math.cos(angle) * radius, pieCenter + Math.sin(angle) * radius] as const;
-}
-
-function ZonePie({ counts, total }: { counts: readonly number[]; total: number }) {
-  const zones = counts.map((count, score) => ({ count, score, label: score === 0 ? 'M' : String(score) }))
-    .reverse().filter(({ count }) => count > 0);
-  if (!zones.length) return null;
-  let counted = 0;
-  const slices = zones.map(zone => {
-    const start = 2 * Math.PI * counted / total - Math.PI / 2;
-    counted += zone.count;
-    const end = 2 * Math.PI * counted / total - Math.PI / 2;
-    const [x, y] = piePoint((start + end) / 2, zones.length === 1 ? 0 : 52);
-    return { ...zone, start, end, x, y };
-  });
-  return <div className="report-zone-layout">
-    <svg className="report-zone-pie" viewBox="0 0 160 160" aria-hidden="true">
-      {slices.map(({ score, start, end }) => {
-        const fill = zoneColor(score);
-        if (slices.length === 1) return <circle key={score} cx={pieCenter} cy={pieCenter} r={pieRadius} fill={fill} />;
-        const [x1, y1] = piePoint(start, pieRadius);
-        const [x2, y2] = piePoint(end, pieRadius);
-        return <path key={score} fill={fill} stroke="#777c74" strokeWidth="1" strokeLinejoin="round"
-          d={`M ${pieCenter} ${pieCenter} L ${x1} ${y1} A ${pieRadius} ${pieRadius} 0 ${end - start > Math.PI ? 1 : 0} 1 ${x2} ${y2} Z`} />;
-      })}
-      {slices.filter(({ count, label }) => count / total >= (label.length === 2 ? .07 : .05)).map(({ score, label, x, y }) =>
-        <text key={score} x={x} y={y} textAnchor="middle" dominantBaseline="central"
-          fill={score === 0 || score === 3 || score === 4 ? '#fff' : '#101510'}>{label}</text>)}
-    </svg>
-    <ZoneCounts counts={counts} testIdPrefix="report-zone" />
-  </div>;
-}
-
-function ZoneDistribution({ series }: { series: readonly ScopedSeries[] }) {
+function ZoneDistribution({ series, view, onView }: {
+  series: readonly ScopedSeries[]; view: DistributionView; onView: (view: DistributionView) => void;
+}) {
   const [help, setHelp] = useState(false);
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const rounds = [...new Set(series.map(entry => entry.round))];
@@ -137,14 +103,23 @@ function ZoneDistribution({ series }: { series: readonly ScopedSeries[] }) {
     <header className="report-metrics-heading"><h3>{distribution ? 'Распределение попаданий' : 'Доля 10 и 10+9'}</h3>
       <button type="button" className="training-mean-help" aria-label="О распределении попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
-    <ReportRoundFilter rounds={rounds} value={round} onChange={setSelectedRound} label="Раунд распределения попаданий" />
-    {distribution && <ZonePie counts={counts} total={shots.length} />}
+    <div className="shot-distribution-controls">
+      <ReportRoundFilter rounds={rounds} value={round} onChange={setSelectedRound} label="Раунд распределения попаданий" />
+      {distribution && <div className="shot-distribution-views" role="group" aria-label="Вид распределения">
+        <button type="button" aria-pressed={view === 'mosaic'} onClick={() => onView('mosaic')}>Мозаика</button>
+        <button type="button" aria-pressed={view === 'pie'} onClick={() => onView('pie')}>Круговая</button>
+      </div>}
+    </div>
+    {distribution && <ShotDistribution key={round ?? 'all'} counts={counts} total={shots.length} view={view} />}
     {showShare && <div className="report-zone-shares">
-      <p className="report-metrics-muted">Доля 10 <strong data-testid="report-ten-share">{formatAverage(tenShare, false)}%</strong></p>
-      <p className="report-metrics-muted">Доля 10+9 <strong data-testid="report-top-share">{formatAverage(topShare, false)}%</strong></p>
+      <div><p className="report-metrics-muted">Доля 10 <strong data-testid="report-ten-share">{formatAverage(tenShare, false)}%</strong></p>
+        <progress max={100} value={tenShare ?? 0} aria-label="Доля десяток" /></div>
+      <div><p className="report-metrics-muted">Доля 10+9 <strong data-testid="report-top-share">{formatAverage(topShare, false)}%</strong></p>
+        <progress max={100} value={topShare ?? 0} aria-label="Доля девяток и десяток" /></div>
     </div>}
     {help && <BottomSheet title="Распределение попаданий" onClose={() => setHelp(false)}>
-      <p>Размер сектора показывает долю стрел с этой оценкой. Справа указано их количество. M — промах, X входит в десятки. Координаты для расчёта не нужны.</p>
+      <p>В мозаике одна плитка соответствует стреле. Для длинной тренировки плитки показывают пропорции. В круговой диаграмме ширина сектора показывает долю оценки. Нажми на оценку, чтобы увидеть точное количество и долю.</p>
+      <p>M — промах. X входит в десятки. Координаты для расчёта не нужны.</p>
     </BottomSheet>}
   </section>;
 }
@@ -155,6 +130,7 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
   const { preferences } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [distributionView, setDistributionView] = useState<DistributionView>('mosaic');
   const scopes = useMemo(() => reportScopes(practice), [practice]);
   const scope = scopes.find(item => item.key === selectedKey) ?? scopes[0];
   const shots = useMemo(() => scope?.series.flatMap(series => series.shots) ?? [], [scope]);
@@ -166,7 +142,7 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
       hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,
       numbered_arrows: visible('numbered_arrows') && <NumberedArrowAnalysis key={`arrows:${scope.key}`} series={scope.series} />,
-      distribution: <ZoneDistribution key={`distribution:${scope.key}`} series={scope.series} />,
+      distribution: <ZoneDistribution key={`distribution:${scope.key}`} series={scope.series} view={distributionView} onView={setDistributionView} />,
     });
   }
   const order = reportBlockOrder(preferences).filter(id => blocks[id]);
@@ -174,7 +150,7 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
   return <>{order.map(id => <ReportBlockSlot key={id} id={id}>
     {id === firstMetric && scope && scopes.length > 1 && <label className="report-metrics-scope">
       <span>Условия расчёта</span>
-      <select data-testid="report-metrics-scope" value={scope.key} onChange={event => setSelectedKey(event.currentTarget.value)}>
+      <select className="report-scope-select" data-testid="report-metrics-scope" value={scope.key} onChange={event => setSelectedKey(event.currentTarget.value)}>
         {scopes.map((item, index) => <option key={item.key} value={item.key}>{index + 1}. {scopeLabel(item)}</option>)}
       </select>
     </label>}

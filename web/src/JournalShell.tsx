@@ -48,7 +48,7 @@ export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, c
 }) {
   const content = useRef<HTMLElement>(null);
   useLayoutEffect(() => { if (content.current) content.current.scrollTop = 0; }, [tab]);
-  return <div className="journal-shell">
+  return <div className="journal-shell" data-tab={tab}>
     <header className="journal-topbar">
       <img src={`${import.meta.env.BASE_URL}icons/fableshot-192.png`} width="32" height="32" alt="" />
       <div className="journal-topbar-title">
@@ -74,19 +74,21 @@ export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, c
   </div>;
 }
 
-function HomeConditions({ conditions }: { conditions: Conditions }) {
+function HomeConditions({ conditions, onEquipment }: { conditions: Conditions; onEquipment: () => void }) {
   const centimeters = (conditions.targetDiameterMm / 10).toLocaleString('ru-RU');
   const profile = getTargetProfile(conditions.targetProfileId)?.title.replace(/^(Indoor|\d+ см) · /u, '');
   const distance = `${conditions.distanceMeters.toLocaleString('ru-RU')} м`;
   const equipment = conditions.equipment;
+  const diameter = equipment?.arrows.diameterMm;
   return <dl className="journal-home-conditions" data-testid="home-conditions-grid">
     <div><dt><JournalGlyph name="target" /><span className="sr-only">Мишень</span></dt><dd>{centimeters} см{profile && ` · ${profile}`}</dd></div>
     <div><dt><JournalGlyph name="distance" /><span className="sr-only">Дистанция</span></dt><dd>{distance}</dd></div>
     {equipment && <div><dt><JournalGlyph name="equipment" /><span className="sr-only">Комплект</span></dt>
       <dd className="home-kit-info"><span>{equipment.name}</span>
-        <span className="home-arrow-diameter" aria-label={`Диаметр стрелы ${equipment.arrows.diameterMm == null ? 'не указан' : `${equipment.arrows.diameterMm} мм`}`}>
-          <JournalGlyph name="diameter" />{equipment.arrows.diameterMm == null ? '???' : `${equipment.arrows.diameterMm.toLocaleString('ru-RU')} мм`}
-        </span>
+        {diameter != null && <button type="button" className="home-arrow-diameter" onClick={onEquipment}
+          aria-label={`Диаметр стрелы ${diameter} мм`} title="Диаметр стрелы задаётся в снаряжении">
+          <JournalGlyph name="diameter" />{`${diameter.toLocaleString('ru-RU')} мм`}
+        </button>}
       </dd></div>}
   </dl>;
 }
@@ -105,8 +107,6 @@ function PracticeTimelineViewport({ children }: { children: ReactNode }) {
       wrapper.dataset.earlier = String(scroll.scrollLeft > 2);
       atNewest = scroll.scrollWidth - scroll.clientWidth - scroll.scrollLeft <= 2;
       wrapper.dataset.later = String(!atNewest);
-      wrapper.style.setProperty('--timeline-thumb-width', `${100 * scroll.clientWidth / scroll.scrollWidth}%`);
-      wrapper.style.setProperty('--timeline-thumb-offset', `${100 * scroll.scrollLeft / scroll.scrollWidth}%`);
     }
     const resize = new ResizeObserver(() => {
       if (atNewest) scroll.scrollLeft = scroll.scrollWidth;
@@ -126,7 +126,6 @@ function PracticeTimelineViewport({ children }: { children: ReactNode }) {
       tabIndex={0} data-testid="home-practice-viewport">
       {children}
     </div>
-    <div className="journal-timeline-position" aria-hidden="true" />
   </div>;
 }
 
@@ -198,7 +197,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   </section>;
 }
 
-export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup, onHistory }: {
+export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup, onHistory, onEquipment }: {
   active: boolean;
   paused?: boolean;
   recent: readonly DiaryEntry[];
@@ -208,6 +207,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
   needsEquipment: boolean;
   onStart: () => void;
   onConditions: () => void;
+  onEquipment: () => void;
   onOpen: (id: string) => void;
   onGroup?: () => void;
   onHistory: () => void;
@@ -217,7 +217,7 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
     <section className="journal-home-hero" data-testid="home-hero">
       <p className="journal-home-eyebrow">{active ? 'В процессе' : 'Время для себя'}</p>
       <h2>{active ? 'Продолжим тренировку?' : 'Привычная тренировка'}</h2>
-      <HomeConditions conditions={conditions} />
+      <HomeConditions conditions={conditions} onEquipment={onEquipment} />
       <div className="journal-home-training-actions">
         <button type="button" className="journal-home-mini" data-testid="home-change-conditions"
           aria-label={paused ? 'Новая тренировка' : 'Изменить условия'} onClick={onConditions}><JournalGlyph name="edit" /></button>

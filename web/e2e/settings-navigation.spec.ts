@@ -1,5 +1,53 @@
 import { expect, test } from '@playwright/test';
 
+test('motion previews switch styles and respect the global animation toggle', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-motion').click();
+  const demo = page.locator('.shot-motion-demo');
+  for (const [score, animation] of [[5, 'shot-reveal'], [7, 'shot-flip'], [9, 'shot-landing']] as const) {
+    await page.getByRole('button', { name: `Показать анимацию для оценки ${score}` }).click();
+    await expect(demo.locator('[data-shot-motion="cards"]')).toHaveCSS('animation-name', animation);
+  }
+  await page.getByRole('button', { name: 'Показать анимацию для оценки 10' }).click();
+  await expect(demo.locator('[data-shot-motion="cards"][data-shot-tier="ten"]')).toHaveCSS('animation-name', 'shot-landing');
+  await expect(demo.locator('.shot-sparks i')).toHaveCount(7);
+  await page.getByRole('button', { name: 'Импульс', exact: true }).click();
+  await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'shot-pulse');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'none');
+  await page.getByTestId('setting-animations').click();
+  await expect(page.getByRole('button', { name: 'Показать анимацию для оценки 10' })).toBeDisabled();
+  await expect(demo.locator('[data-shot-motion]')).toHaveCount(0);
+});
+
+test('lens controls share saved defaults and overrides with training conditions', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-training').click();
+  const slider = page.getByTestId('setting-aim-speed');
+  await expect(slider).toHaveValue('70');
+  await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('375');
+  await slider.fill('100');
+  await page.getByTestId('setting-lens-zoom').fill('500');
+  await page.reload();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-training').click();
+  await expect(page.getByTestId('setting-aim-speed')).toHaveValue('100');
+  await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('500');
+  const back = page.getByRole('button', { name: 'Назад', exact: true });
+  await back.click();
+  await back.click();
+  await page.getByTestId('home-change-conditions').click();
+  await page.getByTestId('conditions-advanced').click();
+  await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('500');
+  await page.getByTestId('setting-lens-zoom').fill('300');
+  await page.reload();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-training').click();
+  await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('300');
+});
+
 test('settings use native categories and Back returns to the category list', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('open-settings').click();

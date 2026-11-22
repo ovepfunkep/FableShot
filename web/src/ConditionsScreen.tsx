@@ -7,7 +7,7 @@ import { TargetPreview } from './TargetBoard.tsx';
 import { getTargetProfile, acceptsDiameter, TARGET_PROFILES } from './target.ts';
 import { isConditions, isRoundRule, loadPresets, savePreset, removePreset } from './conditions.ts';
 import type { Conditions, RoundRule, TrainingPreset } from './conditions.ts';
-import { TrainingPreferenceControls } from './TrainingPreferences.tsx';
+import { LensControls, ShotMotionControl, TrainingPreferenceControls } from './TrainingPreferences.tsx';
 import { tournamentTitle } from './tournaments.ts';
 import type { Tournament, TournamentChoice } from './tournaments.ts';
 import './conditions.css';
@@ -91,11 +91,13 @@ function readPresets() {
   catch (error) { return { presets: [] as TrainingPreset[], error: error instanceof Error ? error.message : 'Не удалось прочитать избранное.' }; }
 }
 
-export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments }: {
+export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, appearance, achievementPreference }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
   onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => boolean; onBack: () => void;
   tournaments?: readonly Tournament[];
+  appearance?: ReactNode;
+  achievementPreference?: ReactNode;
   onTechnique: () => void; techniqueTitle: string;
 }) {
   const [distance, setDistance] = useState(String(initial.distanceMeters));
@@ -222,8 +224,15 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
               <button type="button" role="switch" aria-label="Нумерация стрел" aria-checked={numberedArrows ?? true}
                 data-testid="numbered-arrows-toggle" className="preference-switch" onClick={() => setNumberedArrows(!(numberedArrows ?? true))}><span /></button>
             </div>}
-            <TrainingPreferenceControls />
+            <LensControls />
+            <TrainingPreferenceControls keys={['hideScores', 'averageHundredths', 'showAchievementsDuringInput', 'animations', 'haptics', 'keepAwake', 'trainingOnLockScreen', 'useSystemScale']} />
+            <ShotMotionControl />
+            {achievementPreference}
           </div>
+          {appearance && <details className="conditions-advanced">
+            <summary><Icon name="settings" /><span>Оформление</span><Icon name="right" /></summary>
+            <div className="conditions-advanced-content">{appearance}</div>
+          </details>}
         </div>
       </details>
       {error && <p className="conditions-error" role="alert">{error}</p>}

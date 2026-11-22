@@ -24,6 +24,21 @@ async function cancelAim(page: Page) {
   await expect(page.getByTestId('lens')).toHaveCount(0);
 }
 
+test('a saved ten animates its arrow and closing a clean series celebrates once', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('./');
+  await openTraining(page);
+  for (let i = 1; i <= 3; i++) {
+    await page.getByTestId('target').click();
+    await expect(page.getByTestId(`shot-${i}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
+  }
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await page.getByTestId('next-end').click();
+  await expect(page.getByTestId('clean-series-effect')).toHaveText('Чистая серия30/30');
+  await page.clock.fastForward(1_000);
+  await expect(page.getByTestId('clean-series-effect')).toHaveCount(0);
+});
+
 test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
@@ -85,7 +100,8 @@ test('the miss ring saves direction, stays out of grouping, and can be replaced 
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
   await expect(page.getByTestId('hit-map-miss')).toHaveCount(1);
-  await expect(page.getByTestId('hit-map-coverage')).toContainText('2 из 3');
+  await expect(page.getByTestId('hit-map-hit')).toHaveCount(1);
+  await expect(page.getByTestId('hit-map-score')).toHaveText('10/30');
   await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
 
   await page.locator('[data-testid^="report-end-"]').first().click();
@@ -99,7 +115,7 @@ test('the miss ring saves direction, stays out of grouping, and can be replaced 
   await expect(page.getByTestId('report-round-total-1')).toContainText('20/30');
 });
 
-test('the larger lens fits a narrow screen and follows slower aim', async ({ page }) => {
+test('the glass score fits a narrow lens and keeps its position as aim moves', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 570 });
   await page.goto('./');
   await openTraining(page);
@@ -114,21 +130,23 @@ test('the larger lens fits a narrow screen and follows slower aim', async ({ pag
   await page.mouse.down();
   const lens = page.getByTestId('lens');
   await expect(lens).toContainText('10');
-  await expect(lens.locator('strong')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
+  await expect(lens.locator('strong')).toHaveCSS('color', 'rgb(244, 206, 68)');
   const lensBounds = await lens.boundingBox();
   const field = (await lens.locator('canvas').boundingBox())!;
   const scoreBadge = (await lens.locator('.lens-score').boundingBox())!;
-  expect(scoreBadge.width).toBeLessThan(40);
-  expect(scoreBadge.x - (field.x + field.width / 2)).toBeLessThan(30);
+  expect(scoreBadge.x).toBeGreaterThan(field.x + field.width / 2);
+  expect(scoreBadge.x + scoreBadge.width).toBeLessThanOrEqual(field.x + field.width + 1);
   expect(scoreBadge.y + scoreBadge.height / 2).toBeCloseTo(field.y + field.height / 2, 0);
-  expect(field.width).toBeCloseTo(302, 0);
+  expect(field.width).toBeCloseTo(264, 0);
   expect(lensBounds!.x + lensBounds!.width).toBeLessThanOrEqual(320);
   expect(lensBounds!.y + lensBounds!.height).toBeLessThanOrEqual(570);
+  await lens.screenshot({ path: '../artifacts/ivan-lens-glass.png' });
   await page.mouse.move(x + radius * .13 / 3, y);
   await expect(lens.locator('strong')).toHaveText('10');
-  await page.mouse.move(x + radius * .17 / 1.92, y);
+  await page.mouse.move(x + radius * .17 / (1.92 * .7), y);
   await expect(lens).toContainText('9');
-  await expect(lens.locator('.lens-score')).toHaveCSS('background-color', 'rgb(244, 206, 68)');
+  await expect(lens.locator('.lens-score')).toHaveCSS('color', 'rgb(244, 206, 68)');
+  expect((await lens.locator('.lens-score').boundingBox())?.width).toBe(scoreBadge.width);
   expect((await lens.boundingBox())?.width).toBe(lensBounds!.width);
   await page.mouse.up();
   await expect(lens).toHaveCount(0);
@@ -155,10 +173,10 @@ test('the lens scales physical hits with target zoom and shows only current seri
   await page.mouse.down();
   const marker = [20, 32, 13];
   const field = (await page.getByTestId('lens').locator('canvas').boundingBox())!;
-  expect(field.width).toBe(352);
-  expect(field.height).toBe(316);
-  expect(await lensPixel(page, -30, 0)).toEqual(marker);
-  expect(await lensPixel(page, 30, 0)).toEqual(marker);
+  expect(field.width).toBe(264);
+  expect(field.height).toBe(236);
+  expect(await lensPixel(page, -45, 0)).toEqual(marker);
+  expect(await lensPixel(page, 45, 0)).toEqual(marker);
   await cancelAim(page);
 
   await page.getByRole('button', { name: 'Увеличить' }).click();
@@ -166,16 +184,16 @@ test('the lens scales physical hits with target zoom and shows only current seri
   await expect(page.getByRole('button', { name: 'Сбросить приближение' })).toHaveText('2,3×');
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -67.5, 0)).toEqual(marker);
-  expect(await lensPixel(page, 67.5, 0)).toEqual(marker);
+  expect(await lensPixel(page, -101.25, 0)).toEqual(marker);
+  expect(await lensPixel(page, 101.25, 0)).toEqual(marker);
   await cancelAim(page);
 
   await page.getByTestId('next-end').click();
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -67.5, 0)).not.toEqual(marker);
-  expect(await lensPixel(page, 67.5, 0)).not.toEqual(marker);
+  expect(await lensPixel(page, -101.25, 0)).not.toEqual(marker);
+  expect(await lensPixel(page, 101.25, 0)).not.toEqual(marker);
   await cancelAim(page);
 });
 
@@ -196,18 +214,22 @@ test('the lens keeps hits on their own spot of a traffic-light target', async ({
   const marker = [20, 32, 13];
   await page.mouse.move(x, y);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 0)).not.toEqual(marker);
+  expect(await lensPixel(page, -45, 0)).not.toEqual(marker);
   await cancelAim(page);
 
   await page.mouse.move(x, top);
   await page.mouse.down();
-  expect(await lensPixel(page, -30, 0)).toEqual(marker);
+  expect(await lensPixel(page, -45, 0)).toEqual(marker);
   await cancelAim(page);
 });
 
 test('one hold reaches off-screen spots at 8× in training and in the series editor', async ({ page, context }) => {
   await page.addInitScript(() => {
     for (const scope of ['training', 'editor']) localStorage.setItem(`app.fableshot.target-zoom.${scope}.v1`, '8');
+    const key = 'app.fableshot.training-preferences.v1';
+    const settings = JSON.parse(localStorage.getItem(key)!);
+    settings.preferences.aimSpeedPercent = 100;
+    localStorage.setItem(key, JSON.stringify(settings));
   });
   await page.goto('./');
   await page.getByTestId('home-change-conditions').click();

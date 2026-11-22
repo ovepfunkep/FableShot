@@ -1,9 +1,23 @@
 import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
-import { DEFAULT_PREFERENCES, formatAverage, loadPreferences, savePreferences } from '../src/preferences.ts';
+import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, formatAverage, loadPreferences, savePreferences } from '../src/preferences.ts';
 import { statisticVisible } from '../src/statistics-visibility.ts';
 
 const key = 'app.fableshot.training-preferences.v1';
+
+test('aim speed preserves old settings and validates the supported slider range', t => {
+  const entries = storage(t);
+  assert.equal(loadPreferences().aimSpeedPercent ?? AIM_SPEED_SETTING.default, 70);
+  for (const aimSpeedPercent of [20, 70, 100, 150]) {
+    savePreferences({ ...DEFAULT_PREFERENCES, aimSpeedPercent });
+    assert.equal(loadPreferences().aimSpeedPercent, aimSpeedPercent);
+  }
+  const saved = entries.get(key);
+  for (const aimSpeedPercent of [0, 151, 70.5, NaN, '70']) {
+    assert.throws(() => savePreferences({ ...DEFAULT_PREFERENCES, aimSpeedPercent } as never));
+    assert.equal(entries.get(key), saved);
+  }
+});
 
 test('lock-screen setting is optional for existing diaries and validates explicit overrides', t => {
   storage(t);

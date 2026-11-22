@@ -1,0 +1,78 @@
+.shot-face {
+  position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden;
+  border-radius: inherit; background: var(--surface); backface-visibility: hidden;
+  transform-origin: center;
+}
+.shot-face[data-shot-tier=base] { animation: shot-reveal 160ms ease-out; }
+.shot-face[data-shot-motion=cards][data-shot-tier=red] { animation: shot-flip 300ms cubic-bezier(.18,.7,.24,1); }
+.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten]) {
+  animation: shot-landing 490ms cubic-bezier(.15,.74,.28,1);
+}
+.arrow-slot:not(.compact):has(.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten])),
+.shot-motion-demo:has(.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten])) { overflow: visible; }
+.shot-face[data-shot-motion=pulse]:is([data-shot-tier=red], [data-shot-tier=gold], [data-shot-tier=ten]) {
+  animation: shot-pulse 420ms ease-out;
+}
+.shot-face[data-shot-motion=pulse][data-shot-tier=ten] { animation-duration: 600ms; }
+.shot-sparks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.shot-sparks i {
+  position: absolute; inset: 50% auto auto 50%; width: 3px; height: 7px; border-radius: 3px;
+  background: #fff1ab; box-shadow: 0 0 4px #ffcb53; opacity: 0;
+  animation: shot-spark 350ms 285ms ease-out both;
+}
+.clean-series-effect {
+  position: absolute; z-index: 2; inset: 10px auto auto 50%; translate: -50% 0;
+  display: grid; gap: 2px; padding: 8px 16px; min-width: 126px; text-align: center;
+  border-radius: 14px; border: 1px solid #ffcf51; background: var(--surface);
+  color: var(--ink); font-size: 12px; pointer-events: none;
+  animation: clean-series-in 850ms ease both;
+}
+.clean-series-effect strong { color: var(--accent); font-size: 18px; }
+@keyframes shot-reveal { from { opacity: .3; } }
+@keyframes shot-flip {
+  from { transform: perspective(200px) rotateX(87deg) scale(.94); opacity: .5; }
+  73% { transform: perspective(200px) rotateX(-10deg); }
+  to { transform: none; }
+}
+@keyframes shot-landing {
+  from { transform: perspective(200px) translateY(6px) rotateX(86deg) scale(.77); opacity: .45; }
+  43% { transform: perspective(200px) translateY(-7px) rotateX(-13deg) scale(.91); }
+  64% { transform: translateY(2px) scale(1.02,.84); }
+  81% { transform: translateY(-2px) scale(.99,1); }
+  to { transform: none; }
+}
+@keyframes shot-pulse {
+  from { opacity: .45; transform: scale(.88); box-shadow: inset 0 0 0 0 #fff9; }
+  42% { opacity: 1; transform: none; box-shadow: inset 0 0 0 2px #fff8; }
+  to { box-shadow: inset 0 0 0 8px #fff0; }
+}
+@keyframes shot-spark {
+  from { opacity: 0; transform: scale(.3); }
+  25% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) rotate(var(--spark-angle)) scale(.6); }
+}
+@keyframes clean-series-in {
+  from { opacity: 0; transform: translateY(7px) scale(.92); }
+  20% { opacity: 1; transform: none; box-shadow: 0 0 16px #ffc75160; }
+  75% { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+.shot-motion-settings { display: grid; gap: 8px; padding-block: 8px 12px; }
+.shot-motion-settings > strong { font-size: 14px; }
+.shot-motion-settings .shot-motion-selector, .shot-motion-settings .shot-motion-demo-options { display: flex; gap: 6px; }
+.shot-motion-settings button {
+  flex: 1; min-height: 40px; padding: 5px 8px; border: 1px solid var(--edge);
+  border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 12px;
+}
+.shot-motion-settings button[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
+.shot-motion-settings button:disabled { opacity: .6; }
+.shot-motion-demo {
+  position: relative; overflow: hidden; display: grid; place-items: center; align-self: center;
+  width: 82px; height: 42px; margin-inline: auto; border: 1px solid var(--edge); border-radius: 999px; font-weight: 800;
+}
+:root[data-motion=off] :is(.shot-face, .shot-sparks i, .clean-series-effect) { animation: none; }
+:root[data-motion=off] .clean-series-effect { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .shot-face[data-shot-motion][data-shot-tier], .shot-sparks i, .clean-series-effect { animation: none; }
+  .clean-series-effect { display: none; }
+}

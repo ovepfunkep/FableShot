@@ -1,11 +1,13 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { DEFAULT_PREFERENCES, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
+import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, LENS_ZOOM_SETTING, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
 import type { TrainingPreferences } from './preferences.ts';
 import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
 import { setTrainingWindowActive } from './native-training-window.ts';
 import { supportsAppScale, useNativeAppScale } from './native-app-scale.ts';
+import { ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
+import { zoneColor } from './target.ts';
 import './training-preferences.css';
 
 type PreferencesState = { preferences: TrainingPreferences; error: string; readable: boolean; update: (value: TrainingPreferences) => boolean };
@@ -82,6 +84,50 @@ const switches = [
   { key: 'useSystemScale', title: 'Системный масштаб', tag: 'setting-system-scale', hint: 'Учитывает размер текста и интерфейса Android. При большом масштабе на экране помещается меньше данных.' },
 ] as const;
 
+export function LensControls() {
+  const { preferences, update, readable, error } = useTrainingPreferences();
+  const value = preferences.aimSpeedPercent ?? AIM_SPEED_SETTING.default;
+  const zoom = preferences.lensZoomPercent ?? LENS_ZOOM_SETTING.default;
+  const id = useId();
+  return <div className="aim-speed-control">
+    <div className="preference-row"><label className="preference-title" htmlFor={`${id}-speed`}>Скорость наведения в лупе</label>
+      <output htmlFor={`${id}-speed`}>{value}%</output></div>
+    <input id={`${id}-speed`} data-testid="setting-aim-speed" type="range" min={AIM_SPEED_SETTING.min} max={AIM_SPEED_SETTING.max} step="5"
+      value={value} disabled={!readable} onChange={event => update({ ...preferences, aimSpeedPercent: Number(event.currentTarget.value) })} />
+    <div className="preference-row"><label className="preference-title" htmlFor={`${id}-zoom`}>Увеличение лупы</label>
+      <output htmlFor={`${id}-zoom`}>{(zoom / 100).toLocaleString('ru-RU')}×</output></div>
+    <input id={`${id}-zoom`} data-testid="setting-lens-zoom" type="range" min={LENS_ZOOM_SETTING.min} max={LENS_ZOOM_SETTING.max} step="25"
+      value={zoom} disabled={!readable} onChange={event => update({ ...preferences, lensZoomPercent: Number(event.currentTarget.value) })} />
+    <details><summary>Как перемещать мишень</summary><p>Коснись мишени дважды и на втором касании веди палец. Отпусти — перемещение закончится. Двумя пальцами можно менять масштаб.</p></details>
+    {error && <p className="preferences-error" role="alert">{error}</p>}
+  </div>;
+}
+
+export function ShotMotionControl() {
+  const { preferences, update, error, readable } = useTrainingPreferences();
+  const [demo, setDemo] = useState({ points: 10, id: 0 });
+  const style = preferences.shotMotionStyle ?? 'cards';
+  const canPreview = readable && preferences.animations;
+  return <div className="shot-motion-settings">
+    <strong>Анимация попаданий</strong>
+    <div className="shot-motion-selector" role="group" aria-label="Стиль анимации попаданий">
+      {SHOT_MOTION_STYLES.map(option => <button key={option.id} type="button" disabled={!canPreview}
+        aria-pressed={style === option.id} onClick={() => {
+          if (update({ ...preferences, shotMotionStyle: option.id })) setDemo(previous => ({ points: 10, id: previous.id + 1 }));
+        }}>{option.label}</button>)}
+    </div>
+    <div className="shot-motion-demo" aria-hidden="true">
+      <ShotFace key={`${style}:${demo.id}`} points={canPreview && demo.id > 0 ? demo.points : undefined} style={style}
+        background={zoneColor(demo.points)} color="#111811">{demo.points}</ShotFace>
+    </div>
+    <div className="shot-motion-demo-options" role="group" aria-label="Проверить анимацию">
+      {[5, 7, 9, 10].map(points => <button type="button" key={points} disabled={!canPreview}
+        aria-label={`Показать анимацию для оценки ${points}`} onClick={() => setDemo(previous => ({ points, id: previous.id + 1 }))}>{points}</button>)}
+    </div>
+    {error && <p className="preferences-error" role="alert">{error}</p>}
+  </div>;
+}
+
 export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof switches)[number]['key'][] } = {}) {
   const { preferences, update, error } = useTrainingPreferences();
   const [help, setHelp] = useState<(typeof switches)[number] | null>(null);
@@ -93,11 +139,11 @@ export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof s
       (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale())) &&
       (item.key !== 'realArrowDiameter' || keys?.includes(item.key))).map(item => {
       const checked = preferences[item.key] ?? (item.key !== 'useSystemScale' && item.key !== 'realArrowDiameter');
-      return <div key={item.key} className="preference-row">
+      return <div key={item.key} className="preference-row preference-row--with-help">
         <span className="preference-title">{item.title}
-          <span className="preference-help-anchor">{'\u00a0'}<button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button></span>
           {'subtitle' in item && <small className="preference-subtitle">{item.subtitle}</small>}
         </span>
+        <button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button>
         <button type="button" role="switch" className="preference-switch" aria-label={item.title} aria-checked={checked}
           data-testid={item.tag} disabled={!!error} onClick={() => update({ ...preferences, [item.key]: !checked })}><span /></button>
       </div>;

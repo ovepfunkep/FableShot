@@ -136,7 +136,8 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
                 aria-label={label} aria-pressed={entry.selected}
                 onClick={() => onChoose(entry.seriesId)}>
                 {!isRound ? <SeriesResult number={entry.number} shots={entry.shots}
-                  summary={preferences.hideScores ? '' : `${result.points}/${result.maximum} · ${average}`}
+                  score={preferences.hideScores ? undefined : `${result.points}/${result.maximum}`}
+                  average={preferences.hideScores ? undefined : average}
                   totalTestId={`training-series-result-${entry.number}`} showHits={!preferences.hideScores} /> : <><span className="stage-picker__headline">
                   <span className="stage-picker__name">{label}</span>
                   {entry.selected && <span className="stage-picker__current"

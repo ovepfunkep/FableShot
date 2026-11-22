@@ -1,13 +1,13 @@
 {
   "name": "fableshot-web",
   "private": true,
-  "version": "0.30.22",
+  "version": "0.30.23",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "config": {
-    "androidVersionCode": 66
+    "androidVersionCode": 67
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",

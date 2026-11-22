@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
 import { useAndroidUpdates } from './android-updates.ts';
@@ -9,7 +9,8 @@ import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
 import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
-import { RecentPracticeLimitControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
+import { LensControls, RecentPracticeLimitControl, ShotMotionControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
+import type { ShotMotionEvent } from './ShotMotion.tsx';
 import { supportsAppScale } from './native-app-scale.ts';
 import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
@@ -148,9 +149,9 @@ function App() {
   const [confirm, setConfirm] = useState<'finish' | 'delete' | 'discard'>('finish');
   const confirmDialog = useRef<HTMLDialogElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
-  const arrowPanel = useRef<HTMLDivElement>(null);
-  const [tenFeedback, setTenFeedback] = useState<{ count: number } | null>(null);
-  const playedTenFeedback = useRef<typeof tenFeedback>(null);
+  const motionId = useRef(0);
+  const [shotFeedback, setShotFeedback] = useState<(ShotMotionEvent & { sessionId: string; seriesId: number }) | null>(null);
+  const [cleanSeries, setCleanSeries] = useState<{ id: number; arrows: number; sessionId: string; seriesId: number } | null>(null);
   const pulse = useRef<Animation | null>(null);
   const [offline, setOffline] = useState<'pending' | 'ready' | 'error'>('pending');
   const [timerOpen, setTimerOpen] = useState(false);
@@ -554,23 +555,32 @@ function App() {
   useEffect(() => {
     if (!suggestRound) pulse.current?.cancel();
   }, [suggestRound]);
-  useLayoutEffect(() => {
-    if (!tenFeedback || playedTenFeedback.current === tenFeedback) return;
-    playedTenFeedback.current = tenFeedback;
-    if (!preferences.animations || preferences.hideScores || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const { count } = tenFeedback;
-    const effects: Animation[] = [];
-    for (let index = 1; index <= count; index++) {
-      const score = arrowPanel.current?.querySelector(`[data-testid="shot-${index}"] .arrow-score`);
-      const glow = count === 3 ? '0 0 12px #ffd882, 0 0 3px #fff' : '0 0 8px #fff';
-      if (score?.animate) effects.push(score.animate([
-        { transform: 'scale(1)', textShadow: 'none' },
-        { transform: 'scale(1.15)', textShadow: glow, offset: .35 },
-        { transform: 'scale(1)', textShadow: 'none' },
-      ], { duration: count === 3 ? 1000 : 650, easing: 'ease-out' }));
+  const showTrainingMotion = page === 'training' && preferences.animations && !preferences.hideScores && !editing;
+  useEffect(() => {
+    if (!shotFeedback && !cleanSeries) return;
+    if (!showTrainingMotion || shotFeedback && (shotFeedback.sessionId !== sessionId || shotFeedback.seriesId !== series.id)) setShotFeedback(null);
+    if (!showTrainingMotion || cleanSeries && (cleanSeries.sessionId !== sessionId || cleanSeries.seriesId !== series.id)) setCleanSeries(null);
+  }, [showTrainingMotion, shotFeedback, cleanSeries, sessionId, series.id]);
+  useEffect(() => {
+    if (!shotFeedback) return;
+    const timeout = setTimeout(() => setShotFeedback(null), 700);
+    return () => clearTimeout(timeout);
+  }, [shotFeedback]);
+  useEffect(() => {
+    if (!cleanSeries) return;
+    const timeout = setTimeout(() => setCleanSeries(null), 900);
+    return () => clearTimeout(timeout);
+  }, [cleanSeries]);
+
+  function canPlayTrainingMotion() {
+    return showTrainingMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function playShotMotion(index: number, shot: Shot) {
+    if (sessionId && canPlayTrainingMotion()) {
+      setShotFeedback({ id: ++motionId.current, sessionId, seriesId: series.id, index, points: shot.points });
     }
-    return () => { for (const effect of effects) effect.cancel(); };
-  }, [tenFeedback, page, sessionId, series.id, preferences.animations, preferences.hideScores]);
+  }
 
   function mark(shot: Shot) {
     if (pendingShot) return;
@@ -584,17 +594,16 @@ function App() {
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
       const recorded = stored && findSeries(stored, series.id)?.series.shots[shots.length] === shot;
       if (recorded && preferences.haptics) performTrainingHaptic();
-      if (recorded && shot.points === 10 && shots.length < 3 && shots.every(previous => previous.points === 10) &&
-        preferences.animations && !preferences.hideScores) setTenFeedback({ count: shots.length + 1 });
       if (recorded && numbering) {
         setPostHitReady(false);
         setNumberSaveError(false);
         setPostHit({ seriesId: series.id, index: shots.length, shot });
-      }
+      } else if (recorded) playShotMotion(shots.length, shot);
     }
   }
 
   function closeNumberPicker() {
+    if (pendingShot) playShotMotion(pendingShot.index, pendingShot.shot);
     setPostHit(null);
     setPostHitReady(false);
     setNumberEditOpen(false);
@@ -616,7 +625,16 @@ function App() {
     if (editing) saveEdit(seriesEditor);
     else if (completed) setPage('report');
     else if (past) showSeries(seriesIds[position + 1]);
-    else if (update(advanceSeries)) setSelection(null);
+    else if (update(advanceSeries)) {
+      setSelection(null);
+      if (sessionId && canPlayTrainingMotion() && shots.length >= 3 && shots.every(shot => shot.points === 10)) {
+        const saved = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
+        const next = saved && currentSeries(saved);
+        if (next && next.series.id !== series.id) {
+          setCleanSeries({ id: ++motionId.current, sessionId, seriesId: next.series.id, arrows: shots.length });
+        }
+      }
+    }
   }
 
   function chooseShot(index: number) {
@@ -825,6 +843,7 @@ function App() {
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
       conditions={homeConditions}
       onHistory={() => setTab('history')}
+      onEquipment={() => setTab('equipment')}
       onGroup={supportsLocalRoom() ? () => setPage('group-room') : undefined}
       needsEquipment={!ongoing && !paused && needsHomeEquipment} onStart={() => startPractice()} onOpen={openSaved}
       onConditions={() => {
@@ -917,28 +936,32 @@ function App() {
       </BottomSheet>}
     </div>
   </main>;
+  const themeSettings = <WebThemeSettings value={preferences} disabled={!preferencesReadable}
+    onChange={patch => updatePreferences({ ...preferences, ...patch })} />;
+  const achievementPreference = <div className="preference-row"><span className="preference-title">Показывать достижения</span>
+    <button type="button" role="switch" className="preference-switch" aria-label="Показывать достижения" aria-checked={preferences.showAchievementNotices !== false}
+      disabled={!preferencesReadable} onClick={() => {
+        const enabled = preferences.showAchievementNotices === false;
+        if (updatePreferences({ ...preferences, showAchievementNotices: enabled }) && !enabled) {
+          setAchievementQueue([]);
+          setRecordQueue([]);
+        }
+      }}><span /></button></div>;
   if (page === 'settings' || page === 'statistics') return <SettingsScreen
     section={page === 'statistics' ? 'statistics' : settingsSection}
     onSection={section => { setSettingsSection(section); setPage('settings'); }}
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     appearance={<>
-      <WebThemeSettings value={preferences} disabled={!preferencesReadable} onChange={patch => updatePreferences({ ...preferences, ...patch })} />
+      {themeSettings}
       <RecentPracticeLimitControl />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}
     motion={<div className="settings-panel">
       <TrainingPreferenceControls keys={['animations', 'haptics']} />
-      <div className="preference-row"><span className="preference-title">Показывать достижения</span>
-        <button type="button" role="switch" className="preference-switch" aria-label="Показывать достижения" aria-checked={preferences.showAchievementNotices !== false}
-          disabled={!preferencesReadable} onClick={() => {
-            const enabled = preferences.showAchievementNotices === false;
-            if (updatePreferences({ ...preferences, showAchievementNotices: enabled }) && !enabled) {
-              setAchievementQueue([]);
-              setRecordQueue([]);
-            }
-          }}><span /></button></div>
+      <ShotMotionControl />
+      {achievementPreference}
     </div>}
-    training={<div className="settings-panel"><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
+    training={<div className="settings-panel"><LensControls /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
     statistics={<>
       <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths']} /></div>
       <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>
@@ -976,6 +999,7 @@ function App() {
   if (page === 'conditions') return <>
     {offlineLabel}
     <ConditionsScreen initial={setup ? newConditions : active.series.conditions} rule={setup ? setupDefaults.rule : practice.roundRule} editableRule={setup || !hasHits}
+      appearance={themeSettings} achievementPreference={achievementPreference}
       initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
@@ -1094,11 +1118,13 @@ function App() {
       roundRank={currentRanks && <RankTag rank={currentRanks.round} testId="rank-round" onOpen={() => setRankScope({ kind: 'round', id: round.id })} />}
       seriesRank={currentRanks && <RankTag rank={currentRanks.series} testId="rank-series" onOpen={() => setRankScope({ kind: 'series', id: series.id })} />} />}
     <TrainingShotStrip key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
-      entering={!editing && canAppend ? shots.length : null} onPick={chooseShot} arrowPanelRef={arrowPanel} />
+      entering={!editing && canAppend ? shots.length : null} onPick={chooseShot}
+      feedback={showTrainingMotion && shotFeedback?.sessionId === sessionId && shotFeedback?.seriesId === series.id ? shotFeedback : undefined} />
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
       realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
+      celebration={showTrainingMotion && cleanSeries?.sessionId === sessionId && cleanSeries?.seriesId === series.id ? cleanSeries : undefined}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}
     <TrainingFooter mainText={mainText} showPrevious={!seriesEditor}

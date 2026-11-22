@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
-import { zoneColor } from './TargetBoard.tsx';
-import { summarize } from './target.ts';
+import { summarize, zoneColor } from './target.ts';
 import type { Shot } from './target.ts';
 import { formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
+import { ShotFace } from './ShotMotion.tsx';
+import type { ShotMotionEvent } from './ShotMotion.tsx';
 
 const paths = {
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2',
@@ -69,10 +70,10 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
   </section>;
 }
 
-export function TrainingShotStrip({ shots, previousVolume, selected, entering, onPick, arrowPanelRef }: {
+export function TrainingShotStrip({ shots, previousVolume, selected, entering, onPick, feedback }: {
   shots: readonly Shot[]; previousVolume: number; selected: number | null; entering: number | null;
   onPick: (index: number) => void;
-  arrowPanelRef?: Ref<HTMLDivElement>;
+  feedback?: ShotMotionEvent;
 }) {
   const { preferences } = useTrainingPreferences();
   const strip = useRef<HTMLDivElement>(null);
@@ -102,7 +103,7 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
   }, [focusedPage, pageCount, capacity]);
 
   return <div className="training-hit-strip">
-    <div className="arrow-panel" data-testid="arrow-panel" ref={arrowPanelRef}>
+    <div className="arrow-panel" data-testid="arrow-panel">
       <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
         {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
           aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>
@@ -113,13 +114,17 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
             const compact = capacity > 3;
             const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
             const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
+            const effect = shot && index === feedback?.index ? feedback : undefined;
             return <li key={index}>
               <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
-                style={{ background, color }} data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
+                data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
                 aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
-                {!compact && <span className="arrow-number" aria-hidden="true">{index + 1}</span>}
-                <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
-                {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
+                <ShotFace key={effect?.id ?? 'static'} points={effect?.points} style={preferences.shotMotionStyle ?? 'cards'}
+                  background={background} color={color}>
+                  <span className="arrow-number" aria-hidden="true">{index + 1}</span>
+                  <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
+                  {shot?.physicalArrowNumber !== undefined && <small className="arrow-physical-number" aria-hidden="true">№{shot.physicalArrowNumber}</small>}
+                </ShotFace>
               </button>
             </li>;
           })}

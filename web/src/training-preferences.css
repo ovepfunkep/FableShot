@@ -1,7 +1,8 @@
 .training-preferences { display: grid; gap: 12px; }
 .preference-row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .preference-title { flex: 1; font-size: 14px; font-weight: 700; line-height: 24px; }
-.preference-help-anchor { display: inline-block; white-space: nowrap; vertical-align: middle; }
+.preference-row--with-help { display: grid; grid-template-columns: minmax(0, 1fr) 24px 52px; }
+.preference-row--with-help .preference-title { overflow-wrap: anywhere; }
 .preference-help { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1.5px solid var(--muted); border-radius: 50%; background: none; color: var(--muted); line-height: 1; padding: 0; }
 .preference-switch { display: flex; align-items: center; width: 52px; height: 32px; flex: none; padding: 4px; border: 2px solid #879487; border-radius: 99px; background: #354237; }
 .preference-switch span { width: 16px; height: 16px; border-radius: 50%; background: #b6c1b4; }
@@ -24,3 +25,8 @@
 .statistics-settings > button { justify-self: start; }
 .statistics-settings-section { padding: 14px 16px; border: 1px solid var(--edge); border-radius: 20px; background: var(--surface); }
 .statistics-settings-section h2 { margin: 0 0 8px; font-size: 16px; }
+.aim-speed-control { display: grid; gap: 8px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--edge); }
+.aim-speed-control input { width: 100%; min-height: 44px; accent-color: var(--accent); }
+.aim-speed-control output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.aim-speed-control small, .aim-speed-control details { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.aim-speed-control summary { padding-block: 8px; }

@@ -16,6 +16,7 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
   const { preferences } = useTrainingPreferences();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
+  const [fullScale, setFullScale] = useState(false);
   const points = useMemo(() => practice.rounds.flatMap((round, r) =>
     round.series.flatMap((series, s) => {
       const { average } = summarize(series.shots);
@@ -37,6 +38,7 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
     lower = Math.max(0, upper - 1);
     upper = Math.min(10, lower + 1);
   }
+  if (fullScale) { lower = 0; upper = 10; }
   const ticks = [upper, (upper + lower) / 2, lower];
   const y = (average: number) => bottom - (average - lower) * (bottom - top) / (upper - lower);
   const averageText = formatAverage(selected.average, preferences.averageHundredths);
@@ -52,6 +54,10 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
       <h3 id="training-mean-title">Средний балл по сериям</h3>
       <button type="button" className="training-mean-help" aria-label="О графике среднего балла" onClick={() => setHelp(true)}>?</button>
     </header>
+    <div className="training-mean-scale" role="group" aria-label="Шкала среднего балла">
+      <button type="button" aria-pressed={!fullScale} onClick={() => setFullScale(false)}>Авто</button>
+      <button type="button" aria-pressed={fullScale} onClick={() => setFullScale(true)}>0–10</button>
+    </div>
     <div className="training-mean-chart">
       <div className="training-mean-axis" aria-hidden="true">
         {ticks.map(value => <span key={value}>{formatAverage(value, false)}</span>)}
@@ -84,7 +90,7 @@ export function TrainingMeanTrend({ practice }: { practice: Practice }) {
     </div>
     {help && <BottomSheet title="Средний балл по сериям" onClose={() => setHelp(false)}>
       <p>Каждая точка — средний балл внесённых стрел одной серии, включая неполную. Промах считается за ноль. Пунктир разделяет раунды.</p>
-      <p>Вертикальная шкала подстраивается под результаты всей тренировки с небольшим запасом. Минимальный диапазон — один балл.</p>
+      <p>«Авто» подстраивает вертикальную шкалу с запасом, минимальный диапазон — один балл. Для сравнения величины колебаний между тренировками выбери «0–10».</p>
     </BottomSheet>}
   </section>;
 }

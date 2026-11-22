@@ -1,8 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput } from './target.ts';
+import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput, zoneColor } from './target.ts';
 import type { Point, Shot, TargetSpec, TargetSpot } from './target.ts';
 import { clampTargetZoom, MAX_TARGET_ZOOM, MovableTargetZoom, TargetZoom } from './TargetZoom.tsx';
+import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import { AIM_SPEED_SETTING, LENS_ZOOM_SETTING } from './preferences.ts';
+import { CleanSeriesEffect } from './ShotMotion.tsx';
 
 type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
@@ -20,9 +23,8 @@ const AIM_SPEED = 1.92;
 const TAP_SLOP = 8;
 const DOUBLE_TAP_MS = 240;
 const DOUBLE_TAP_DISTANCE = 32;
-const LENS_WIDTH = 352;
-const LENS_HEIGHT = 316;
-const ringColors = ['#f6f5e9', '#242a2c', '#3295c7', '#e44c43', '#f4ce44'];
+const LENS_WIDTH = 264;
+const LENS_HEIGHT = 236;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const midpoint = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -38,10 +40,6 @@ function initialTargetView(scope?: ZoomScope): View {
     } catch { /* The target remains usable without local storage. */ }
   }
   return initialView;
-}
-
-export function zoneColor(points: number): string {
-  return points > 0 ? ringColors[Math.floor((points - 1) / 2)] : '#667267';
 }
 
 function circle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
@@ -150,12 +148,13 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const hit = isOnTargetInput(aim.point, spec) ? scorePoint(aim.point, spec) : { code: '—', points: 0 };
+  const { preferences } = useTrainingPreferences();
   const scale = Number(document.documentElement.style.getPropertyValue('--app-scale')) || 1;
   const fit = Math.max(.1, Math.min(1, (window.innerWidth / scale - 18) / LENS_WIDTH,
     (window.innerHeight / scale - 54) / LENS_HEIGHT));
   const width = LENS_WIDTH * fit;
   const height = LENS_HEIGHT * fit;
-  const radius = baseRadius * 2.5 / scale;
+  const radius = baseRadius * (preferences.lensZoomPercent ?? LENS_ZOOM_SETTING.default) / 100 / scale;
   const shaft = radius * shaftRadius(spec);
   useLayoutEffect(() => {
     const ctx = canvas.current && canvasContext(canvas.current, width, height);
@@ -173,26 +172,24 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
   }, [aim, radius, shaft, spec, shots, selectedIndex, realArrowDiameter, width, height]);
   const left = clamp(aim.screen.x / scale - width / 2 - 1, 8, Math.max(8, window.innerWidth / scale - width - 10));
   const top = Math.max(8, aim.screen.y / scale - height - 28);
-  const color = zoneColor(hit.points);
-  const foreground = hit.points >= 3 && hit.points <= 4 ? '#fff' : '#101510';
-  const inner = hit.code === 'X' || hit.points > 0 && hit.points % 2 === 0;
+  const color = hit.points <= 4 ? '#edf5ed' : hit.points <= 6 ? '#76d2ff' : hit.points <= 8 ? '#ff8d7d' : zoneColor(hit.points);
   return <div className="lens" data-testid="lens" aria-hidden="true" style={{ left, top, width: width + 2 }}>
-    <div className="lens-score" style={{ left: width / 2 + Math.min(Math.max(12, shaft + 7), Math.max(0, width / 2 - 38)),
-      backgroundColor: inner ? undefined : color }}>
-      <strong style={{ backgroundColor: inner ? color : '#f2f6ee', color: inner ? foreground : '#101510' }}>{hit.code}</strong>
-    </div>
     <canvas ref={canvas} className="lens-canvas" style={{ height }} />
+    <div className="lens-score" style={{ color, fontSize: width * .27 }}><strong>{hit.code}</strong></div>
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, celebration }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
   selectedIndex?: number | null; onBlockedTap?: () => void;
   spec?: TargetSpec;
   panOnly?: boolean;
   zoomScope?: ZoomScope;
   realArrowDiameter?: number;
+  celebration?: { id: number; arrows: number };
 }) {
+  const { preferences } = useTrainingPreferences();
+  const aimSpeed = AIM_SPEED * (preferences.aimSpeedPercent ?? AIM_SPEED_SETTING.default) / 100;
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
@@ -279,7 +276,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       const travel = towardsEnd ? screenSize - finger : finger;
       // Use the unzoomed radius so aiming stays fast at 8×. Near a screen edge,
       // increase gain only in the direction with too little room to reach the target edge.
-      const gain = Math.max(AIM_SPEED / baseRadius, distanceToEdge / Math.max(1, travel - 2));
+      const gain = Math.max(aimSpeed / baseRadius, distanceToEdge / Math.max(1, travel - 2));
       return from + delta * gain;
     }
     return {
@@ -458,6 +455,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
     </div>
     <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />
+    {celebration && <CleanSeriesEffect key={celebration.id} arrows={celebration.arrows} />}
     {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;

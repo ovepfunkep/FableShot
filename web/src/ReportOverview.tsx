@@ -136,7 +136,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     </header>
     <div className="report-body" data-testid="report-screen">
       <div className="report-title-row">
-        <h2 className="report-title">{entry?.title || 'Тренировка'}</h2>
+        <h2 className="report-title" title={entry?.title || undefined}>{entry?.title || 'Тренировка'}</h2>
         {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
         {entry?.trainingTime && visible('training_time') && <ReportDuration time={entry.trainingTime} />}
       </div>
@@ -161,11 +161,19 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
             <h3 data-testid={`report-round-total-${roundIndex + 1}`}>Раунд {roundIndex + 1}{summary(shots) && ` · ${summary(shots)}`}</h3>
             {visible('norms') && <RankTag rank={roundRank(practice, round.id, preferences.rankCategory ?? null)} testId={`report-rank-${roundIndex + 1}`} onOpen={() => onRank(round.id)} />}
           </div>
+          {(visible('result') || visible('average')) && <div className="report-series-columns" aria-hidden="true">
+            {visible('result') && <span className="report-series-score">Очки</span>}
+            {visible('average') && <span className="report-series-average">Ср.</span>}
+            {visible('result') && <span className="report-series-cumulative" title="Сумма с начала раунда">Σ</span>}
+          </div>}
           {round.series.map((series, seriesIndex) => {
-            cumulative += summarize(series.shots).points;
+            const result = summarize(series.shots);
+            cumulative += result.points;
             return series.shots.length > 0 && <button type="button" className="report-series"
               key={series.id} data-testid={`report-end-${series.id}`} disabled={deleted} onClick={() => onSelectSeries(series.id)}>
-              <SeriesResult number={seriesIndex + 1} shots={series.shots} summary={summary(series.shots)}
+              <SeriesResult number={seriesIndex + 1} shots={series.shots}
+                score={visible('result') ? `${result.points}/${result.maximum}` : undefined}
+                average={visible('average') ? formatAverage(result.average, preferences.averageHundredths) : undefined}
                 totalTestId={`report-series-total-${series.id}`} showHits={visible('result')}
                 cumulative={visible('result') ? cumulative : undefined} />
             </button>;

@@ -1,7 +1,0 @@
-.report-zone-legend { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .875rem; font-variant-numeric: tabular-nums; }
-.report-zone-legend li { white-space: nowrap; }
-.report-zone-legend strong { display: inline-block; min-width: 2ch; text-align: end; paint-order: stroke fill; -webkit-text-stroke: .8px #101510; }
-.report-zone-legend strong:is([data-zone="0"], [data-zone="3"], [data-zone="4"]) { -webkit-text-stroke-color: #f2f6ee; }
-.zone-counts-total { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--edge); color: var(--muted); }
-.zone-counts-total span { display: block; font-size: .625rem; }
-.zone-counts-total b { display: block; color: var(--ink, #f2f6ee); }

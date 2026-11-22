@@ -14,7 +14,7 @@
 .report-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; gap: 18px; padding: 20px; }
 .report-title { margin: 0; font-size: 20px; line-height: 26px; letter-spacing: -.3px; overflow-wrap: anywhere; }
 .report-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.report-title-row .report-title { min-width: 0; }
+.report-title-row .report-title { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .report-title-row .report-duration { flex: none; white-space: nowrap; }
 .report-title-row .report-title { margin-right: auto; }
 .session-achievements-action { display: inline-flex; flex: none; }

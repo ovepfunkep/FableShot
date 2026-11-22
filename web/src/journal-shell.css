@@ -90,7 +90,7 @@
 .journal-home-conditions svg { width: 18px; height: 18px; }
 .journal-home-conditions dd { margin: 0; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
 .journal-home-conditions .home-kit-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.home-arrow-diameter { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.home-arrow-diameter { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; border: 0; background: none; color: inherit; font: inherit; padding: 0; min-height: 32px; text-decoration: underline dotted; text-underline-offset: 4px; }
 .journal-home-history { color: inherit; font: inherit; text-align: left; }
 
 .journal-home-primary { display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -151,7 +151,8 @@
 .journal-timeline-month { position: absolute; z-index: 1; top: calc(var(--timeline-axis) - 7px); transform: translateX(-50%); padding: 0 3px; color: var(--muted); background: var(--surface); font-size: 9px; }
 
 .journal-timeline-frame { min-width: 0; position: relative; }
-.journal-timeline-viewport { container-type: inline-size; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--edge) var(--raised); }
+.journal-timeline-viewport { container-type: inline-size; overflow-x: auto; scrollbar-width: none; }
+.journal-timeline-viewport::-webkit-scrollbar { display: none; }
 .journal-timeline-viewport .journal-timeline {
   --timeline-card-width: min(100px, calc(100cqw / 3 - var(--card-gap)));
   --timeline-step: calc((100cqw - 12px - var(--timeline-card-width)) / 4);
@@ -163,15 +164,6 @@
 }
 .journal-timeline-frame::after { inset: 0 0 8px auto; transform: scaleX(-1); }
 .journal-timeline-frame[data-earlier="true"]::before, .journal-timeline-frame[data-later="true"]::after { opacity: 1; }
-.journal-timeline-position { display: none; }
-@media (pointer: coarse) {
-  .journal-timeline-viewport { scrollbar-width: none; }
-  .journal-timeline-position { display: block; position: relative; height: 3px; margin-top: 3px; border-radius: 3px; background: var(--raised); }
-  .journal-timeline-position::before {
-    content: ''; position: absolute; inset-block: 0; left: var(--timeline-thumb-offset); width: var(--timeline-thumb-width);
-    border-radius: inherit; background: var(--accent-line, #c6f43d8c);
-  }
-}
 
 @media (max-width: 359px) {
   .journal-home { gap: 16px; padding: 16px 16px 24px; }
@@ -185,4 +177,10 @@
   display: grid; place-items: center; flex: 0 0 44px; height: 44px;
   border: 1px solid var(--edge); border-radius: 14px;
   background: var(--surface); color: var(--accent);
+}
+.journal-shell[data-tab=home] {
+  background:
+    radial-gradient(circle at 103% 24%, transparent 76px, var(--geometry-line) 77px 78px, transparent 79px 111px, var(--geometry-line) 112px 113px, transparent 114px),
+    radial-gradient(circle at -4% 82%, transparent 43px, var(--geometry-line) 44px 45px, transparent 46px 71px, var(--geometry-line) 72px 73px, transparent 74px),
+    linear-gradient(145deg, transparent 60%, var(--geometry-line) 60.2%, transparent 60.5%);
 }

@@ -1,1 +1,6 @@
-.report-round-filter { justify-self: start; max-width: 100%; min-height: 40px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); color: inherit; font: inherit; font-size: .8125rem; }
+.report-scope-select {
+  min-width: 0; max-width: 100%; min-height: 44px; padding: 6px 9px; border: 1px solid var(--edge);
+  border-radius: 12px; background: var(--raised); color: var(--ink); font: inherit; font-size: .8125rem;
+  font-weight: 650; text-overflow: ellipsis;
+}
+.report-scope-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

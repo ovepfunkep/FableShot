@@ -5,7 +5,7 @@ import type { NumberedArrowGroup, NumberedArrowSeries } from './numbered-arrow-a
 import { formatAverage } from './preferences.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { getTargetProfile } from './target.ts';
-import { zoneColor } from './TargetBoard.tsx';
+import { zoneColor } from './target.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './numbered-arrow-analysis.css';
 

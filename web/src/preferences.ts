@@ -7,6 +7,9 @@ import { isThemeMode, isThemeStyle } from './web-theme.ts';
 import type { ThemeMode, ThemeStyle } from './web-theme.ts';
 
 export const RECENT_PRACTICE_LIMIT = { min: 5, max: 20 };
+export const AIM_SPEED_SETTING = { min: 20, max: 150, default: 70 };
+export const LENS_ZOOM_SETTING = { min: 150, max: 600, default: 375 };
+export type ShotMotionStyle = 'cards' | 'pulse';
 
 export type TrainingPreferences = {
   hideScores: boolean;
@@ -17,6 +20,9 @@ export type TrainingPreferences = {
   trainingOnLockScreen?: boolean;
   useSystemScale?: boolean;
   realArrowDiameter?: boolean;
+  aimSpeedPercent?: number;
+  lensZoomPercent?: number;
+  shotMotionStyle?: ShotMotionStyle;
   rankCategory?: 'male' | 'female';
   disabledStatistics?: StatisticFeature[];
   distributionShare?: '10' | '10+9';
@@ -45,6 +51,11 @@ export function valid(value: unknown): value is TrainingPreferences {
     (record.rankCategory === undefined || record.rankCategory === 'male' || record.rankCategory === 'female') &&
     (record.useSystemScale === undefined || typeof record.useSystemScale === 'boolean') &&
     (record.realArrowDiameter === undefined || typeof record.realArrowDiameter === 'boolean') &&
+    (record.aimSpeedPercent === undefined || typeof record.aimSpeedPercent === 'number' && Number.isInteger(record.aimSpeedPercent) &&
+      record.aimSpeedPercent >= AIM_SPEED_SETTING.min && record.aimSpeedPercent <= AIM_SPEED_SETTING.max) &&
+    (record.lensZoomPercent === undefined || typeof record.lensZoomPercent === 'number' && Number.isInteger(record.lensZoomPercent) &&
+      record.lensZoomPercent >= LENS_ZOOM_SETTING.min && record.lensZoomPercent <= LENS_ZOOM_SETTING.max) &&
+    (record.shotMotionStyle === undefined || record.shotMotionStyle === 'cards' || record.shotMotionStyle === 'pulse') &&
     (record.disabledStatistics === undefined || isDisabledStatistics(record.disabledStatistics)) &&
     (record.distributionShare === undefined || record.distributionShare === '10' || record.distributionShare === '10+9') &&
     (record.recentPracticeLimit === undefined || typeof record.recentPracticeLimit === 'number' &&

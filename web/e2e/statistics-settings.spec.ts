@@ -5,7 +5,7 @@ import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
 import { STATISTIC_SECTIONS } from '../src/statistics-visibility.ts';
 import { openHistoryEntry } from './journal-navigation.ts';
 
-test('hit distribution shows proportional sectors and a count list beside them', async ({ page }) => {
+test('mosaic and circular view show the same counts and shares without a separate legend', async ({ page }) => {
   const practice = emptyPractice();
   practice.roundRule = { unit: 'unlimited', limit: null };
   const series = practice.rounds[0].series[0];
@@ -25,21 +25,27 @@ test('hit distribution shows proportional sectors and a count list beside them',
   await openHistoryEntry(page, 'distribution');
 
   const distribution = page.getByTestId('report-zone-distribution');
-  const pie = distribution.locator('svg');
-  const legend = distribution.getByRole('list', { name: 'Попадания по зонам' });
-  await expect(legend.getByRole('listitem')).toHaveText(['10: 20', '9: 18', '8: 1', 'M: 1']);
-  await expect(legend.getByText('10', { exact: true })).toHaveCSS('color', 'rgb(244, 206, 68)');
-  await expect(legend.getByText('8', { exact: true })).toHaveCSS('color', 'rgb(228, 76, 67)');
+  const mosaic = distribution.getByTestId('shot-mosaic');
+  const pie = distribution.getByTestId('shot-distribution-pie');
+  const reading = distribution.getByTestId('shot-distribution-reading');
+  await expect(mosaic.locator('[data-zone]')).toHaveCount(40);
+  await expect(mosaic.locator('[data-zone="10"]')).toHaveCount(20);
+  await expect(pie).toHaveCount(0);
+  await distribution.screenshot({ path: '../artifacts/ivan-distribution-mosaic.png' });
+  await distribution.getByRole('button', { name: 'Оценка 10, стрел: 20', exact: true }).click();
+  await expect(reading).toContainText('20 из 40');
+  await expect(reading).toContainText('50,0%');
+  await distribution.getByRole('button', { name: 'Круговая', exact: true }).click();
+  await expect(mosaic).toHaveCount(0);
   await expect(pie.locator('path')).toHaveCount(4);
-  await expect(pie.locator('path').nth(0)).toHaveAttribute('fill', '#f4ce44');
-  await expect(pie.locator('path').nth(1)).toHaveAttribute('fill', '#f4ce44');
-  await expect(pie.locator('path').nth(1)).toHaveAttribute('stroke-width', '1');
-  await expect(pie.locator('path').nth(0)).toHaveAttribute('d', /L 80 2 .* 80 158 Z$/);
-  await expect(pie.locator('text')).toHaveText(['10', '9']);
-  const chartBounds = (await pie.boundingBox())!;
-  const legendBounds = (await legend.boundingBox())!;
-  expect(legendBounds.x).toBeGreaterThan(chartBounds.x + chartBounds.width);
-  expect(legendBounds.x + legendBounds.width).toBeLessThan(320);
+  await expect(pie.locator('text')).toHaveText(['10 · 20', '9 · 18']);
+  await expect(reading).toContainText('20 из 40');
+  await distribution.screenshot({ path: '../artifacts/ivan-distribution-pie.png' });
+  await distribution.getByRole('button', { name: 'Промах, стрел: 1', exact: true }).click();
+  await expect(reading).toContainText('Промах');
+  await expect(reading).toContainText('2,5%');
+  const bounds = (await pie.boundingBox())!;
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
 
   await expect(distribution).toContainText('Доля 10 50,0%');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
@@ -105,6 +111,7 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await openHistoryEntry(page, 'stats');
   await expect(page.getByTestId('exercise-rank-level')).toHaveText('МС по очкам');
   await expect(page.getByTestId('report-result-rank')).toHaveText('МС');
+  await page.getByTestId('report-result').screenshot({ path: '../artifacts/ivan-result-redesign.png' });
   const rankTable = page.getByRole('table', { name: 'Пороги нормативов за 60 стрел' });
   await expect(rankTable.getByRole('button', { name: 'МС', exact: true }).locator('..')).toHaveAttribute('data-rank-state', 'reached');
   await expect(rankTable.getByRole('button', { name: 'МСМК', exact: true }).locator('..')).toHaveAttribute('data-rank-state', 'next');
@@ -117,7 +124,9 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await page.getByRole('button', { name: 'Разряд по всей тренировке', exact: true }).click();
   await expect(page.getByTestId('rank-details').getByRole('table')).toBeVisible();
   await expect(page.getByTestId('rank-details').locator('.rank-scale')).toHaveCount(0);
-  await expect(page.getByTestId('rank-progress')).toContainText('540 очков · 60 из 60 стрел');
+  await expect(page.getByTestId('rank-progress')).toContainText('540 очков');
+  await expect(page.getByTestId('rank-progress')).toContainText('60 из 60 стрел');
+  await page.getByTestId('rank-details').screenshot({ path: '../artifacts/ivan-rank-details-redesign.png' });
   await page.getByTestId('rank-open-reference').click();
   await expect(page.getByTestId('rank-reference')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -125,7 +134,7 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await openHistoryEntry(page, 'partial');
   await expect(page.getByTestId('exercise-rank-level')).toHaveText('Темп МС');
   await expect(page.getByTestId('report-result-rank')).toHaveText('МС');
-  await expect(page.locator('.report-result-rank')).toContainText('Прогноз разряда');
+  await expect(page.locator('.report-result-rank')).toHaveAttribute('data-forecast', 'true');
   await expect(page.getByTestId('exercise-rank-progress')).toHaveText('57 из 60 стрел');
   await expect(page.getByTestId('exercise-rank-next')).toHaveText('МСМК · порог уже недостижим');
   await rankTable.getByRole('button', { name: 'МС', exact: true }).click();

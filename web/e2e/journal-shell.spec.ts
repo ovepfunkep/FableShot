@@ -66,7 +66,7 @@ test('Home shows the current kit shaft diameter and its missing value', async ({
     localStorage.setItem(key, JSON.stringify(equipment));
   });
   await page.reload();
-  await expect(page.getByLabel('Диаметр стрелы не указан')).toContainText('???');
+  await expect(page.locator('.home-arrow-diameter')).toHaveCount(0);
 });
 
 test('Home uses recorded dates and asks for a kit when the habitual kit is archived', async ({ page }) => {

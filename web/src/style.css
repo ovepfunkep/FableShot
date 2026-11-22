@@ -98,8 +98,13 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
   position: fixed; z-index: 4; overflow: hidden; pointer-events: none;
   border: 1px solid #637762; border-radius: 16px; background: #152016;
 }
-.lens-score { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 30px; border: 1px solid #ffffff80; border-radius: 9px; background: #152016; }
-.lens-score strong { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; font-size: .875rem; font-variant-numeric: tabular-nums; }
+.lens-score {
+  position: absolute; inset: 0 0 0 55%; display: grid; place-items: center;
+  padding-inline-start: 7%; background: linear-gradient(90deg, transparent, #101710ed 31%, #101710 86%);
+  font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.08em;
+  text-shadow: 0 0 .55em color-mix(in srgb, currentColor 48%, transparent);
+}
+.lens-score strong { font-size: inherit; font-weight: 850; }
 .lens-canvas { width: 100%; display: block; }
 
 .training-controls { flex: none; padding: 4px 16px; background: #18231b; }
@@ -119,7 +124,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
   background: var(--surface); font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .arrow-slot:disabled { opacity: 1; }
-.arrow-slot.compact { width: 100%; height: 30px; font-size: 13px; }
+.arrow-slot.compact { width: 100%; height: 30px; font-size: 13px; --arrow-watermark-size: 40px; }
 .arrow-page-12 .arrow-slot.compact { max-width: 38px; }
 .arrow-entered { border-color: #c6d0c6; }
 .arrow-entering { border: 2px solid #d5ddd5; animation: arrow-entering 850ms ease-in-out infinite alternate; }
@@ -129,7 +134,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
   animation: none;
 }
 @keyframes arrow-entering { from { border-color: #6a796d; } }
-.arrow-number { position: absolute; left: 0; font-size: 48px; line-height: 1; font-weight: 800; opacity: .12; }
+.arrow-number { position: absolute; inset-inline-start: 2px; top: 50%; transform: translateY(-50%); font-size: var(--arrow-watermark-size, 60px); line-height: 1; font-weight: 800; opacity: .13; }
 .arrow-score { position: relative; }
 .arrow-physical-number { position: absolute; top: 3px; right: 10px; font-size: 10px; font-weight: 800; line-height: 1; }
 .arrow-slot.compact:has(.arrow-physical-number) .arrow-score { transform: translateY(4px); }

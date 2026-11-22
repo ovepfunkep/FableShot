@@ -1,5 +1,10 @@
 export type Point = { x: number; y: number };
 export type Hit = { points: number; code: string };
+const ringColors = ['#f6f5e9', '#242a2c', '#3295c7', '#e44c43', '#f4ce44'];
+
+export function zoneColor(points: number): string {
+  return points > 0 ? ringColors[Math.floor((points - 1) / 2)] : '#667267';
+}
 export type Shot = Hit & { point: Point | null; missPoint?: Point; spot?: TargetSpot; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
 export type TargetSpot = 0 | 1 | 2;
 export type TargetSpec = { profileId: string; diameterMm: number; shaftDiameterMm: number };

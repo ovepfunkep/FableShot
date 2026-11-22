@@ -3,6 +3,35 @@ import { openTraining } from './journal-navigation.ts';
 import { advanceSeries, appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
 
+test('traffic-light map filters individual faces and keeps map and score consistent', async ({ page }) => {
+  const practice = emptyPractice();
+  practice.rounds[0].series[0].conditions = { ...DEFAULT_CONDITIONS, targetProfileId: 'wa-indoor-triple-outer-v1' };
+  practice.rounds[0].series[0].shots = [
+    { code: '10', points: 10, point: { x: 0, y: 0 }, spot: 0 },
+    { code: '9', points: 9, point: { x: .15, y: 0 }, spot: 1 },
+    { code: '8', points: 8, point: { x: .25, y: 0 }, spot: 2 },
+    { code: 'M', points: 0, point: null, missPoint: { x: .6, y: 0 }, spot: 2 },
+  ];
+  await page.addInitScript(data => localStorage.setItem('app.fableshot.practice-pilot.v3', JSON.stringify(data)), practice);
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  const map = page.getByTestId('training-hit-map');
+  await expect(map.getByTestId('hit-map-hit')).toHaveCount(3);
+  await map.getByTestId('hit-map-spot-0').click();
+  await expect(map.getByTestId('hit-map-hit')).toHaveCount(1);
+  await expect(map.getByTestId('hit-map-score')).toHaveText('10/10');
+  await map.getByTestId('hit-map-spot-2').click();
+  await expect(map.getByTestId('hit-map-miss')).toHaveCount(1);
+  await expect(map.getByTestId('hit-map-score')).toHaveText('8/20');
+  await map.getByTestId('hit-map-spot-all').click();
+  await expect(map.getByTestId('hit-map-hit')).toHaveCount(3);
+  const zoom = await map.getByRole('group', { name: 'Приближение мишени' }).boundingBox();
+  const plot = await map.getByTestId('hit-map-plot').boundingBox();
+  expect(zoom!.y).toBeGreaterThanOrEqual(plot!.y + plot!.height);
+  await map.screenshot({ path: '../artifacts/ivan-hit-map-redesign.png' });
+});
+
 test('the report graphs all entered series while CG3 uses confirmed series only', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
@@ -11,7 +40,12 @@ test('the report graphs all entered series while CG3 uses confirmed series only'
   await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
   await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
-  await expect(page.getByTestId('report-round-1').locator('.report-series-cumulative')).toHaveText(['30', '30']);
+  await expect(page.getByTestId('report-round-1').locator('.report-series-summary .report-series-cumulative')).toHaveText(['30', '30']);
+  const rows = page.getByTestId('report-round-1').locator('.report-series-summary');
+  for (const column of ['score', 'average', 'cumulative']) {
+    const edges = await rows.locator(`.report-series-${column}`).evaluateAll(cells => cells.map(cell => cell.getBoundingClientRect().right));
+    expect(edges[0]).toEqual(edges[1]);
+  }
   const trend = page.getByTestId('training-mean-trend');
   await expect(trend.getByTestId('training-mean-value')).toHaveText('0,0 / 10');
   await expect(trend.getByText('Раунд 1 · серия 2', { exact: true })).toBeVisible();
@@ -38,6 +72,9 @@ test('series averages use a compact vertical range, including identical results'
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   const trend = page.getByTestId('training-mean-trend');
   await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '9,5', '9,0']);
+  await trend.getByRole('button', { name: '0–10', exact: true }).click();
+  await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '5,0', '0,0']);
+  await trend.getByRole('button', { name: 'Авто', exact: true }).click();
   await expect(trend.getByTestId('training-mean-chart')).toHaveAccessibleName(/от 9,0 до 10,0/);
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('next-end').click();
@@ -62,19 +99,16 @@ test('map and zone distribution share conditions while the map can isolate one s
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   const map = page.getByTestId('training-hit-map');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
-  await expect(map.getByTestId('hit-map-score')).toHaveText('39');
-  await expect(map.getByTestId('hit-map-zone-10')).toHaveText('10: 3');
-  await expect(map.getByTestId('hit-map-zone-9')).toHaveText('9: 1');
-  await expect(map.getByTestId('hit-map-zone-M')).toHaveText('M: 1');
-  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('4/1');
-  await expect(page.getByTestId('report-zone-M')).toHaveText('M: 1');
-  await expect(page.getByTestId('report-zone-10')).toHaveText('10: 3');
+  await expect(map.getByTestId('hit-map-score')).toHaveText('39/50');
+  await expect(map.getByRole('list', { name: 'Попадания по зонам' })).toHaveCount(0);
+  await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('Промах, стрел: 1');
+  await expect(page.getByTestId('report-zone-10')).toHaveAccessibleName('Оценка 10, стрел: 3');
   await expect(page.getByTestId('report-ten-share')).toHaveText('60,0%');
 
   await map.getByTestId('hit-map-next').click();
-  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('3/0');
-  await expect(map.getByTestId('hit-map-rms')).toHaveText('Разброс RMS 3,3 мм');
-  await expect(map.getByTestId('hit-map-shift')).toHaveCount(0);
+  await expect(map.getByTestId('hit-map-score')).toHaveText('30/30');
+  await expect(map.getByTestId('hit-map-rms')).toHaveText('3,3 мм');
+  await expect(map.getByTestId('hit-map-shift')).toHaveText('8,0 мм');
   await map.getByTestId('hit-map-mode-points').click();
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   const target = map.getByTestId('hit-map-plot');
@@ -93,7 +127,7 @@ test('map and zone distribution share conditions while the map can isolate one s
   await page.mouse.up();
   await expect(target).not.toHaveAttribute('viewBox', centered!);
   await map.getByTestId('hit-map-series').selectOption('');
-  await expect(map.getByTestId('hit-map-score')).toHaveText('39');
+  await expect(map.getByTestId('hit-map-score')).toHaveText('39/50');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(resetZoom).toHaveText('1,5×');
   await resetZoom.click();
@@ -115,8 +149,7 @@ test('map and zone distribution share conditions while the map can isolate one s
   await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
-  await expect(map.getByTestId('hit-map-score')).toHaveText('10');
-  await expect(map.getByTestId('hit-map-zone-total').locator('b')).toHaveText('1/0');
+  await expect(map.getByTestId('hit-map-score')).toHaveText('10/10');
   await expect(page.getByTestId('report-result-average')).toHaveText('10,0');
   await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
   await expect(page.getByTestId('report-zone-M')).toHaveCount(0);

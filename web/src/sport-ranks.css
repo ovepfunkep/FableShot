@@ -46,7 +46,7 @@ button.rank-tag:active { background: var(--raised); }
 .rank-dialog__header h2 { margin: 0; font-size: 1.25rem; }
 .rank-dialog__header button { font-size: 1.6rem; }
 .rank-detail, .rank-reference { display: grid; gap: 10px; }
-.rank-detail h3, .rank-detail p, .rank-source p { margin: 0; }
+.rank-detail h3, .rank-detail p { margin: 0; }
 .rank-detail h3 { font-size: 1.4rem; }
 .rank-muted, .rank-reason { color: var(--muted); }
 .rank-muted { font-size: .875rem; }
@@ -59,10 +59,6 @@ button.rank-tag:active { background: var(--raised); }
   font-size: .875rem;
 }
 .rank-next strong { color: #a3d9ff; }
-.rank-source { font-size: .875rem; color: var(--muted); }
-.rank-source summary { cursor: pointer; padding-block: 9px; }
-.rank-source p { margin-bottom: 6px; }
-.rank-reference a, .rank-source a { color: var(--accent); }
 .rank-open-reference, .rank-link {
   min-height: 44px;
   padding: 8px 0;
@@ -152,3 +148,29 @@ button.rank-tag:active { background: var(--raised); }
 .rank-reference__scroll th:first-child { min-width: 11.5rem; text-align: left; }
 .rank-reference__scroll tbody th span { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; }
 .rank-reference__scroll tr:nth-child(even) > * { background: var(--raised); }
+.rank-summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0 6px; }
+.rank-summary-level > span, .rank-summary-average > span { color: var(--muted); font-size: 12px; }
+.rank-dialog .rank-detail .rank-summary-level h3 { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 28px; letter-spacing: 0; text-transform: none; }
+.rank-summary-level .rank-medal { width: 24px; height: 24px; }
+.rank-summary-average { display: grid; gap: 4px; text-align: right; }
+.rank-summary-average strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.rank-context { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; margin: 0; padding-block: 12px; border-block: 1px solid var(--edge); }
+.rank-context dt { color: var(--muted); font-size: 11px; }
+.rank-context dd { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.rank-volume { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; padding-top: 8px; font-variant-numeric: tabular-nums; }
+.rank-volume strong { font-size: 20px; }
+.rank-volume small, .rank-volume span { color: var(--muted); font-size: 12px; font-weight: 400; }
+.rank-volume progress { flex-basis: 100%; width: 100%; height: 4px; accent-color: var(--accent); }
+.rank-calculation { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.rank-calculation p { padding-bottom: 8px; }
+.rank-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.rank-detail-actions > button {
+  flex: 1 1 auto; text-align: center; min-height: 44px; padding: 7px 10px;
+  border: 1px solid var(--edge); border-radius: 12px; background: var(--raised);
+  font-size: .8125rem; font-weight: 650;
+}
+.rank-detail-actions .rank-link { color: var(--ink); }
+.rank-detail-actions .rank-open-reference { background: var(--accent-wash); }
+.rank-calculation summary { display: list-item; min-height: 0; padding-block: 10px; cursor: pointer; }
+.rank-source-links { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .75rem; }
+.rank-source-links a { color: var(--accent); }

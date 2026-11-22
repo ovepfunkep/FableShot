@@ -58,12 +58,10 @@ function CategoryButtons({ category, onCategory, testId }: {
 }
 
 function RankSource() {
-  return <details className="rank-source">
-    <summary data-testid="rank-help">О нормативах ЕВСК</summary>
-    <p>Числовое сравнение по приложению № 34 к приказу Минспорта России от 10 марта 2026 г. № 201.
-      Для официального присвоения учитываются также возраст и условия соревнований.</p>
-    <a href={RANK_SOURCE} target="_blank" rel="noreferrer">Источник · Минспорт России</a>
-  </details>;
+  return <div className="rank-source-links">
+    <a href={RANK_SOURCE} target="_blank" rel="noreferrer">Источник ЕВСК</a>
+    <a href={RANK_DOCUMENT} target="_blank" rel="noreferrer">Таблица XLS</a>
+  </div>;
 }
 
 export function RankDetails({ rank, onClose, onOpenReference, onCategory }: {
@@ -74,23 +72,40 @@ export function RankDetails({ rank, onClose, onOpenReference, onCategory }: {
   return <RankDialog title={`${rank.scopeLabel} · нормативы`} testId="rank-details" onClose={onClose}>
     <div className="rank-detail">
       {evaluation ? <>
-        <h3 data-testid="rank-headline">{rank.finalResult ? 'По очкам' : 'Темп'} · {rank.label ?? '—'}</h3>
-        <p>{bowCategoryName(evaluation.exercise.bow)} · {evaluation.exercise.distance} м · {evaluation.exercise.arrows} стрел</p>
-        {conditions && <p className="rank-muted" data-testid="rank-target-conditions">
-          {conditions.targetDiameterMm / 10} см · {getTargetProfile(conditions.targetProfileId)?.title}
-        </p>}
-        <p data-testid="rank-progress">{evaluation.points} очков · {evaluation.entered} из {evaluation.exercise.arrows} стрел
-          {!rank.finalResult && evaluation.projected !== null && ` · прогноз ${formatAverage(evaluation.projected, true)}`}</p>
+        <div className="rank-summary">
+          <div className="rank-summary-level"><span>{rank.finalResult ? 'Результат упражнения' : 'Прогноз по среднему'}</span>
+            <h3 data-testid="rank-headline"><RankMedal />{rank.label ?? '—'}</h3></div>
+          <div className="rank-summary-average"><span>Средний балл</span><strong>{formatAverage(evaluation.entered ? evaluation.points / evaluation.entered : null, true)}</strong></div>
+        </div>
+        <dl className="rank-context">
+          <div><dt>Лук</dt><dd>{bowCategoryName(evaluation.exercise.bow)}</dd></div>
+          <div><dt>Дистанция</dt><dd>{evaluation.exercise.distance} м</dd></div>
+          <div><dt>Упражнение</dt><dd>{evaluation.exercise.arrows} стрел</dd></div>
+        </dl>
+        <div className="rank-volume" data-testid="rank-progress"><strong>{evaluation.points} <small>очков</small></strong>
+          <span>{evaluation.entered} из {evaluation.exercise.arrows} стрел</span>
+          <progress value={Math.min(evaluation.entered, evaluation.exercise.arrows)} max={evaluation.exercise.arrows} aria-label="Объём упражнения" />
+        </div>
         <ExerciseThresholdTable key={evaluation.exercise.id} evaluation={evaluation} finalResult={rank.finalResult}
           saved={rank.finalResult} showAverage showVolume={false} />
       </> : <p className="rank-reason" data-testid="rank-unavailable">{rank.reason}</p>}
-      {onCategory && (rank.category === null || changingCategory ? <CategoryButtons category={rank.category} testId="rank-category"
-        onCategory={category => { onCategory(category); setChangingCategory(false); }} />
-        : <button type="button" className="rank-link" data-testid="rank-change-category" onClick={() => setChangingCategory(true)}>
-          Категория · {RANK_CATEGORIES[rank.category]} <span aria-hidden="true">✎</span>
-        </button>)}
-      <button type="button" className="rank-open-reference" data-testid="rank-open-reference" onClick={onOpenReference}>Вся разрядная сетка <span aria-hidden="true">›</span></button>
-      <RankSource />
+      <div className="rank-detail-actions">
+        {onCategory && rank.category !== null && !changingCategory &&
+          <button type="button" className="rank-link" aria-label={`Изменить категорию · ${RANK_CATEGORIES[rank.category]}`}
+            data-testid="rank-change-category" onClick={() => setChangingCategory(true)}>
+            {RANK_CATEGORIES[rank.category]} <span aria-hidden="true">✎</span>
+          </button>}
+        <button type="button" className="rank-open-reference" data-testid="rank-open-reference" onClick={onOpenReference}>Вся сетка <span aria-hidden="true">›</span></button>
+      </div>
+      {onCategory && (rank.category === null || changingCategory) && <CategoryButtons category={rank.category} testId="rank-category"
+        onCategory={category => { onCategory(category); setChangingCategory(false); }} />}
+      <details className="rank-calculation">
+        <summary data-testid="rank-help">Расчёт и источник</summary>
+        {conditions && <p data-testid="rank-target-conditions">{conditions.targetDiameterMm / 10} см · {getTargetProfile(conditions.targetProfileId)?.title}</p>}
+        {!rank.finalResult && evaluation?.projected != null && <p>Прогноз при сохранении среднего: {formatAverage(evaluation.projected, true)} очков.</p>}
+        <p>Для официального разряда также учитываются возраст и условия соревнований.</p>
+        <RankSource />
+      </details>
     </div>
   </RankDialog>;
 }
@@ -123,7 +138,6 @@ export function RankReference({ initialBow, initialCategory, onClose }: {
         </table>
       </div>
       <RankSource />
-      <a href={RANK_DOCUMENT} target="_blank" rel="noreferrer">Полный документ ЕВСК · XLS</a>
     </div>
   </RankDialog>;
 }
