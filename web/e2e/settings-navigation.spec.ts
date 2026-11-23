@@ -12,7 +12,9 @@ test('motion previews switch styles and respect the global animation toggle', as
   }
   await page.getByRole('button', { name: 'Показать анимацию для оценки 10' }).click();
   await expect(demo.locator('[data-shot-motion="cards"][data-shot-tier="ten"]')).toHaveCSS('animation-name', 'shot-landing');
-  await expect(demo.locator('.shot-sparks i')).toHaveCount(7);
+  await expect(demo.locator('.shot-sparks i')).toHaveCount(10);
+  await page.getByRole('button', { name: 'Чистая серия', exact: true }).click();
+  await expect(page.getByTestId('clean-series-effect')).toHaveText('Чистая серия30/30');
   await page.getByRole('button', { name: 'Импульс', exact: true }).click();
   await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'shot-pulse');
   await page.emulateMedia({ reducedMotion: 'reduce' });

@@ -11,6 +11,7 @@ import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
 import { LensControls, RecentPracticeLimitControl, ShotMotionControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
 import type { ShotMotionEvent } from './ShotMotion.tsx';
+import { CLEAN_SERIES_MS, SHOT_FEEDBACK_MS } from './ShotMotion.tsx';
 import { supportsAppScale } from './native-app-scale.ts';
 import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
@@ -569,6 +570,8 @@ function App() {
     if (!suggestRound) pulse.current?.cancel();
   }, [suggestRound]);
   const showTrainingMotion = page === 'training' && preferences.animations && !preferences.hideScores && !editing;
+  const activeShotFeedback = showTrainingMotion && shotFeedback?.sessionId === sessionId && shotFeedback?.seriesId === series.id
+    ? shotFeedback : undefined;
   useEffect(() => {
     if (!shotFeedback && !cleanSeries) return;
     if (!showTrainingMotion || shotFeedback && (shotFeedback.sessionId !== sessionId || shotFeedback.seriesId !== series.id)) setShotFeedback(null);
@@ -576,12 +579,12 @@ function App() {
   }, [showTrainingMotion, shotFeedback, cleanSeries, sessionId, series.id]);
   useEffect(() => {
     if (!shotFeedback) return;
-    const timeout = setTimeout(() => setShotFeedback(null), 700);
+    const timeout = setTimeout(() => setShotFeedback(null), SHOT_FEEDBACK_MS);
     return () => clearTimeout(timeout);
   }, [shotFeedback]);
   useEffect(() => {
     if (!cleanSeries) return;
-    const timeout = setTimeout(() => setCleanSeries(null), 900);
+    const timeout = setTimeout(() => setCleanSeries(null), CLEAN_SERIES_MS);
     return () => clearTimeout(timeout);
   }, [cleanSeries]);
 
@@ -591,6 +594,7 @@ function App() {
 
   function playShotMotion(index: number, shot: Shot) {
     if (sessionId && canPlayTrainingMotion()) {
+      setCleanSeries(null);
       setShotFeedback({ id: ++motionId.current, sessionId, seriesId: series.id, index, points: shot.points });
     }
   }
@@ -1148,11 +1152,12 @@ function App() {
       seriesRank={currentRanks && <RankTag rank={currentRanks.series} testId="rank-series" onOpen={() => setRankScope({ kind: 'series', id: series.id })} />} />}
     <TrainingShotStrip key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot}
-      feedback={showTrainingMotion && shotFeedback?.sessionId === sessionId && shotFeedback?.seriesId === series.id ? shotFeedback : undefined} />
+      feedback={activeShotFeedback} />
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
       realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
+      feedback={activeShotFeedback}
       celebration={showTrainingMotion && cleanSeries?.sessionId === sessionId && cleanSeries?.seriesId === series.id ? cleanSeries : undefined}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}

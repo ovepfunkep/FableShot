@@ -6,7 +6,7 @@ import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
 import { setTrainingWindowActive } from './native-training-window.ts';
 import { supportsAppScale, useNativeAppScale } from './native-app-scale.ts';
-import { ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
+import { CleanSeriesEffect, ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
 import { zoneColor } from './target.ts';
 import './training-preferences.css';
 
@@ -119,7 +119,7 @@ export function LensControls({ preview }: { preview?: ReactNode }) {
 
 export function ShotMotionControl() {
   const { preferences, update, error, readable } = useTrainingPreferences();
-  const [demo, setDemo] = useState({ points: 10, id: 0 });
+  const [demo, setDemo] = useState<{ points: number | null; id: number }>({ points: 10, id: 0 });
   const style = preferences.shotMotionStyle ?? 'cards';
   const canPreview = readable && preferences.animations;
   return <div className="shot-motion-settings">
@@ -130,13 +130,17 @@ export function ShotMotionControl() {
           if (await update({ ...preferences, shotMotionStyle: option.id })) setDemo(previous => ({ points: 10, id: previous.id + 1 }));
         }}>{option.label}</button>)}
     </div>
-    <div className="shot-motion-demo" aria-hidden="true">
-      <ShotFace key={`${style}:${demo.id}`} points={canPreview && demo.id > 0 ? demo.points : undefined} style={style}
-        background={zoneColor(demo.points)} color="#111811">{demo.points}</ShotFace>
+    <div className="shot-motion-preview" aria-hidden="true">
+      {canPreview && demo.points === null ? <CleanSeriesEffect key={demo.id} arrows={3} /> : <div className="shot-motion-demo">
+        <ShotFace key={`${style}:${demo.id}`} points={canPreview && demo.id > 0 ? demo.points ?? undefined : undefined} style={style}
+          background={zoneColor(demo.points ?? 10)} color="#111811">{demo.points ?? 10}</ShotFace>
+      </div>}
     </div>
     <div className="shot-motion-demo-options" role="group" aria-label="Проверить анимацию">
       {[5, 7, 9, 10].map(points => <button type="button" key={points} disabled={!canPreview}
         aria-label={`Показать анимацию для оценки ${points}`} onClick={() => setDemo(previous => ({ points, id: previous.id + 1 }))}>{points}</button>)}
+      <button type="button" disabled={!canPreview}
+        onClick={() => setDemo(previous => ({ points: null, id: previous.id + 1 }))}>Чистая серия</button>
     </div>
     {error && <p className="preferences-error" role="alert">{error}</p>}
   </div>;

@@ -32,12 +32,17 @@ test('a saved ten animates its arrow and closing a clean series celebrates once'
   for (let i = 1; i <= 3; i++) {
     await page.getByTestId('target').click();
     await expect(page.getByTestId(`shot-${i}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
+    await expect(page.getByTestId('target-ten-wave')).toHaveCount(1);
   }
   await expect(page.getByTestId('series-score')).toHaveText('30/30');
   await page.getByTestId('next-end').click();
   await expect(page.getByTestId('clean-series-effect')).toHaveText('Чистая серия30/30');
-  await page.clock.fastForward(1_000);
+  await page.clock.fastForward(1_600);
   await expect(page.getByTestId('clean-series-effect')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByTestId('target').click();
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await expect(page.getByTestId('target-ten-wave')).toHaveCount(0);
 });
 
 test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {

@@ -4,41 +4,71 @@
   transform-origin: center;
 }
 .shot-face[data-shot-tier=base] { animation: shot-reveal 160ms ease-out; }
-.shot-face[data-shot-motion=cards][data-shot-tier=red] { animation: shot-flip 300ms cubic-bezier(.18,.7,.24,1); }
+.shot-face[data-shot-motion=cards][data-shot-tier=red] { animation: shot-flip 410ms ease-out; }
 .shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten]) {
-  animation: shot-landing 490ms cubic-bezier(.15,.74,.28,1);
+  --shot-lift: -17px;
+  animation: shot-landing 640ms ease-out;
 }
-.arrow-slot:not(.compact):has(.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten])),
+.arrow-slot.compact .shot-face[data-shot-motion=cards] { --shot-lift: -9px; }
+.arrow-slot:has(.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten])),
 .shot-motion-demo:has(.shot-face[data-shot-motion=cards]:is([data-shot-tier=gold], [data-shot-tier=ten])) { overflow: visible; }
 .shot-face[data-shot-motion=pulse]:is([data-shot-tier=red], [data-shot-tier=gold], [data-shot-tier=ten]) {
   animation: shot-pulse 420ms ease-out;
 }
-.shot-face[data-shot-motion=pulse][data-shot-tier=ten] { animation-duration: 600ms; }
+.shot-face[data-shot-motion=pulse][data-shot-tier=ten] { animation-duration: 570ms; }
 .shot-sparks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.arrow-slot.compact .shot-sparks { --spark-spread: .55; }
 .shot-sparks i {
-  position: absolute; inset: 50% auto auto 50%; width: 3px; height: 7px; border-radius: 3px;
-  background: #fff1ab; box-shadow: 0 0 4px #ffcb53; opacity: 0;
-  animation: shot-spark 350ms 285ms ease-out both;
+  position: absolute; inset: 50% auto auto 50%; width: 3px; height: 10px; border-radius: 3px;
+  background: #fff5ba; box-shadow: 0 0 7px #ffbf49; opacity: 0;
+  animation: shot-spark 470ms 340ms ease-out both;
+}
+.shot-sparks i:nth-of-type(even) { height: 7px; background: #ffcf54; }
+.shot-ten-wave, .target-ten-wave {
+  position: absolute; pointer-events: none; translate: -50% -50%; opacity: 0;
+  border: 2px solid #ffd465; border-radius: 50%;
+  box-shadow: 0 0 11px #ffc45c9c, inset 0 0 8px #ffe4a280;
+  animation: shot-wave 540ms 320ms ease-out both;
+}
+.shot-ten-wave { inset: 50% auto auto 50%; width: 88%; height: 92%; border-radius: 999px; }
+.target-ten-wave {
+  width: 48px; height: 48px; z-index: 1;
+  animation: shot-wave 550ms 100ms ease-out both;
 }
 .clean-series-effect {
-  position: absolute; z-index: 2; inset: 10px auto auto 50%; translate: -50% 0;
-  display: grid; gap: 2px; padding: 8px 16px; min-width: 126px; text-align: center;
-  border-radius: 14px; border: 1px solid #ffcf51; background: var(--surface);
-  color: var(--ink); font-size: 12px; pointer-events: none;
-  animation: clean-series-in 850ms ease both;
+  position: absolute; z-index: 2; inset: 12px auto auto 50%; translate: -50% 0;
+  width: min(78%, 222px); display: grid; gap: 2px; padding: 10px 16px;
+  border-radius: 19px; border: 1px solid #ffcf51;
+  background: radial-gradient(ellipse at 50% 0%, #725020, #20190e 80%);
+  color: #ffe7b1; text-align: center; font-size: 13px; pointer-events: none;
+  animation: clean-series-in ease-out both;
 }
-.clean-series-effect strong { color: var(--accent); font-size: 18px; }
+.clean-series-effect::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; border: 1px solid #ffd465;
+  animation: shot-wave 680ms 120ms ease-out both;
+}
+.clean-series-effect strong { color: #ffe07f; font-size: 1.55rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.clean-series-light { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
+.clean-series-light i {
+  width: 17px; height: 3px; border-radius: 9px; background: #ffdf77;
+  animation: clean-series-light 390ms calc(160ms + var(--light-delay, 0ms)) ease-out both;
+}
+.clean-series-light i:nth-child(2) { --light-delay: 90ms; }
+.clean-series-light i:nth-child(3) { --light-delay: 180ms; }
+.target-stage:has(.lens) :is(.target-ten-wave, .clean-series-effect) { visibility: hidden; }
 @keyframes shot-reveal { from { opacity: .3; } }
 @keyframes shot-flip {
-  from { transform: perspective(200px) rotateX(87deg) scale(.94); opacity: .5; }
-  73% { transform: perspective(200px) rotateX(-10deg); }
+  from { transform: perspective(180px) rotateX(89deg) scale(.88); opacity: .4; }
+  57% { transform: perspective(180px) rotateX(-25deg) scale(1.055); opacity: 1; }
+  81% { transform: perspective(180px) rotateX(8deg) scale(.99); }
   to { transform: none; }
 }
 @keyframes shot-landing {
-  from { transform: perspective(200px) translateY(6px) rotateX(86deg) scale(.77); opacity: .45; }
-  43% { transform: perspective(200px) translateY(-7px) rotateX(-13deg) scale(.91); }
-  64% { transform: translateY(2px) scale(1.02,.84); }
-  81% { transform: translateY(-2px) scale(.99,1); }
+  from { transform: perspective(180px) translateY(5px) rotateX(86deg) scale(.75); opacity: .4; }
+  39% { transform: perspective(180px) translateY(var(--shot-lift)) rotateX(-19deg) scale(1.09); opacity: 1; }
+  58% { transform: translateY(3px) scale(1.1,.77); }
+  77% { transform: translateY(-4px) scale(.99,1.06); }
+  91% { transform: scale(1.02,.96); }
   to { transform: none; }
 }
 @keyframes shot-pulse {
@@ -47,19 +77,31 @@
   to { box-shadow: inset 0 0 0 8px #fff0; }
 }
 @keyframes shot-spark {
-  from { opacity: 0; transform: scale(.3); }
-  25% { opacity: 1; }
-  to { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) rotate(var(--spark-angle)) scale(.6); }
+  from { opacity: 0; transform: rotate(var(--spark-angle)) scale(.3); }
+  15% { opacity: 1; }
+  to { opacity: 0; transform: translate(calc(var(--spark-x) * var(--spark-spread, 1)),
+    calc(var(--spark-y) * var(--spark-spread, 1))) rotate(var(--spark-angle)) scale(.5); }
+}
+@keyframes shot-wave {
+  from { opacity: 0; transform: scale(.55); }
+  18% { opacity: .9; }
+  to { opacity: 0; transform: scale(1.48); }
 }
 @keyframes clean-series-in {
-  from { opacity: 0; transform: translateY(7px) scale(.92); }
-  20% { opacity: 1; transform: none; box-shadow: 0 0 16px #ffc75160; }
-  75% { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0; transform: translateY(16px) scale(.86); }
+  17% { opacity: 1; transform: translateY(-3px) scale(1.035); box-shadow: 0 0 26px #ffc75173; }
+  30%, 80% { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-10px) scale(.98); }
+}
+@keyframes clean-series-light {
+  from { opacity: .2; transform: scaleX(.2); }
+  55% { box-shadow: 0 0 10px #ffc751; }
+  to { opacity: 1; transform: none; }
 }
 .shot-motion-settings { display: grid; gap: 8px; padding-block: 8px 12px; }
 .shot-motion-settings > strong { font-size: 14px; }
 .shot-motion-settings .shot-motion-selector, .shot-motion-settings .shot-motion-demo-options { display: flex; gap: 6px; }
+.shot-motion-demo-options button:last-child { flex-grow: 2; }
 .shot-motion-settings button {
   flex: 1; min-height: 40px; padding: 5px 8px; border: 1px solid var(--edge);
   border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 12px;
@@ -70,9 +112,10 @@
   position: relative; overflow: hidden; display: grid; place-items: center; align-self: center;
   width: 82px; height: 42px; margin-inline: auto; border: 1px solid var(--edge); border-radius: 999px; font-weight: 800;
 }
-:root[data-motion=off] :is(.shot-face, .shot-sparks i, .clean-series-effect) { animation: none; }
-:root[data-motion=off] .clean-series-effect { display: none; }
+.shot-motion-preview { position: relative; min-height: 104px; display: grid; place-items: center; }
+:root[data-motion=off] .shot-face[data-shot-motion][data-shot-tier] { animation: none; }
+:root[data-motion=off] :is(.shot-sparks, .target-ten-wave, .clean-series-effect) { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .shot-face[data-shot-motion][data-shot-tier], .shot-sparks i, .clean-series-effect { animation: none; }
-  .clean-series-effect { display: none; }
+  .shot-face[data-shot-motion][data-shot-tier], .clean-series-effect, .clean-series-light i { animation-name: none; }
+  .shot-sparks, .target-ten-wave, .clean-series-effect::before { display: none; }
 }
