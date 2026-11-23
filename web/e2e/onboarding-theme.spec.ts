@@ -7,6 +7,53 @@ import { openSettingsCategory } from './journal-navigation.ts';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('first launch previews quick settings, saves them and lets the user revisit the choices', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('./');
+  await page.getByTestId('onboard-start').click();
+  const quick = page.getByTestId('onboard-preferences');
+  const average = quick.getByTestId('onboard-average-example');
+  await expect(average).toHaveText('8,3');
+  await quick.getByRole('switch', { name: 'Средний до сотых' }).click();
+  await expect(average).toHaveText('8,35');
+  await quick.getByTestId('style-pop').click();
+  await expect(quick.getByRole('region', { name: 'Пример результата' })).toHaveAttribute('data-style', 'pop');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'sport');
+  await expect(quick.getByTestId('onboard-achievement-example')).toBeVisible();
+  await quick.getByRole('switch', { name: 'Достижения при отметке попаданий' }).click();
+  await expect(quick.getByTestId('onboard-achievement-example')).toHaveCount(0);
+  await quick.getByTestId('onboard-save-preferences').click();
+  await expect(page.getByTestId('start-training')).toBeVisible();
+  const { records, diary } = await readStoredJournal(page);
+  expect(diary).toBeNull();
+  expect(JSON.parse(records['app.fableshot.training-preferences.v1']!).preferences).toMatchObject({
+    themeStyle: 'pop', averageHundredths: true, showAchievementsDuringInput: false, onboardingSeen: true,
+  });
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'help', 'help-quick-preferences');
+  await page.getByTestId('help-quick-preferences').click();
+  await expect(average).toHaveText('8,35');
+  await quick.getByTestId('style-minimal').click();
+  await quick.getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByTestId('help-quick-preferences')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
+});
+
+test('skipping quick settings keeps the existing choices', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('onboard-start').click();
+  await page.getByTestId('style-pop').click();
+  await page.getByTestId('onboard-skip-preferences').click();
+  await expect(page.getByTestId('start-training')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'sport');
+  const { records } = await readStoredJournal(page);
+  const { preferences } = JSON.parse(records['app.fableshot.training-preferences.v1']!);
+  expect(preferences.onboardingSeen).toBe(true);
+  expect(preferences.themeStyle).toBeUndefined();
+});
+
 test('first launch offers an isolated example and lets the user reopen it from settings', async ({ page }) => {
   await page.goto('./');
   await expect(page.getByTestId('onboarding-screen')).toBeVisible();

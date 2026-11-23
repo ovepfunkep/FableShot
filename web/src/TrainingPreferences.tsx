@@ -97,7 +97,7 @@ const switches = [
   { key: 'useSystemScale', title: 'Системный масштаб', tag: 'setting-system-scale', hint: 'Учитывает размер текста и интерфейса Android. При большом масштабе на экране помещается меньше данных.' },
 ] as const;
 
-export function LensControls() {
+export function LensControls({ preview }: { preview?: ReactNode }) {
   const { preferences, update, readable, error } = useTrainingPreferences();
   const value = preferences.aimSpeedPercent ?? AIM_SPEED_SETTING.default;
   const zoom = preferences.lensZoomPercent ?? LENS_ZOOM_SETTING.default;
@@ -111,6 +111,7 @@ export function LensControls() {
       <output htmlFor={`${id}-zoom`}>{(zoom / 100).toLocaleString('ru-RU')}×</output></div>
     <input id={`${id}-zoom`} data-testid="setting-lens-zoom" type="range" min={LENS_ZOOM_SETTING.min} max={LENS_ZOOM_SETTING.max} step="25"
       value={zoom} disabled={!readable} onChange={event => update({ ...preferences, lensZoomPercent: Number(event.currentTarget.value) })} />
+    {preview}
     <details><summary>Как перемещать мишень</summary><p>Коснись мишени дважды и на втором касании веди палец. Отпусти — перемещение закончится. Двумя пальцами можно менять масштаб.</p></details>
     {error && <p className="preferences-error" role="alert">{error}</p>}
   </div>;

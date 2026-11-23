@@ -16,7 +16,7 @@ import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
 import { TechniqueSettingsProvider } from './TechniqueSettings.tsx';
 import { StagePicker } from './StagePicker.tsx';
-import { TargetBoard } from './TargetBoard.tsx';
+import { LensTestTarget, TargetBoard } from './TargetBoard.tsx';
 import { Icon, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
@@ -29,6 +29,7 @@ import { ProfileScreen } from './ProfileScreen.tsx';
 import { WebReleaseNotes } from './WebReleaseNotes.tsx';
 import { AboutScreen } from './AboutScreen.tsx';
 import { WebOnboarding } from './WebOnboarding.tsx';
+import type { OnboardingChapter } from './WebOnboarding.tsx';
 import { WebThemeSettings } from './WebThemeSettings.tsx';
 import { SettingsAction, SettingsScreen } from './SettingsScreen.tsx';
 import type { SettingsSection } from './SettingsScreen.tsx';
@@ -114,7 +115,7 @@ function App() {
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [hostResults, setHostResults] = useState<{ history: RoomHistory; name?: string } | null>(null);
   const [onboardingRequested, setOnboardingRequested] = useState(false);
-  const [tutorialChapter, setTutorialChapter] = useState<'target' | 'report' | null>(null);
+  const [tutorialChapter, setTutorialChapter] = useState<Exclude<OnboardingChapter, 'welcome'> | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [achievementResetOpen, setAchievementResetOpen] = useState(false);
@@ -848,7 +849,8 @@ function App() {
     }
   });
   if (showingOnboarding) {
-    return <>{offlineLabel}<WebOnboarding initialChapter={tutorialChapter ?? 'welcome'} onClose={leaveOnboarding} onStart={async () => {
+    return <>{offlineLabel}<WebOnboarding initialChapter={tutorialChapter ?? 'welcome'} offerPreferences={!preferences.onboardingSeen}
+      onClose={leaveOnboarding} onStart={async () => {
       await leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
       if (ongoing) selectEntry(ongoing, 'conditions');
       else { setSessionId(null); setPage('conditions'); }
@@ -986,7 +988,7 @@ function App() {
       <ShotMotionControl />
       {achievementPreference}
     </div>}
-    training={<div className="settings-panel"><LensControls /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
+    training={<div className="settings-panel"><LensControls preview={<LensTestTarget />} /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
     statistics={<>
       <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths']} /></div>
       <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>
@@ -1002,6 +1004,7 @@ function App() {
     </>}
     help={<div className="settings-actions">
       <SettingsAction icon="book" data-testid="settings-onboarding" onClick={() => setOnboardingRequested(true)}>Знакомство с FableShot</SettingsAction>
+      <SettingsAction icon="spark" data-testid="help-quick-preferences" onClick={() => setTutorialChapter('preferences')}>Быстрые настройки</SettingsAction>
       <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialChapter('target')}>Как отмечать попадания</SettingsAction>
       <SettingsAction icon="stats" data-testid="help-report-tutorial" onClick={() => setTutorialChapter('report')}>Как читать статистику</SettingsAction>
     </div>}

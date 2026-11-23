@@ -65,7 +65,7 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: web
       - name: Check training, archives, offline startup and rooms
-        run: npm run test:ui -- training.spec.ts training-analysis.spec.ts progress-timeline.spec.ts numbered-arrows.spec.ts migration-parity.spec.ts archive.spec.ts mytargets-ui.spec.ts onboarding-theme.spec.ts offline-readiness.spec.ts local-room-probe.spec.ts storage-migration.spec.ts
+        run: npm run test:ui -- training.spec.ts training-analysis.spec.ts progress-timeline.spec.ts numbered-arrows.spec.ts migration-parity.spec.ts archive.spec.ts mytargets-ui.spec.ts onboarding-theme.spec.ts settings-navigation.spec.ts offline-readiness.spec.ts local-room-probe.spec.ts storage-migration.spec.ts
         env:
           FABLE_BROWSER: chromium
         working-directory: web

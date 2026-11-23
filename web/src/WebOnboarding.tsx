@@ -6,9 +6,13 @@ import { TrainingHitMap } from './TrainingHitMap.tsx';
 import { DEFAULT_TARGET, scorePoint, summarize } from './target.ts';
 import type { Shot } from './target.ts';
 import { Icon } from './TrainingChrome.tsx';
+import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import { formatAverage } from './preferences.ts';
+import { WebThemeSettings } from './WebThemeSettings.tsx';
+import { DEFAULT_THEME_STYLE } from './web-theme.ts';
 import './web-onboarding.css';
 
-export type OnboardingChapter = 'welcome' | 'target' | 'report';
+export type OnboardingChapter = 'welcome' | 'target' | 'report' | 'preferences';
 
 type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void };
 
@@ -169,9 +173,82 @@ function TutorialReport({ onStart, onClose, onBack }: Pick<OnboardingActions, 'o
   </main>;
 }
 
-export function WebOnboarding(actions: OnboardingActions & { initialChapter: OnboardingChapter }) {
+function QuickPreferences({ onDone, onBack, standalone }: {
+  onDone: () => void; onBack: () => void; standalone: boolean;
+}) {
+  const { preferences, update, readable, error } = useTrainingPreferences();
+  const [themeStyle, setThemeStyle] = useState(preferences.themeStyle ?? DEFAULT_THEME_STYLE);
+  const [hundredths, setHundredths] = useState(preferences.averageHundredths);
+  const [inputNotices, setInputNotices] = useState(preferences.showAchievementsDuringInput !== false);
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    setSaving(true);
+    const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths,
+      showAchievementsDuringInput: inputNotices, ...(standalone ? {} : { onboardingSeen: true }) });
+    if (success) onDone();
+    else setSaving(false);
+  }
+  return <main className="web-onboard web-onboard-preferences" data-testid="onboard-preferences">
+    <header className="web-onboard-header">
+      <button type="button" className="icon-button" aria-label="Назад" disabled={saving} onClick={onBack}><Icon name="back" /></button>
+      <Brand />
+    </header>
+    <div className="web-onboard-copy"><h1>Быстрые настройки</h1></div>
+    <WebThemeSettings value={{ themeStyle }} stylesOnly disabled={saving} onChange={patch => {
+      if (patch.themeStyle) setThemeStyle(patch.themeStyle);
+    }} />
+    <section className="web-onboard-preference-sample" data-style={themeStyle} aria-label="Пример результата">
+      <div><span>Результат</span><strong>192/230</strong></div>
+      <div><span>Средний</span><strong data-testid="onboard-average-example">{formatAverage(192 / 23, hundredths)}</strong></div>
+    </section>
+    <div className="web-onboard-preference-options">
+      <button type="button" role="switch" aria-checked={hundredths} className="web-onboard-option" disabled={saving}
+        onClick={() => setHundredths(!hundredths)}>
+        <span>Средний до сотых</span>
+        <span className="preference-switch" aria-hidden="true"><span /></span>
+      </button>
+      <button type="button" role="switch" aria-checked={inputNotices} className="web-onboard-option" disabled={saving}
+        onClick={() => setInputNotices(!inputNotices)}>
+        <span>Достижения при отметке попаданий</span>
+        <span className="preference-switch" aria-hidden="true"><span /></span>
+      </button>
+      <div className="web-onboard-notice-example">
+        {inputNotices && preferences.showAchievementNotices !== false ?
+          <span data-testid="onboard-achievement-example"><Icon name="trophy" /> Начало пути</span> :
+          <small>{preferences.showAchievementNotices === false ? 'Показ достижений можно включить в «Движение и отклик».' : 'Достижения появятся после выхода из ввода.'}</small>}
+      </div>
+    </div>
+    <aside className="web-onboard-settings-guide">
+      <strong>Остальное в настройках</strong>
+      <dl>
+        <div><dt>Лупа и экран блокировки</dt><dd>Тренировка</dd></div>
+        <div><dt>Анимации и вибрация</dt><dd>Движение и отклик</dd></div>
+        <div><dt>Графики и их порядок</dt><dd>Статистика</dd></div>
+      </dl>
+    </aside>
+    {error && <p className="preferences-error" role="alert">{error}</p>}
+    <div className="web-onboard-actions">
+      <button type="button" className="primary" data-testid="onboard-save-preferences" disabled={saving || !readable} onClick={save}>
+        {standalone ? 'Сохранить' : 'Сохранить и продолжить'}
+      </button>
+      {!standalone && <button type="button" className="web-onboard-link" data-testid="onboard-skip-preferences" disabled={saving}
+        onClick={onDone}>Пропустить настройки</button>}
+    </div>
+  </main>;
+}
+
+export function WebOnboarding(actions: OnboardingActions & { initialChapter: OnboardingChapter; offerPreferences: boolean }) {
   const [chapter, setChapter] = useState(actions.initialChapter);
-  if (chapter === 'report') return <TutorialReport onStart={actions.onStart} onClose={actions.onClose} onBack={() => setChapter('target')} />;
-  if (chapter === 'target') return <TargetTutorial onStart={actions.onStart} onClose={actions.onClose} onReport={() => setChapter('report')} />;
-  return <Welcome {...actions} onExample={() => setChapter('target')} />;
+  const [previousChapter, setPreviousChapter] = useState<OnboardingChapter>('welcome');
+  const standalone = actions.initialChapter === 'preferences';
+  function start() {
+    if (!actions.offerPreferences) { actions.onStart(); return; }
+    setPreviousChapter(chapter);
+    setChapter('preferences');
+  }
+  if (chapter === 'preferences') return <QuickPreferences standalone={standalone}
+    onDone={standalone ? actions.onClose : actions.onStart} onBack={standalone ? actions.onClose : () => setChapter(previousChapter)} />;
+  if (chapter === 'report') return <TutorialReport onStart={start} onClose={actions.onClose} onBack={() => setChapter('target')} />;
+  if (chapter === 'target') return <TargetTutorial onStart={start} onClose={actions.onClose} onReport={() => setChapter('report')} />;
+  return <Welcome {...actions} onStart={start} onExample={() => setChapter('target')} />;
 }

@@ -30,3 +30,11 @@
 .aim-speed-control output { color: var(--accent); font-variant-numeric: tabular-nums; }
 .aim-speed-control small, .aim-speed-control details { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .aim-speed-control summary { padding-block: 8px; }
+.lens-settings-preview {
+  display: grid; gap: 6px; padding: 12px;
+  border: 1px solid var(--edge); border-radius: var(--card-radius); background: var(--surface);
+}
+.lens-settings-preview h2, .lens-settings-preview p { margin: 0; }
+.lens-settings-preview h2 { font-size: 1rem; }
+.lens-settings-preview p { color: var(--muted); font-size: .8rem; line-height: 1.4; }
+.lens-settings-preview .target-stage { height: clamp(164px, 33dvh, 252px); min-height: 0; }

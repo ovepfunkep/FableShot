@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MISS_RING_WIDTH, outerRadius, scorePoint, shaftRadius, spotOffsets, spotPoint, targetInput, zoneColor } from './target.ts';
 import type { Point, Shot, TargetSpec, TargetSpot } from './target.ts';
 import { clampTargetZoom, MAX_TARGET_ZOOM, MovableTargetZoom, TargetZoom } from './TargetZoom.tsx';
@@ -172,14 +172,16 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
   }, [aim, radius, shaft, spec, shots, selectedIndex, realArrowDiameter, width, height]);
   const left = clamp(aim.screen.x / scale - width / 2 - 1, 8, Math.max(8, window.innerWidth / scale - width - 10));
   const top = Math.max(8, aim.screen.y / scale - height - 28);
-  const color = hit.points <= 4 ? '#edf5ed' : hit.points <= 6 ? '#76d2ff' : hit.points <= 8 ? '#ff8d7d' : zoneColor(hit.points);
+  const zone = zoneColor(hit.points);
+  const color = hit.points <= 4 ? '#edf5ed' : hit.points <= 6 ? '#76d2ff' : hit.points <= 8 ? '#ff8d7d' : zone;
+  const scoreStyle = { '--lens-zone': zone, color, fontSize: width * .125 } as CSSProperties;
   return <div className="lens" data-testid="lens" aria-hidden="true" style={{ left, top, width: width + 2 }}>
     <canvas ref={canvas} className="lens-canvas" style={{ height }} />
-    <div className="lens-score" style={{ color, fontSize: width * .27 }}><strong>{hit.code}</strong></div>
+    <div className="lens-score" style={scoreStyle}><strong>{hit.code}</strong></div>
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, celebration }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, celebration, showZoom = true }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
   selectedIndex?: number | null; onBlockedTap?: () => void;
   spec?: TargetSpec;
@@ -187,6 +189,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   zoomScope?: ZoomScope;
   realArrowDiameter?: number;
   celebration?: { id: number; arrows: number };
+  showZoom?: boolean;
 }) {
   const { preferences } = useTrainingPreferences();
   const aimSpeed = AIM_SPEED * (preferences.aimSpeedPercent ?? AIM_SPEED_SETTING.default) / 100;
@@ -469,9 +472,18 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       onPointerCancel={event => end(event, false)} onLostPointerCapture={event => end(event, false)}>
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
     </div>
-    <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />
+    {showZoom && <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />}
     {celebration && <CleanSeriesEffect key={celebration.id} arrows={celebration.arrows} />}
     {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
+  </section>;
+}
+
+export function LensTestTarget() {
+  const [shots, setShots] = useState<Shot[]>([]);
+  return <section className="lens-settings-preview" aria-label="Тестовая мишень" data-testid="lens-settings-preview">
+    <h2>Тестовая мишень</h2>
+    <p>Удерживай и веди палец, чтобы проверить лупу. Пробные попадания видны только здесь.</p>
+    <TargetBoard shots={shots} inputEnabled showZoom={false} onShot={shot => setShots([shot])} />
   </section>;
 }

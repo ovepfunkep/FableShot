@@ -6,10 +6,11 @@ import './web-theme.css';
 const styleLabels: Record<ThemeStyle, string> = { sport: 'Спорт', pop: 'Поп', minimal: 'Минимал' };
 const modeLabels: Record<ThemeMode, string> = { system: 'Как в системе', light: 'Светлая', dark: 'Тёмная' };
 
-export function WebThemeSettings({ value, onChange, disabled = false }: {
+export function WebThemeSettings({ value, onChange, disabled = false, stylesOnly = false }: {
   value: ThemePreferences;
   onChange: (patch: ThemePreferences) => void;
   disabled?: boolean;
+  stylesOnly?: boolean;
 }) {
   const id = useId();
   const { themeStyle = DEFAULT_THEME_STYLE, themeMode = DEFAULT_THEME_MODE } = value;
@@ -30,7 +31,7 @@ export function WebThemeSettings({ value, onChange, disabled = false }: {
         </label>)}
       </div>
     </fieldset>
-    <fieldset disabled={disabled}>
+    {!stylesOnly && <fieldset disabled={disabled}>
       <legend>Тема</legend>
       <div className="web-theme-modes">
         {THEME_MODES.map(mode => <label className="web-theme-mode" key={mode}>
@@ -39,6 +40,6 @@ export function WebThemeSettings({ value, onChange, disabled = false }: {
           <span>{modeLabels[mode]}</span>
         </label>)}
       </div>
-    </fieldset>
+    </fieldset>}
   </section>;
 }

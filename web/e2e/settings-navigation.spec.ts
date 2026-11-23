@@ -1,4 +1,4 @@
-import { readDiary } from './stored-journal.ts';
+import { readDiary, readStoredJournal } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 
 test('motion previews switch styles and respect the global animation toggle', async ({ page }) => {
@@ -31,6 +31,7 @@ test('lens controls share saved defaults and overrides with training conditions'
   await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('375');
   await slider.fill('100');
   await page.getByTestId('setting-lens-zoom').fill('500');
+  await expect(page.getByText('5×', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-training').click();
@@ -43,10 +44,62 @@ test('lens controls share saved defaults and overrides with training conditions'
   await page.getByTestId('conditions-advanced').click();
   await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('500');
   await page.getByTestId('setting-lens-zoom').fill('300');
+  await expect(page.getByText('3×', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-training').click();
   await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('300');
+});
+
+test('the settings target uses the selected lens magnification and aim speed without recording a practice', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-training').click();
+  const preview = page.getByTestId('lens-settings-preview');
+  const target = preview.getByTestId('target');
+  await target.scrollIntoViewIfNeeded();
+  const lens = preview.getByTestId('lens');
+  const speed = page.getByTestId('setting-aim-speed');
+  const zoom = page.getByTestId('setting-lens-zoom');
+  async function startAim() {
+    await target.scrollIntoViewIfNeeded();
+    const { x, y, width, height } = (await target.boundingBox())!;
+    const center = { x: x + width / 2, y: y + height / 2, radius: Math.min(width, height) * .44 };
+    await page.mouse.move(center.x, center.y);
+    await page.mouse.down();
+    await expect(lens.locator('strong')).toHaveText('10');
+    return center;
+  }
+  function pixel(offset: number) {
+    return lens.locator('canvas').evaluate((canvas: HTMLCanvasElement, distance) => {
+      const scale = canvas.width / canvas.getBoundingClientRect().width;
+      return Array.from(canvas.getContext('2d')!.getImageData(Math.round(canvas.width / 2 + distance * scale),
+        Math.round(canvas.height / 2), 1, 1).data.slice(0, 3));
+    }, offset);
+  }
+  await zoom.fill('150');
+  await expect(page.getByText('1,5×', { exact: true })).toBeVisible();
+  const first = await startAim();
+  expect(await pixel(first.radius * .55)).toEqual([228, 76, 67]);
+  await page.mouse.up();
+
+  await zoom.fill('600');
+  await speed.fill('20');
+  await expect(page.getByText('6×', { exact: true })).toBeVisible();
+  await expect(page.getByText('20%', { exact: true })).toBeVisible();
+  const slow = await startAim();
+  expect(await pixel(slow.radius * .55)).toEqual([244, 206, 68]);
+  await page.mouse.move(slow.x + slow.radius * .16, slow.y);
+  await expect(lens.locator('strong')).toHaveText('10');
+  await page.mouse.up();
+
+  await speed.fill('150');
+  await expect(page.getByText('150%', { exact: true })).toBeVisible();
+  const fast = await startAim();
+  await page.mouse.move(fast.x + fast.radius * .16, fast.y);
+  await expect(lens.locator('strong')).not.toHaveText('10');
+  await page.mouse.up();
+  expect((await readStoredJournal(page)).diary).toBeNull();
 });
 
 test('settings use native categories and Back returns to the category list', async ({ page }) => {
