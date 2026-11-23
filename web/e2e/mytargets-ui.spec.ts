@@ -1,3 +1,4 @@
+import { readStoredJournal } from './stored-journal.ts';
 import { openSettingsCategory } from './journal-navigation.ts';
 import { expect, test } from '@playwright/test';
 import initSqlJs from 'sql.js';
@@ -17,20 +18,23 @@ test('MyTargets CSV preview adds confirmed measured arrows and repeated import a
   await page.getByTestId('mytargets-file').setInputFiles({ name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await expect(page.getByTestId('mytargets-preview')).toContainText('Выбрано: 1, стрел: 2');
   await expect(page.getByTestId('mytargets-apply')).toBeDisabled();
-  expect(await page.evaluate(() => localStorage.getItem('app.fableshot.active-data.v1'))).toBeNull();
+  expect((await readStoredJournal(page)).diary).toBeNull();
   await page.getByTestId('mytargets-confirm').check();
   await expect(page.getByTestId('mytargets-result')).toContainText('тренировок: 1, стрел: 2');
+  await expect(page.getByTestId('mytargets-result')).toContainText('Очки: 19 · С координатами: 0 / 2');
   await page.getByTestId('mytargets-apply').click();
   await expect(page.getByTestId('home-screen')).toBeVisible();
   await expect(page.getByTestId('achievement-notice')).toContainText('Правильный выбор');
-  const awards = await page.evaluate(() => JSON.parse(JSON.parse(localStorage.getItem('app.fableshot.active-data.v1')!).records['app.fableshot.practice-diary.v1']).achievementLedger.grants.map((grant: { id: string }) => grant.id));
+  const receipt = page.getByTestId('mytargets-receipt');
+  await expect(receipt).toContainText('Очки19');
+  await page.getByTestId('mytargets-open-history').click();
+  await expect(page.getByText('Synthetic import', { exact: true })).toBeVisible();
+  await expect(receipt).toHaveCount(0);
+  const persisted = await readStoredJournal(page);
+  const awards = persisted.diary?.achievementLedger?.grants.map(grant => grant.id);
   expect(awards).toEqual(['APP01']);
-  const imported = await page.evaluate(() => {
-    const active = JSON.parse(localStorage.getItem('app.fableshot.active-data.v1')!);
-    const diary = JSON.parse(active.records['app.fableshot.practice-diary.v1']);
-    return { entries: diary.entries, equipment: JSON.parse(active.records['app.fableshot.equipment.v1']),
-      recovery: !!localStorage.getItem('app.fableshot.recovery-data.v1') };
-  });
+  const imported = { entries: persisted.diary!.entries, equipment: JSON.parse(persisted.records['app.fableshot.equipment.v1']!),
+    recovery: !!persisted.recovery };
   expect(imported.recovery).toBe(true);
   expect(imported.entries).toHaveLength(1);
   expect(imported.entries[0].title).toBe('Synthetic import');
@@ -84,13 +88,11 @@ test('MyTargets SQLite ZIP imports offline with original Y coordinates and compl
   await expect(page.getByTestId('mytargets-preview')).toContainText('Выбрано: 1, стрел: 2');
   await expect(page.getByTestId('mytargets-preview')).toContainText('Пустых ячеек в источнике: 1');
   await expect(page.getByTestId('mytargets-result')).toContainText('тренировок: 1, стрел: 2');
+  await expect(page.getByTestId('mytargets-result')).toContainText('Очки: 19 · С координатами: 2 / 2');
   await page.getByTestId('mytargets-apply').click();
   await expect(page.getByTestId('home-screen')).toBeVisible();
-  const persisted = await page.evaluate(() => {
-    const active = JSON.parse(localStorage.getItem('app.fableshot.active-data.v1')!);
-    return { diary: JSON.parse(active.records['app.fableshot.practice-diary.v1']),
-      equipment: JSON.parse(active.records['app.fableshot.equipment.v1']) };
-  });
+  const saved = await readStoredJournal(page);
+  const persisted = { diary: saved.diary!, equipment: JSON.parse(saved.records['app.fableshot.equipment.v1']!) };
   expect(persisted.diary.entries).toHaveLength(1);
   expect(persisted.diary.entries[0].title).toBe('Offline ZIP import');
   const series = persisted.diary.entries[0].practice.rounds[0].series[0];

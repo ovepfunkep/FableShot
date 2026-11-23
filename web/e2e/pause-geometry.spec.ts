@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, applyConditions, completePractice, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -22,10 +23,7 @@ test('paused training remains unfinished and resumes after reload without losing
   await page.reload();
   await page.getByTestId('home-start-training').click();
   await expect(page.getByTestId('series-score')).toHaveText('10/10');
-  expect(await page.evaluate(() => {
-    const diary = JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!);
-    return diary.entries.map(entry => ({ paused: entry.paused, savedAt: entry.practice.savedAt }));
-  })).toEqual([{ paused: false, savedAt: null }]);
+  expect((await readDiary(page)).entries.map(entry => ({ paused: entry.paused, savedAt: entry.practice.savedAt }))).toEqual([{ paused: false, savedAt: null }]);
 });
 
 test('geometry trend shows exact RMS and offset values and respects its display setting', async ({ page }) => {

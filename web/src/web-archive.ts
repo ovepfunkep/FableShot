@@ -147,8 +147,12 @@ export async function inspectWebArchive(bytes: Uint8Array): Promise<WebArchivePr
   return { manifest, records: records as DataRecords, summary, ...(nativeSource ? { nativeSource } : {}) };
 }
 
-export function archiveSourceToken(source: Pick<Storage, 'getItem'> = localStorage): string {
-  return JSON.stringify([ACTIVE_DATA_KEY, ...DATA_KEYS, ...LEGACY_DATA_KEYS].map(key => source.getItem(key)));
+export function archiveSourceToken(source?: Pick<Storage, 'getItem'>): string {
+  if (!source) {
+    const revision = appStorage.revision();
+    if (revision) return revision;
+  }
+  return JSON.stringify([ACTIVE_DATA_KEY, ...DATA_KEYS, ...LEGACY_DATA_KEYS].map(key => (source ?? localStorage).getItem(key)));
 }
 
 export function captureArchiveState(allowInvalid = false): { records: DataRecords; token: string } {
@@ -163,7 +167,7 @@ export function captureArchiveState(allowInvalid = false): { records: DataRecord
   return { records, token };
 }
 
-export function replaceArchiveRecords(records: DataRecords, expected: { records: DataRecords; token: string }, source: Pick<Storage, 'getItem' | 'setItem'> = localStorage): void {
+export function replaceArchiveRecords(records: DataRecords, expected: { records: DataRecords; token: string }, source?: Pick<Storage, 'getItem' | 'setItem'>): Promise<void> | void {
   validateArchiveRecords(records);
   if (Object.keys(expected.records).length !== DATA_KEYS.length || !DATA_KEYS.every(key => Object.hasOwn(expected.records, key)) ||
     Object.values(expected.records).some(value => value !== null && typeof value !== 'string')) throw new Error('Неверный снимок текущих данных.');
@@ -176,15 +180,22 @@ export function replaceArchiveRecords(records: DataRecords, expected: { records:
     for (const grant of grants) if (grant.stageRank && !grant.notifiedAt) grant.notifiedAt = grant.earnedAt;
     state.records[DIARY_KEY] = JSON.stringify(diary);
   }
-  const previous = { version: 1, savedAt: new Date().toISOString(), records: structuredClone(expected.records), originalSource: expected.token };
+  const previous = { version: 1, savedAt: new Date().toISOString(), records: structuredClone(expected.records) };
+  if (!source && appStorage.revision()) return appStorage.replace(state.records, JSON.stringify(previous), expected.token);
+  source ??= localStorage;
   // Failure of either write leaves the old active data intact. No old keys are deleted.
-  source.setItem(RECOVERY_DATA_KEY, JSON.stringify(previous));
+  source.setItem(RECOVERY_DATA_KEY, JSON.stringify({ ...previous, originalSource: expected.token }));
   if (archiveSourceToken(source) !== expected.token) throw new Error('Дневник изменился при резервировании. Повтори действие.');
   source.setItem(ACTIVE_DATA_KEY, JSON.stringify(state));
 }
 
-export function lastRecovery(source: Pick<Storage, 'getItem'> = localStorage): { savedAt: string; records: DataRecords; summary: ArchiveSummary } | null {
-  const raw = source.getItem(RECOVERY_DATA_KEY);
+export async function saveArchiveRecovery(expected: { records: DataRecords; token: string }): Promise<void> {
+  validateArchiveRecords(expected.records);
+  await appStorage.saveRecovery(JSON.stringify({ version: 1, savedAt: new Date().toISOString(), records: expected.records }), expected.token);
+}
+
+export function lastRecovery(source?: Pick<Storage, 'getItem'>): { savedAt: string; records: DataRecords; summary: ArchiveSummary } | null {
+  const raw = source ? source.getItem(RECOVERY_DATA_KEY) : appStorage.recovery();
   if (raw === null) return null;
   const value = JSON.parse(raw);
   if (value?.version !== 1 || typeof value.savedAt !== 'string' || !Number.isFinite(Date.parse(value.savedAt))) throw new Error('Резервная копия повреждена.');

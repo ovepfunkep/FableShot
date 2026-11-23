@@ -98,12 +98,12 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
   const numberedCountValid = parsedNumberedCount === undefined || (/^\d+$/.test(countText) && validNumberedCount(parsedNumberedCount));
 
   useLayoutEffect(() => { sheet.current?.showModal(); }, []);
-  function persist(draft: EquipmentEdit, form: HTMLFormElement): EquipmentLibrary | null {
+  async function persist(draft: EquipmentEdit, form: HTMLFormElement): Promise<EquipmentLibrary | null> {
     if (!library) return null;
     try {
       const edit = { ...draft, value: { ...draft.value, ...readEquipmentDetails(draft.kind, form) } } as EquipmentEdit;
       const next = editEquipment(library, edit);
-      saveEquipment(next, library);
+      await saveEquipment(next, library);
       setState({ library: next, error: '' });
       return next;
     } catch (error) {
@@ -124,30 +124,30 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
     }
   }
 
-  function saveComponent(form: HTMLFormElement) {
+  async function saveComponent(form: HTMLFormElement) {
     if (!component || !library || !kit) return;
     const creating = !(component.kind === 'bow' ? library.bows : library.arrows).some(item => item.id === component.value.id);
     const value = { ...component.value, name: component.value.name.trim() };
     if (component.kind === 'bow') {
       const bow = value as EquipmentBow;
-      if (persist({ kind: 'bows', value: bow }, form)) {
+      if (await persist({ kind: 'bows', value: bow }, form)) {
         if (creating) setKit({ ...kit, bowId: bow.id });
         setComponent(null);
       }
     } else {
       if (!diameterValid || !numberedCountValid) return;
       const arrows: EquipmentArrows = { ...component.value, name: value.name, diameterMm: parsedDiameter, numberedCount: parsedNumberedCount };
-      if (persist({ kind: 'arrows', value: arrows }, form)) {
+      if (await persist({ kind: 'arrows', value: arrows }, form)) {
         if (creating) setKit({ ...kit, arrowsId: arrows.id });
         setComponent(null);
       }
     }
   }
 
-  function saveKit(form: HTMLFormElement) {
+  async function saveKit(form: HTMLFormElement) {
     if (!kit || !library) return;
     const value = { ...kit, name: kit.name.trim() };
-    const next = persist({ kind: 'kits', value }, form);
+    const next = await persist({ kind: 'kits', value }, form);
     if (next) {
       onSelect(equipmentSnapshot(next, value.id));
       onClose();

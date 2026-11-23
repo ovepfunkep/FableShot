@@ -94,7 +94,7 @@ function readPresets() {
 export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, appearance, achievementPreference }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
-  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => boolean; onBack: () => void;
+  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => Promise<boolean>; onBack: () => void;
   tournaments?: readonly Tournament[];
   appearance?: ReactNode;
   achievementPreference?: ReactNode;
@@ -161,9 +161,9 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
     return true;
   }
 
-  function writePreset() {
+  async function writePreset() {
     try {
-      const presets = savePreset(presetName.trim(), nextConditions, nextRule, numberedArrows);
+      const presets = await savePreset(presetName.trim(), nextConditions, nextRule, numberedArrows);
       setPresetState({ presets, error: '' });
       setPresetName('');
       setError('');
@@ -171,9 +171,9 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось сохранить избранное.'); }
   }
 
-  function deletePreset(id: string) {
+  async function deletePreset(id: string) {
     try {
-      setPresetState({ presets: removePreset(id), error: '' });
+      setPresetState({ presets: await removePreset(id), error: '' });
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось удалить набор.'); }
   }
@@ -238,9 +238,9 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       {error && <p className="conditions-error" role="alert">{error}</p>}
     </div>
     <footer className="conditions-footer">
-      <button type="button" className="primary" data-testid="start-training" disabled={!valid} onClick={() => {
+      <button type="button" className="primary" data-testid="start-training" disabled={!valid} onClick={async () => {
         if (tournamentKey && !tournamentChoice) { setError('Этот турнирный старт больше недоступен. Выбери другой.'); return; }
-        if (!onApply(nextConditions, nextRule, numberedArrows, tournamentChoice)) setError('Не удалось применить условия. Повтори действие.');
+        if (!await onApply(nextConditions, nextRule, numberedArrows, tournamentChoice)) setError('Не удалось применить условия. Повтори действие.');
       }}>{editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
     </footer>
     {sheet === 'equipment' && <EquipmentPicker selected={equipment} onSelect={setEquipment} onClose={() => setSheet(null)} editSelected={editEquipment} />}

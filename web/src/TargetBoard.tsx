@@ -15,7 +15,7 @@ type AimAnchor = { position: Point; point: Point; screen: Point };
 type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | null;
   aim: { id: number; origin: Point; startsOnFace: boolean; anchor: AimAnchor | null } | null;
   touchTap: { id: number; origin: Point; startedAt: number } | null;
-  panPointer: number | null;
+  pan: { id: number; origin: Point; firstTap: (() => void) | null } | null;
   blocked: { id: number; origin: Point } | null };
 
 const initialView: View = { zoom: 1, x: 0, y: 0 };
@@ -198,7 +198,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   const movedManually = useRef(false);
   const [aim, setAim] = useState<Aim | null>(null);
   const gesture = useRef<Gesture>({ pointers: new Map(), aim: null, multi: false, timer: null,
-    touchTap: null, panPointer: null, blocked: null });
+    touchTap: null, pan: null, blocked: null });
   const pendingTap = useRef<{ timer: number; origin: Point; deliver: () => void } | null>(null);
   const actions = useRef({ inputEnabled, panOnly, onShot, onBlockedTap });
   useLayoutEffect(() => { actions.current = { inputEnabled, panOnly, onShot, onBlockedTap }; });
@@ -309,8 +309,10 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       track.multi = true;
       track.blocked = null;
       track.touchTap = null;
-      track.panPointer = null;
+      const firstTap = track.pan?.firstTap;
+      track.pan = null;
       clearAim();
+      firstTap?.();
       return;
     }
     track.multi = false;
@@ -320,7 +322,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       window.clearTimeout(first.timer);
       pendingTap.current = null;
       if (event.pointerType === 'touch' && !panOnly && distance(first.origin, position) <= DOUBLE_TAP_DISTANCE) {
-        track.panPointer = event.pointerId;
+        track.pan = { id: event.pointerId, origin: position, firstTap: first.deliver };
         return;
       }
       first.deliver();
@@ -366,9 +368,16 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       changeView(zoom, to.x - size.width / 2 - (from.x - size.width / 2 - current.x) * ratio,
         to.y - size.height / 2 - (from.y - size.height / 2 - current.y) * ratio);
     } else if (!track.multi) {
-      if (track.panPointer === event.pointerId) {
-        if (distance(position, previous) > 0) movedManually.current = true;
-        changeView(current.zoom, current.x + position.x - previous.x, current.y + position.y - previous.y);
+      const pan = track.pan;
+      if (pan?.id === event.pointerId) {
+        let from = previous;
+        if (pan.firstTap) {
+          if (distance(position, pan.origin) <= TAP_SLOP) return;
+          pan.firstTap = null;
+          from = pan.origin;
+        }
+        movedManually.current = true;
+        changeView(current.zoom, current.x + position.x - from.x, current.y + position.y - from.y);
         return;
       }
       let panFrom = previous;
@@ -402,6 +411,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     if (!track.pointers.has(event.pointerId)) return;
     const position = local(event);
     const aiming = track.aim;
+    const pan = track.pan?.id === event.pointerId ? track.pan : null;
     const tap = track.touchTap;
     const touchTap = commit && tap?.id === event.pointerId && event.timeStamp - tap.startedAt < DOUBLE_TAP_MS
       && distance(position, tap.origin) <= TAP_SLOP;
@@ -417,13 +427,18 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       track.multi = false;
       track.blocked = null;
       track.touchTap = null;
-      track.panPointer = null;
+      track.pan = null;
     }
-    const shot = shouldScore ? markTargetPoint(point, spec) : null;
+    if (pan) {
+      if (!pan.firstTap) return;
+      pan.firstTap();
+      if (!commit || distance(position, pan.origin) > TAP_SLOP) return;
+    }
+    const shot = shouldScore || pan ? markTargetPoint(point, spec) : null;
     const deliver = () => {
       const current = actions.current;
       if (shot && current.inputEnabled && !current.panOnly) current.onShot(spot === undefined ? shot : { ...shot, spot });
-      else if (shouldSuggest && !current.inputEnabled) current.onBlockedTap?.();
+      else if ((shouldSuggest || pan && isOnTargetInput(point, spec)) && !current.inputEnabled) current.onBlockedTap?.();
     };
     if (touchTap) {
       const timer = window.setTimeout(() => {

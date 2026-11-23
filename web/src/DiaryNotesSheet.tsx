@@ -30,7 +30,7 @@ export function DiaryNotesSheet({ notes, scope, readOnly = false, onSave, onClos
   notes: readonly DiaryNote[];
   scope: DiaryNoteScope;
   readOnly?: boolean;
-  onSave: (nextNotes: DiaryNote[]) => boolean;
+  onSave: (nextNotes: DiaryNote[]) => boolean | Promise<boolean>;
   onClose: () => void;
   initialNoteId?: string;
   initialNew?: boolean;
@@ -79,7 +79,7 @@ export function DiaryNotesSheet({ notes, scope, readOnly = false, onSave, onClos
     else onClose();
   }
 
-  function save(replacement: DiaryNote | null) {
+  async function save(replacement: DiaryNote | null) {
     if (!draft || readOnly) return;
     const current = notes.find(item => item.id === draft.initial.id);
     if (current !== (draft.isNew ? undefined : draft.initial)) {
@@ -89,7 +89,7 @@ export function DiaryNotesSheet({ notes, scope, readOnly = false, onSave, onClos
     const now = Date.now();
     const next = !replacement ? notes.map(item => item.id === current?.id ? { ...item, deletedAtMs: now, updatedAtMs: now } : item)
       : current ? notes.map(item => item.id === current.id ? replacement : item) : [...notes, replacement];
-    if (onSave(next)) backToList();
+    if (await onSave(next)) backToList();
     else setError(replacement ? 'Не удалось сохранить заметку. Повтори действие.' : 'Не удалось удалить заметку. Повтори действие.');
   }
 

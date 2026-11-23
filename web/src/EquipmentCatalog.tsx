@@ -103,11 +103,11 @@ export function EquipmentCatalog({ onBack, onSelect, history = [] }: {
     else if (kind === 'arrows') edit({ kind, value: { id, name: '', diameterMm: null } });
     else edit({ kind, value: { id, name: '', bowId: null, arrowsId: null } });
   }
-  function persist(edit: Draft) {
+  async function persist(edit: Draft) {
     if (!library) return false;
     try {
       const next = editEquipment(library, edit);
-      saveEquipment(next, library);
+      await saveEquipment(next, library);
       setState({ library: next, error: '' });
       return true;
     } catch (cause) {
@@ -115,13 +115,13 @@ export function EquipmentCatalog({ onBack, onSelect, history = [] }: {
       return false;
     }
   }
-  function save(form: HTMLFormElement) {
+  async function save(form: HTMLFormElement) {
     if (!draft || !library || !draft.value.name.trim()) return;
     try {
       const details = readEquipmentDetails(draft.kind, form);
       if (draft.kind === 'arrows' && (!diameterValid || !countValid)) return;
       const arrowFields = draft.kind === 'arrows' ? { diameterMm: parsedDiameter, numberedCount: parsedCount } : {};
-      if (persist(itemDraft(draft.kind, { ...draft.value, ...details, ...arrowFields }))) setDraft(null);
+      if (await persist(itemDraft(draft.kind, { ...draft.value, ...details, ...arrowFields }))) setDraft(null);
     } catch (cause) { setState(current => ({ ...current, error: cause instanceof Error ? cause.message : 'Не удалось сохранить снаряжение.' })); }
   }
   function dismiss() { setDraft(null); }

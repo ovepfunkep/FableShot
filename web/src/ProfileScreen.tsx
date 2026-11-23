@@ -79,11 +79,11 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
     </div>
     {panel === 'technique' && <TechniqueWindow initial={null} onPublication={onPublication} onClose={() => setPanel(null)} />}
     {panel === 'name' && <BottomSheet title="Имя" onClose={() => setPanel(null)}>
-      <form className="profile-form" onSubmit={event => {
+      <form className="profile-form" onSubmit={async event => {
         event.preventDefault();
         setAchievementError('');
         const displayName = name.trim();
-        if (!update({ ...preferences, displayName })) return;
+        if (!await update({ ...preferences, displayName })) return;
         setPanel(null);
         if (displayName) {
           try { onAchievement?.('APP08'); }
@@ -97,8 +97,8 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
     {panel === 'time' && <BottomSheet title="Часы стрельбы" onClose={() => setPanel(null)}>
       <p>Учтено в дневнике · {formatMinutes(recorded)}</p>
       <p>Добавь время, которое было до FableShot.</p>
-      <form className="profile-form" onSubmit={event => {
-        event.preventDefault(); if (timeValid && update({ ...preferences, shootingBaseMinutes: nextBase })) setPanel(null);
+      <form className="profile-form" onSubmit={async event => {
+        event.preventDefault(); if (timeValid && await update({ ...preferences, shootingBaseMinutes: nextBase })) setPanel(null);
       }}>
         <div className="profile-metrics">
           <label>Часы<input inputMode="numeric" maxLength={6} value={hours} onChange={event => setHours(event.target.value)} /></label>

@@ -16,7 +16,7 @@ function Highlights({ values }: { values: readonly string[] }) {
 
 export function WebReleaseNotes({ seen, onSeen, showHistory, onCloseHistory }: {
   seen: number | null | undefined;
-  onSeen: (code: number) => boolean;
+  onSeen: (code: number) => Promise<boolean>;
   showHistory: boolean;
   onCloseHistory: () => void;
 }) {
@@ -42,7 +42,7 @@ export function WebReleaseNotes({ seen, onSeen, showHistory, onCloseHistory }: {
   if (!pending.length) return null;
   const previousVersion = webReleaseHistory().find(release => release.code === seen)?.version;
   const highlights = [...new Set(pending.flatMap(release => release.highlights))];
-  function acknowledge() { setFailed(!onSeen(WEB_RELEASE_CODE)); }
+  async function acknowledge() { setFailed(!await onSeen(WEB_RELEASE_CODE)); }
 
   return <BottomSheet key="pending" title="Что нового" tag="release-notes" onClose={acknowledge}>
     <div className="web-release-notes">

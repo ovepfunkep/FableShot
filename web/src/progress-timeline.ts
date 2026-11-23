@@ -97,6 +97,34 @@ function conditionLabel(conditions: Conditions): string {
   const bow = BOW_CATEGORIES.find(item => item.value === conditions.equipment?.bow.category)?.label ?? 'Класс лука неизвестен';
   return `${conditions.distanceMeters.toLocaleString('ru-RU')} м · Ø ${(conditions.targetDiameterMm / 10).toLocaleString('ru-RU')} см · ${getTargetProfile(conditions.targetProfileId)?.title ?? 'Мишень неизвестна'} · ${bow}`;
 }
+function basicMeasurements(shots: readonly Series['shots'][number][]) {
+  const share = (count: number) => shots.length ? 100 * count / shots.length : null;
+  let points = 0, tens = 0, misses = 0;
+  for (const shot of shots) {
+    points += shot.points;
+    if (shot.points === 10) tens++;
+    if (shot.points === 0) misses++;
+  }
+  return { average: shots.length ? points / shots.length : null, tenShare: share(tens), missShare: share(misses) };
+}
+
+/** Descriptive results stay available when bow class or matching conditions are unknown. */
+export function buildTrainingHistoryTimeline(entries: readonly DiaryEntry[]): TimelineGroup {
+  const group: TimelineGroup = { key: 'training-history', label: 'Все тренировки', comparable: false, points: [] };
+  for (const entry of entries) {
+    if (entry.practice.savedAt === null || entry.deletedAt) continue;
+    const date = timelineDate(entry);
+    if (!date) continue;
+    const shots = entry.practice.rounds.flatMap(round => round.series.flatMap(series => series.shots));
+    if (!shots.length) continue;
+    const day = Date.parse(`${date}T00:00:00Z`) / DAY;
+    group.points.push({ id: entry.id, sessionId: entry.id, title: entry.title || 'Тренировка', date, day, x: day,
+      arrows: shots.length, geometry: null, values: { ...basicMeasurements(shots), cg3: null, rms: null, xShare: null } });
+  }
+  sortTimelinePoints(group.points);
+  return group;
+}
+
 function measurements(series: readonly Series[]): Pick<TimelinePoint, 'values' | 'arrows' | 'geometry'> {
   const shots = series.flatMap(item => item.shots), conditions = series[0].conditions;
   const profile = getTargetProfile(conditions.targetProfileId);
@@ -109,9 +137,8 @@ function measurements(series: readonly Series[]): Pick<TimelinePoint, 'values' |
     shots.length ? 100 * shots.filter(matches).length / shots.length : null;
   const xKnown = shots.some(shot => shot.code === 'X') || (verifiedTarget && profile.zones.some(zone => zone.code === 'X'));
   return { arrows: shots.length, geometry, values: {
-    average: shots.length ? shots.reduce((sum, shot) => sum + shot.points, 0) / shots.length : null,
-    rms: geometry?.rmsMm ?? null, tenShare: share(shot => shot.points === 10),
-    xShare: xKnown ? share(shot => shot.code === 'X') : null, missShare: share(shot => shot.points === 0),
+    ...basicMeasurements(shots), rms: geometry?.rmsMm ?? null,
+    xShare: xKnown ? share(shot => shot.code === 'X') : null,
     cg3: composite.availability === 'available' ? composite.total ?? null : null,
   } };
 }
@@ -133,7 +160,7 @@ export function buildProgressTimeline(entries: readonly DiaryEntry[]): TimelineG
       let group = groups.get(key);
       if (!group) {
         const comparable = progressConditionKey(series[0].conditions) !== null;
-        group = { key, label: conditionLabel(series[0].conditions) + (comparable ? '' : ` · ${date} · ${entry.title ?? entry.id}`), comparable, points: [] };
+        group = { key, label: conditionLabel(series[0].conditions) + (comparable ? '' : ` · ${date} · ${entry.title || 'Тренировка'}`), comparable, points: [] };
         groups.set(key, group);
       }
       const day = Date.parse(`${date}T00:00:00Z`) / DAY;
@@ -141,17 +168,19 @@ export function buildProgressTimeline(entries: readonly DiaryEntry[]): TimelineG
         ...measurements(series) });
     }
   }
-  for (const group of groups.values()) {
-    group.points.sort((a, b) => a.day - b.day || a.sessionId.localeCompare(b.sessionId));
-    let start = 0;
-    while (start < group.points.length) {
-      let end = start + 1;
-      while (end < group.points.length && group.points[end].day === group.points[start].day) end++;
-      for (let index = start; index < end; index++) group.points[index].x += (index - start + 1) / (end - start + 1);
-      start = end;
-    }
-  }
+  for (const group of groups.values()) sortTimelinePoints(group.points);
   return [...groups.values()].sort((a, b) => b.points.at(-1)!.x - a.points.at(-1)!.x || a.label.localeCompare(b.label));
+}
+
+function sortTimelinePoints(points: TimelinePoint[]) {
+  points.sort((a, b) => a.day - b.day || a.sessionId.localeCompare(b.sessionId));
+  let start = 0;
+  while (start < points.length) {
+    let end = start + 1;
+    while (end < points.length && points[end].day === points[start].day) end++;
+    for (let index = start; index < end; index++) points[index].x += (index - start + 1) / (end - start + 1);
+    start = end;
+  }
 }
 export function availableTimelineMetrics(group: TimelineGroup, preferences: TrainingPreferences): TimelineMetric[] {
   if (!statisticVisible(preferences, 'progress_trend')) return [];

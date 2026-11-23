@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const baseURL = process.env.FABLE_UI_BASE ?? 'http://127.0.0.1:4173/FableShot/';
+const browser = process.env.FABLE_BROWSER ?? 'chrome';
 
 export default defineConfig({
   // Offline precaching includes SQLite WASM; avoid starving cold browser contexts on this workstation.
@@ -8,7 +9,7 @@ export default defineConfig({
   testDir: 'e2e',
   use: {
     baseURL,
-    channel: process.env.FABLE_BROWSER ?? 'chrome',
+    ...(browser === 'webkit' ? { browserName: 'webkit' } : { channel: browser }),
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,

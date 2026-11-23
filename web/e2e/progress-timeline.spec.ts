@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -16,6 +17,7 @@ test('progress scrolls across the full history and compares equipment aliases wi
   await page.getByTestId('nav-progress').click();
   const timeline = page.getByTestId('progress-trend');
   await expect(timeline).toBeVisible();
+  await page.getByTestId('progress-view-compare').click();
   const average = page.getByTestId('progress-insight-average');
   await expect(average).toContainText('+2,0 балла');
   await average.getByText('База · 3 трен.').click();
@@ -55,5 +57,24 @@ test('progress scrolls across the full history and compares equipment aliases wi
   await page.getByTestId('analytics-apply').click();
   await expect(page.locator('.journal-tab-metrics')).toContainText('10,0');
   await expect(page.getByTestId('progress-insights')).toHaveCount(0);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).entries)).toEqual(entries);
+  expect((await readDiary(page)).entries).toEqual(entries);
+});
+
+test('the default graph shows every dated workout with an unspecified bow class', async ({ page }) => {
+  const entries = ['2026-11-07', '2026-11-08', '2026-11-09'].map((date, index) => {
+    const points = 8 + index;
+    const practice = appendShot(emptyPractice(), { code: String(points), points, point: null, imported: true });
+    return { id: 'private-import-id-' + index, localDate: date, startedAt: date + 'T12:00:00Z',
+      practice: { ...practice, savedAt: date + 'T13:00:00Z' } };
+  });
+  await page.addInitScript(entries => localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries })), entries);
+  await page.goto('./');
+  await page.getByTestId('nav-progress').click();
+  const graph = page.getByTestId('progress-trend');
+  await expect(graph.getByTestId('progress-view-history')).toHaveAttribute('aria-pressed', 'true');
+  await expect(graph.getByTestId('progress-trend-chart').getByRole('button')).toHaveCount(3);
+  await expect(graph).not.toContainText('private-import-id');
+  await graph.getByTestId('progress-view-compare').click();
+  await expect(graph).toContainText('Для сравнения нужны тренировки с указанным классом лука');
+  await expect(graph.getByTestId('progress-insights')).toHaveCount(0);
 });

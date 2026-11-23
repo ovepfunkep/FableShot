@@ -82,8 +82,8 @@ export function loadTimerSettings(): TimerSettings {
   return { seriesSeconds: settings.seriesSeconds, restSeconds: settings.restSeconds };
 }
 
-export function saveTimerSettings(settings: TimerSettings): void {
+export function saveTimerSettings(settings: TimerSettings): void | Promise<void> {
   if (!isSettings(settings)) throw new RangeError('Длительность должна быть от 1 до 3600 секунд.');
   loadTimerSettings();
-  appStorage.setItem(settingsKey, JSON.stringify({ version: 1, settings }));
+  return appStorage.setItem(settingsKey, JSON.stringify({ version: 1, settings }));
 }

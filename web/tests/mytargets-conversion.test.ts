@@ -218,3 +218,23 @@ test('CSV named equipment survives explicit conditions mapping and remains idemp
   assert.deepEqual(repeated.equipment, result.equipment);
   assert.deepEqual(source, original);
 });
+
+test('a newer export preserves identical scores on a different day and reuses locally edited equipment', async () => {
+  const source = async (title: string, day: string) => parseMyTargets(new TextEncoder().encode([MYTARGETS_HEADERS.join(';'),
+    [title, day, '', 'Indoor', 'Club bow', 'Club arrows', '1', '18 m', 'WA Full (40 cm)', '1', '12:00', '9', '', '', ''].join(';'),
+  ].join('\r\n')));
+  const first = await source('Friday', '2025-01-03');
+  const initial = mergeMyTargets(first, emptyDiary(), emptyEquipment(), { ...options, confirmedBoundaries: first.requiredConfirmations });
+  const edited = structuredClone(initial.equipment);
+  edited.bows[0].category = 'recurve';
+  edited.bows[0].name = 'My club bow';
+  edited.arrows[0].diameterMm = 6;
+  edited.kits[0].name = 'Practice kit';
+  const second = await source('Saturday', '2025-01-04');
+  const result = mergeMyTargets(second, initial.diary, edited, { ...options, confirmedBoundaries: second.requiredConfirmations });
+  assert.equal(result.addedShots, 1);
+  assert.equal(result.addedPoints, 9);
+  assert.equal(result.locatedShots, 0);
+  assert.equal(result.diary.entries[1].practice.rounds[0].series[0].conditions.equipment?.id, edited.kits[0].id);
+  assert.deepEqual(result.equipment, edited);
+});

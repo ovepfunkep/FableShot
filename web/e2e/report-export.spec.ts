@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { PDFDocument } from 'pdf-lib';
@@ -64,7 +65,7 @@ test('PNG and paged PDF preview offline without downloading, remain cached and s
   await page.getByTestId('report-export-csv').click();
   const csv = await readFile((await (await csvDownload).path())!, 'utf8');
   expect(csv.split('\r\n').filter(Boolean)).toHaveLength(37);
-  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!));
+  const after = await readDiary(page);
   expect(after.entries).toEqual(JSON.parse(diary).entries);
   expect(after.achievementLedger.grants.filter((grant: { id: string }) => grant.id === 'APP04')).toHaveLength(1);
   await page.keyboard.press('Escape');

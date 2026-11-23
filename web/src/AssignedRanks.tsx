@@ -22,7 +22,7 @@ function newDraft(category?: RankCategory): Draft {
 
 export function AssignedRanks({ assignments, onChange, defaultCategory }: {
   assignments: readonly RankAssignment[];
-  onChange: (next: RankAssignment[]) => boolean;
+  onChange: (next: RankAssignment[]) => Promise<boolean>;
   defaultCategory?: RankCategory;
 }) {
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -44,9 +44,9 @@ export function AssignedRanks({ assignments, onChange, defaultCategory }: {
     if (panel?.mode === 'editor') show({ mode: 'editor', draft: { ...panel.draft, [key]: value } });
   }
 
-  function write(action: () => RankAssignment[]) {
+  async function write(action: () => RankAssignment[]) {
     try {
-      if (onChange(action())) show({ mode: 'list' });
+      if (await onChange(action())) show({ mode: 'list' });
       else setError('Не удалось сохранить отметку. Попробуй ещё раз.');
     } catch (cause) {
       setError(cause instanceof Error && cause.message === 'rank_assignment_conflict' ?

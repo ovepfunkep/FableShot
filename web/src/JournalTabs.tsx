@@ -7,7 +7,7 @@ import { RankTag } from './SportRanks.tsx';
 import { ProgressFiltersSheet, ProgressTimeline } from './ProgressTimeline.tsx';
 import { GeometryTrend } from './GeometryTrend.tsx';
 import { ProgressExport } from './ProgressExport.tsx';
-import { buildProgressTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries } from './progress-timeline.ts';
+import { buildProgressTimeline, buildTrainingHistoryTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries } from './progress-timeline.ts';
 import type { ProgressFilters } from './progress-timeline.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
 import { BottomSheet } from './ConditionsScreen.tsx';
@@ -179,7 +179,10 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
   const showAverage = statisticVisible(preferences, 'average');
   const showVolume = statisticVisible(preferences, 'volume');
   const filtered = useMemo(() => filterProgressEntries(entries, filters), [entries, filters]);
-  const groups = useMemo(() => buildProgressTimeline(filtered), [filtered]);
+  const groups = useMemo(() => buildProgressTimeline(filtered).filter(group => group.comparable), [filtered]);
+  const history = useMemo(() => buildTrainingHistoryTimeline(filtered), [filtered]);
+  const [comparisonKey, setComparisonKey] = useState<string | null>(null);
+  const comparison = groups.find(group => group.key === comparisonKey) ?? groups[0];
   const sessions = filtered.map(entry => {
     const shots = entry.practice.rounds.flatMap(roundShots);
     return { date: new Date(entry.startedAt), arrows: shots.length, ...summarize(shots) };
@@ -207,8 +210,8 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
         {showVolume && <><div><dt>Тренировки</dt><dd>{number.format(sessions.length)}</dd></div>
           <div><dt>Стрелы</dt><dd>{number.format(totals.arrows)}</dd></div></>}
       </dl>}
-      <ProgressTimeline groups={groups} />
-      {groups[0] && <GeometryTrend group={groups[0]} />}
+      <ProgressTimeline groups={groups} history={history} comparisonKey={comparisonKey} onCompare={setComparisonKey} />
+      {comparison && <GeometryTrend group={comparison} />}
     </>}
     {filterOpen && <ProgressFiltersSheet entries={entries} value={filters} onClose={() => setFilterOpen(false)}
       onApply={next => { setFilters(next); setFilterOpen(false); }} />}

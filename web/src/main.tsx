@@ -59,11 +59,12 @@ import { roundRank, seriesRank } from './sport-ranks.ts';
 import { freezeProgressBaseline } from './progress-scoring.ts';
 import { StatisticsSettings } from './StatisticsSettings.tsx';
 import { ArchiveScreen } from './ArchiveScreen.tsx';
-import { MyTargetsImport } from './MyTargetsImport.tsx';
+import { MyTargetsImport, MyTargetsImportReceipt, clearImportReceipt, readImportReceipt } from './MyTargetsImport.tsx';
 import { withStorageOwner } from './storage-owner.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
-import { loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
+import { initializeAppStorage } from './app-storage.ts';
+import { isDiary, loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
 import { announceRoomEntry, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
 import { readRoomHistory } from './group-leaderboard.ts';
@@ -101,15 +102,19 @@ function App() {
   const { preferences, readable: preferencesReadable, update: updatePreferences } = useTrainingPreferences();
   const [state, setState] = useState(initialDiary);
   const diaryRef = useRef(state.diary);
+  const diaryWrites = useRef(Promise.resolve());
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tab, setTab] = useState<JournalTab>('home');
   const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments' | 'group-room'>('journal');
   const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
   const [myTargetsOpen, setMyTargetsOpen] = useState(false);
+  const [importReceipt, setImportReceipt] = useState(readImportReceipt);
+  const [archiveBack, setArchiveBack] = useState<'journal' | 'settings'>('settings');
+  useEffect(clearImportReceipt, []);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [hostResults, setHostResults] = useState<{ history: RoomHistory; name?: string } | null>(null);
   const [onboardingRequested, setOnboardingRequested] = useState(false);
-  const [tutorialRequested, setTutorialRequested] = useState(false);
+  const [tutorialChapter, setTutorialChapter] = useState<'target' | 'report' | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [achievementResetOpen, setAchievementResetOpen] = useState(false);
@@ -168,7 +173,13 @@ function App() {
     return () => pending.abort();
   }, []);
 
-  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string): boolean {
+  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string): Promise<boolean> {
+    const operation = diaryWrites.current.then(() => persistDiary(change, trainingId));
+    diaryWrites.current = operation.then(() => {}, () => {});
+    return operation;
+  }
+
+  async function persistDiary(change: (previous: Diary) => Diary, trainingId?: string): Promise<boolean> {
     const previous = diaryRef.current;
     if (!previous) return false;
     try {
@@ -194,7 +205,7 @@ function App() {
       if (added.length && preferences.showAchievementNotices === false && next.achievementLedger) next = { ...next,
         achievementLedger: { ...next.achievementLedger, grants: next.achievementLedger.grants.map(grant =>
           known.has(`${grant.id}:${grant.scope}`) ? grant : { ...grant, notifiedAt: new Date().toISOString() }) } };
-      saveDiary(next, previous);
+      await saveDiary(next, previous);
       diaryRef.current = next;
       setState({ diary: next, error: '' });
       if (added.length && preferences.showAchievementNotices !== false) {
@@ -218,12 +229,14 @@ function App() {
   async function refreshRoomHistory(trainingId: string, membership: RoomMembership, manual = false) {
     const snapshot = await roomSnapshot(membership.invitation);
     const history = readRoomHistory(snapshot);
-    saveRoomHistory(trainingId, history, readRoomName(snapshot) ?? membership.roomName, manual);
+    if (!await saveRoomHistory(trainingId, history, readRoomName(snapshot) ?? membership.roomName, manual)) {
+      throw new Error('Не удалось сохранить таблицу.');
+    }
     return history;
   }
 
   function saveRoomHistory(trainingId: string, history: RoomHistory, roomName?: string, manual = false) {
-    const saved = writeDiary(previous => {
+    return writeDiary(previous => {
       const item = previous.entries.find(candidate => candidate.id === trainingId && !candidate.deletedAt);
       if (!item || item.groupRoomHistory?.finalizedAt ||
         !history.finalizedAt && (item.groupRoomHistory?.receivedAt ?? 0) > history.receivedAt) return previous;
@@ -236,7 +249,6 @@ function App() {
       } : candidate) };
       return awardRoomAchievements(updated, trainingId, new Date(history.receivedAt).toISOString());
     });
-    if (!saved) throw new Error('Не удалось сохранить таблицу.');
   }
 
   useEffect(() => {
@@ -290,7 +302,7 @@ function App() {
     } catch (cause) { setState(previous => ({ ...previous, error: cause instanceof Error ? cause.message : 'Не удалось сохранить достижение памятки.' })); }
   }
 
-  function update(change: (previous: Practice) => Practice, rememberSetup = false): boolean {
+  function update(change: (previous: Practice) => Practice, rememberSetup = false): Promise<boolean> {
     return writeDiary(previous => {
       const entry = previous.entries.find(item => item.id === sessionId);
       if (!entry) return previous;
@@ -317,15 +329,15 @@ function App() {
     }, sessionId ?? undefined);
   }
 
-  function saveEdit(keepSelection = false): boolean {
+  async function saveEdit(keepSelection = false): Promise<boolean> {
     if (!edit) return true;
-    if (!update(previous => replaceShot(previous, edit.seriesId, edit.index, edit.shot))) return false;
+    if (!await update(previous => replaceShot(previous, edit.seriesId, edit.index, edit.shot))) return false;
     if (!keepSelection) setEdit(null);
     return true;
   }
 
-  function showSeries(seriesId: number) {
-    if (!saveEdit()) return;
+  async function showSeries(seriesId: number) {
+    if (!await saveEdit()) return;
     setSelection(seriesId);
     setPage('training');
     setPicker(null);
@@ -393,7 +405,7 @@ function App() {
     setPage(next);
   }
 
-  function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice) {
+  async function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice) {
     if (ongoing && !roomSetup) { selectEntry(ongoing, 'training'); return true; }
     if (!conditions && paused) return resumeEntry(paused);
     const chosen = refreshConditions(conditions ?? suggested.conditions);
@@ -412,7 +424,7 @@ function App() {
       try { saveRoomMembership(roomSetup); }
       catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
     }
-    if (!writeDiary(previous => {
+    if (!await writeDiary(previous => {
       // Pause the other practice only when the new group practice is actually saved.
       const existing = roomSetup && ongoing ? previous.entries.map(candidate => candidate.id === ongoing.id ? {
         ...candidate, paused: true,
@@ -461,12 +473,12 @@ function App() {
     else prepareRoomTraining(membership);
   }
 
-  function resumeEntry(item: DiaryEntry) {
+  async function resumeEntry(item: DiaryEntry) {
     if (ongoing && ongoing.id !== item.id) {
       setState(previous => ({ ...previous, error: 'Сначала заверши активную тренировку.' }));
       return false;
     }
-    if (!writeDiary(previous => ({ ...previous, entries: previous.entries.map(entry => entry.id === item.id ? {
+    if (!await writeDiary(previous => ({ ...previous, entries: previous.entries.map(entry => entry.id === item.id ? {
       ...entry, paused: false, practice: resumePractice(entry.practice),
       personalRecords: entry.personalRecords ?? (entry.practice.savedAt !== null || entry.nativeArchiveSession ? [] : undefined),
       trainingTime: startTrainingTime(Date.now(), entry.trainingTime, true),
@@ -477,9 +489,9 @@ function App() {
     return true;
   }
 
-  function pauseEntry() {
-    if (!entry || entry.paused || completed || !saveEdit()) return;
-    if (writeDiary(previous => ({ ...previous, entries: previous.entries.map(item => item.id === entry.id ? {
+  async function pauseEntry() {
+    if (!entry || entry.paused || completed || !await saveEdit()) return;
+    if (await writeDiary(previous => ({ ...previous, entries: previous.entries.map(item => item.id === entry.id ? {
       ...item, paused: true,
       ...(item.trainingTime ? { trainingTime: stopTrainingTime(item.trainingTime, Date.now()) } : {}),
     } : item) }))) setPage('journal');
@@ -582,7 +594,7 @@ function App() {
     }
   }
 
-  function mark(shot: Shot) {
+  async function mark(shot: Shot) {
     if (pendingShot) return;
     if (editing) {
       const updated = { ...editing.shot, ...shot };
@@ -590,15 +602,22 @@ function App() {
       if (!shot.point && !shot.missPoint) delete updated.spot;
       setEdit({ ...editing, shot: updated });
     }
-    else if (canAppend && update(previous => appendShot(previous, shot))) {
+    else if (canAppend) {
+      let index = -1;
+      const saved = await update(previous => {
+        const latest = currentSeries(previous)?.series;
+        if (latest?.id !== series.id || numbering && latest.shots.length !== shots.length) return previous;
+        index = latest.shots.length;
+        return appendShot(previous, shot);
+      });
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
-      const recorded = stored && findSeries(stored, series.id)?.series.shots[shots.length] === shot;
+      const recorded = index >= 0 && saved && stored && findSeries(stored, series.id)?.series.shots[index] === shot;
       if (recorded && preferences.haptics) performTrainingHaptic();
       if (recorded && numbering) {
         setPostHitReady(false);
         setNumberSaveError(false);
-        setPostHit({ seriesId: series.id, index: shots.length, shot });
-      } else if (recorded) playShotMotion(shots.length, shot);
+        setPostHit({ seriesId: series.id, index, shot });
+      } else if (recorded) playShotMotion(index, shot);
     }
   }
 
@@ -610,22 +629,22 @@ function App() {
     setNumberSaveError(false);
   }
 
-  function chooseArrowNumber(value: number | undefined) {
+  async function chooseArrowNumber(value: number | undefined) {
     if (numberEditOpen && editing) {
       setEdit({ ...editing, shot: { ...editing.shot, physicalArrowNumber: value } });
       closeNumberPicker();
     } else if (pendingShot && value !== undefined) {
-      if (update(previous => replaceShot(previous, pendingShot.seriesId, pendingShot.index,
+      if (await update(previous => replaceShot(previous, pendingShot.seriesId, pendingShot.index,
         { ...pendingShot.shot, physicalArrowNumber: value }))) closeNumberPicker();
       else setNumberSaveError(true);
     }
   }
 
-  function mainAction() {
-    if (editing) saveEdit(seriesEditor);
+  async function mainAction() {
+    if (editing) await saveEdit(seriesEditor);
     else if (completed) setPage('report');
     else if (past) showSeries(seriesIds[position + 1]);
-    else if (update(advanceSeries)) {
+    else if (await update(advanceSeries)) {
       setSelection(null);
       if (sessionId && canPlayTrainingMotion() && shots.length >= 3 && shots.every(shot => shot.points === 10)) {
         const saved = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
@@ -637,14 +656,14 @@ function App() {
     }
   }
 
-  function chooseShot(index: number) {
+  async function chooseShot(index: number) {
     const shot = shots[index];
     if (pendingShot || !shot) return;
     if (editing?.index === index) {
       if (seriesEditor && !dirty) setEdit(null);
       return;
     }
-    if (!saveEdit()) return;
+    if (!await saveEdit()) return;
     setEdit({ seriesId: series.id, index, shot });
   }
 
@@ -653,8 +672,8 @@ function App() {
     else if (!past && !completed && shots.length) update(previous => removeShot(previous, series.id, shots.length - 1));
   }
 
-  function openPicker(kind: 'round' | 'series') {
-    if (saveEdit()) setPicker(kind);
+  async function openPicker(kind: 'round' | 'series') {
+    if (await saveEdit()) setPicker(kind);
   }
 
   function openConfirm(kind: 'finish' | 'delete' | 'discard') {
@@ -662,10 +681,13 @@ function App() {
     confirmDialog.current?.showModal();
   }
 
-  function leaveTraining() {
-    if (completed) setPage('report');
-    else if (hasHits) openConfirm('finish');
-    else if (writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId),
+  async function leaveTraining() {
+    // A pointer down on the close button delivers any tap still waiting on the target.
+    await diaryWrites.current;
+    const current = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
+    if (current?.savedAt) setPage('report');
+    else if (current?.rounds.some(item => item.series.some(end => end.shots.length))) openConfirm('finish');
+    else if (await writeDiary(previous => ({ ...previous, entries: previous.entries.filter(item => item.id !== sessionId),
       ...(previous.tournaments && sessionId ? { tournaments: unlinkTournamentSession(previous.tournaments, sessionId) } : {}),
     }))) {
       setSessionId(null);
@@ -674,16 +696,16 @@ function App() {
     }
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (confirm === 'discard') {
       setEdit(null);
     } else if (confirm === 'delete' && editing) {
-      if (update(previous => removeShot(previous, series.id, editing.index))) {
+      if (await update(previous => removeShot(previous, series.id, editing.index))) {
         setEdit(null);
         if (!diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
         else if (seriesEditor && series.shots.length === 1) closeSeriesEditor();
       }
-    } else if (confirm === 'finish' && update(previous => completePractice(previous, new Date().toISOString()))) {
+    } else if (confirm === 'finish' && await update(previous => completePractice(previous, new Date().toISOString()))) {
       setSelection(null);
       setReportTrail([]);
       setReportBack('journal');
@@ -724,9 +746,9 @@ function App() {
   const technique = setup ? setupMemo : practice.techniqueUses?.at(-1)?.selection ?? null;
   const techniqueWindow = techniqueOpen && <TechniqueWindow initial={memoSnapshot ?? technique} readOnly={completed || memoSnapshot !== null} onClose={() => { setTechniqueOpen(false); setMemoSnapshot(null); }}
     onPublication={publication => void recordPublication(publication)}
-    onSelect={selection => {
+    onSelect={async selection => {
       if (setup) { setSetupMemo(selection); setTechniqueOpen(false); return true; }
-      const success = update(previous => bindTechnique(previous, selection));
+      const success = await update(previous => bindTechnique(previous, selection));
       if (success) setTechniqueOpen(false);
       return success;
     }} />;
@@ -777,13 +799,13 @@ function App() {
 
   const firstOnboarding = page === 'journal' && tab === 'home' && state.diary !== null && entries.length === 0 &&
     preferencesReadable && !preferences.onboardingSeen && !onboardingDismissed;
-  const showingOnboarding = firstOnboarding || onboardingRequested || tutorialRequested;
+  const showingOnboarding = firstOnboarding || onboardingRequested || tutorialChapter !== null;
   const androidUpdates = useAndroidUpdates(!showingOnboarding && page === 'journal' && tab === 'home');
-  function leaveOnboarding() {
-    if (preferencesReadable && !preferences.onboardingSeen) updatePreferences({ ...preferences, onboardingSeen: true });
+  async function leaveOnboarding() {
+    if (preferencesReadable && !preferences.onboardingSeen) await updatePreferences({ ...preferences, onboardingSeen: true });
     setOnboardingDismissed(true);
     setOnboardingRequested(false);
-    setTutorialRequested(false);
+    setTutorialChapter(null);
   }
   function leaveConditions() {
     setSetupMemo(null);
@@ -809,7 +831,7 @@ function App() {
         else if (editing) setEdit(null);
         else leaveTraining();
         break;
-      case 'archive': setPage('settings'); break;
+      case 'archive': setPage(archiveBack); break;
       case 'statistics':
       case 'settings':
         if (settingsSection || page === 'statistics') {
@@ -826,11 +848,12 @@ function App() {
     }
   });
   if (showingOnboarding) {
-    return <>{offlineLabel}<WebOnboarding initialExample={tutorialRequested} onClose={leaveOnboarding} onStart={() => {
-      leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
+    return <>{offlineLabel}<WebOnboarding initialChapter={tutorialChapter ?? 'welcome'} onClose={leaveOnboarding} onStart={async () => {
+      await leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
       if (ongoing) selectEntry(ongoing, 'conditions');
       else { setSessionId(null); setPage('conditions'); }
-    }} onImport={() => { leaveOnboarding(); setPage('settings'); setMyTargetsOpen(true); }} /></>;
+    }} onImport={async () => { await leaveOnboarding(); setPage('settings'); setMyTargetsOpen(true); }}
+      onRestore={async () => { await leaveOnboarding(); setArchiveBack('journal'); setPage('archive'); }} /></>;
   }
 
   if (page === 'journal') return <JournalShell tab={tab} onTab={setTab} onSettings={() => setPage('settings')}
@@ -838,6 +861,8 @@ function App() {
     {offlineLabel}
     {error}
     {tab === 'home' && <AndroidUpdateCard updates={androidUpdates} />}
+    {tab === 'home' && importReceipt && <MyTargetsImportReceipt result={importReceipt} onClose={() => setImportReceipt(null)}
+      onHistory={() => { setImportReceipt(null); setTab('history'); }} />}
     {tab === 'home' && state.diary && <JournalHome active={!!ongoing || !!paused} paused={!ongoing && !!paused} recent={recent}
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
@@ -901,7 +926,7 @@ function App() {
     onRecords={() => setPage('records')}
     onAchievement={recordServiceAchievement} onPublication={publication => void recordPublication(publication)}
     onBack={() => setPage('journal')} onRanks={() => { setRanksBack('profile'); setPage('best-ranks'); }} />{notice}{error}</>;
-  if (page === 'archive') return <><ArchiveScreen onBack={() => setPage('settings')} onAchievement={recordServiceAchievement} />{notice}{error}</>;
+  if (page === 'archive') return <><ArchiveScreen onBack={() => setPage(archiveBack)} restoreFirst={archiveBack === 'journal'} onAchievement={recordServiceAchievement} />{notice}{error}</>;
   if (page === 'group-room') return <main className="conditions-page settings-page">
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={() => setPage('journal')}><Icon name="back" /></button>
@@ -918,7 +943,7 @@ function App() {
           const history = readRoomHistory(snapshot);
           if (!history.finalizedAt) throw new Error('Комната не подтвердила итоги.');
           const name = readRoomName(snapshot);
-          const saved = writeDiary(previous => {
+          const saved = await writeDiary(previous => {
             const matching = new Set(previous.groupSeries?.filter(journal => history.participants.some(person => person.entryId === journal.entryId) ||
               history.series.some(series => series.entryId === journal.entryId)).map(journal => journal.trainingId));
             return matching.size ? { ...previous, entries: previous.entries.map(item => matching.has(item.id)
@@ -940,9 +965,9 @@ function App() {
     onChange={patch => updatePreferences({ ...preferences, ...patch })} />;
   const achievementPreference = <div className="preference-row"><span className="preference-title">Показывать достижения</span>
     <button type="button" role="switch" className="preference-switch" aria-label="Показывать достижения" aria-checked={preferences.showAchievementNotices !== false}
-      disabled={!preferencesReadable} onClick={() => {
+      disabled={!preferencesReadable} onClick={async () => {
         const enabled = preferences.showAchievementNotices === false;
-        if (updatePreferences({ ...preferences, showAchievementNotices: enabled }) && !enabled) {
+        if (await updatePreferences({ ...preferences, showAchievementNotices: enabled }) && !enabled) {
           setAchievementQueue([]);
           setRecordQueue([]);
         }
@@ -969,7 +994,7 @@ function App() {
     </>}
     data={<>
       <div className="settings-actions">
-        <SettingsAction icon="archive" data-testid="settings-archive" onClick={() => setPage('archive')}>Архив и восстановление</SettingsAction>
+        <SettingsAction icon="archive" data-testid="settings-archive" onClick={() => { setArchiveBack('settings'); setPage('archive'); }}>Архив и восстановление</SettingsAction>
         <SettingsAction icon="download" data-testid="settings-mytargets" aria-haspopup="dialog" onClick={() => setMyTargetsOpen(true)}>Импорт MyTargets</SettingsAction>
       </div>
       <SettingsAction icon="undo" tone="danger" aria-haspopup="dialog" onClick={() => setAchievementResetOpen(true)}
@@ -977,7 +1002,8 @@ function App() {
     </>}
     help={<div className="settings-actions">
       <SettingsAction icon="book" data-testid="settings-onboarding" onClick={() => setOnboardingRequested(true)}>Знакомство с FableShot</SettingsAction>
-      <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialRequested(true)}>Как отмечать попадания</SettingsAction>
+      <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialChapter('target')}>Как отмечать попадания</SettingsAction>
+      <SettingsAction icon="stats" data-testid="help-report-tutorial" onClick={() => setTutorialChapter('report')}>Как читать статистику</SettingsAction>
     </div>}
     about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
@@ -987,8 +1013,8 @@ function App() {
     {notice}
     {achievementResetOpen && <BottomSheet title="Обнулить достижения?" onClose={() => setAchievementResetOpen(false)}>
       <p>Тренировки останутся в истории. Достижения начнут начисляться с новых занятий.</p>
-      <button type="button" className="primary" data-testid="achievement-reset-confirm" onClick={() => {
-        if (writeDiary(diary => ({ ...diary, achievementLedger: { epoch: crypto.randomUUID(), grants: [] } }))) {
+      <button type="button" className="primary" data-testid="achievement-reset-confirm" onClick={async () => {
+        if (await writeDiary(diary => ({ ...diary, achievementLedger: { epoch: crypto.randomUUID(), grants: [] } }))) {
           setAchievementQueue([]); setAchievementResetOpen(false);
         }
       }}>Обнулить</button>
@@ -1003,11 +1029,11 @@ function App() {
       initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
-      onBack={leaveConditions} onApply={(conditions, rule, numberedArrows, tournament) => {
+      onBack={leaveConditions} onApply={async (conditions, rule, numberedArrows, tournament) => {
         if (setup) {
           return startPractice(conditions, rule, numberedArrows, tournament);
         }
-        const success = update(previous => {
+        const success = await update(previous => {
           const next = applyConditions(previous, conditions, hasHits ? undefined : rule, numberedArrows);
           const applied = currentSeries(next)?.series.conditions;
           // The earliest pilot used a synthesized start date for an open practice.
@@ -1046,8 +1072,8 @@ function App() {
       onAchievement={id => recordServiceAchievement(id, sessionId ?? undefined)}
       grants={grants.filter(grant => grant.sessionId === sessionId)}
       onNotes={setNotesScope}
-      onRename={title => !!entry && writeDiary(previous => renameDiaryEntry(previous, entry.id, title))}
-      onTrash={deleted => {
+      onRename={async title => !!entry && writeDiary(previous => renameDiaryEntry(previous, entry.id, title))}
+      onTrash={async deleted => {
         if (!entry) return false;
         return writeDiary(previous => setDiaryDeleted(previous, entry.id, deleted));
       }}
@@ -1093,17 +1119,17 @@ function App() {
         </output>}
       </div>}
       {seriesEditor && <button type="button" className="icon-button" aria-label="Заметки серии"
-        onClick={() => { if (saveEdit(true)) setNotesScope({ seriesId: series.id }); }}><Icon name="notes" /></button>}
+        onClick={async () => { if (await saveEdit(true)) setNotesScope({ seriesId: series.id }); }}><Icon name="notes" /></button>}
       {!seriesEditor && <>
-      {roomJournal && <button type="button" className="icon-button" aria-label="Таблица комнаты" onClick={() => {
-        if (saveEdit()) setRoomLeaderboardOpen(true);
+      {roomJournal && <button type="button" className="icon-button" aria-label="Таблица комнаты" onClick={async () => {
+        if (await saveEdit()) setRoomLeaderboardOpen(true);
       }}><Icon name="group" /></button>}
       <button type="button" className="icon-button" aria-label="Памятка и фокус" data-testid="training-technique-open"
-        onClick={() => { if (saveEdit()) setTechniqueOpen(true); }}><Icon name="notes" /></button>
+        onClick={async () => { if (await saveEdit()) setTechniqueOpen(true); }}><Icon name="notes" /></button>
       <button type="button" className="icon-button" aria-label="Условия тренировки" disabled={past || completed || !entry}
-        onClick={() => { if (saveEdit()) { setConditionsBack('training'); setPage('conditions'); } }}><Icon name="settings" /></button>
+        onClick={async () => { if (await saveEdit()) { setConditionsBack('training'); setPage('conditions'); } }}><Icon name="settings" /></button>
       <button type="button" className="icon-button" aria-label="Статистика" disabled={!hasHits}
-        onClick={() => { if (saveEdit()) { if (!completed) setReportBack('training'); setPage('report'); } }}><Icon name="stats" /></button>
+        onClick={async () => { if (await saveEdit()) { if (!completed) setReportBack('training'); setPage('report'); } }}><Icon name="stats" /></button>
       </>}
     </header>
     {roomJournal && roomLeaderboardOpen && <GroupLeaderboard key={roomJournal.entryId} entryId={roomJournal.entryId}
@@ -1144,13 +1170,13 @@ function App() {
       onChoose={chooseArrowNumber} onClose={closeNumberPicker} />}
     {picker && <StagePicker kind={picker} practice={practice} roundId={round.id} seriesId={series.id}
       onChoose={showSeries} onClose={() => setPicker(null)}
-      onNewRound={() => {
-        const saved = update(startRound);
+      onNewRound={async () => {
+        const saved = await update(startRound);
         if (saved) setSelection(null);
         return saved;
       }}
-      onDelete={id => {
-        const saved = update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id));
+      onDelete={async id => {
+        const saved = await update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id));
         if (saved && !diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
         return saved;
       }} />}
@@ -1175,5 +1201,8 @@ function App() {
 }
 
 const root = createRoot(document.getElementById('root')!);
-withStorageOwner(() => root.render(<StrictMode><TrainingPreferencesProvider><TechniqueSettingsProvider><App /></TechniqueSettingsProvider></TrainingPreferencesProvider></StrictMode>),
+withStorageOwner(async () => {
+  await initializeAppStorage(isDiary);
+  root.render(<StrictMode><TrainingPreferencesProvider><TechniqueSettingsProvider><App /></TechniqueSettingsProvider></TrainingPreferencesProvider></StrictMode>);
+},
   message => root.render(<main className="conditions-page"><div className="conditions-content"><h1>Дневник защищён</h1><p role="alert">{message}</p><button type="button" onClick={() => window.location.reload()}>Повторить</button></div></main>));

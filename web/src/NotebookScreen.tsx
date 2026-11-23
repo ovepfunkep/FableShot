@@ -17,8 +17,8 @@ function scopeTitle(note: DiaryNote) {
 export function NotebookScreen({ entries, notes, onSaveStandalone, onSaveSession, onOpenSession, onBack }: {
   entries: readonly DiaryEntry[];
   notes: readonly DiaryNote[];
-  onSaveStandalone: (next: DiaryNote[]) => boolean;
-  onSaveSession: (id: string, next: DiaryNote[]) => boolean;
+  onSaveStandalone: (next: DiaryNote[]) => Promise<boolean>;
+  onSaveSession: (id: string, next: DiaryNote[]) => Promise<boolean>;
   onOpenSession: (id: string) => void;
   onBack: () => void;
 }) {

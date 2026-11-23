@@ -65,7 +65,7 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
   onToggle: () => void;
   onReset: () => void;
   onSelectPhase: (phase: TimerPhase) => void;
-  onSave: (settings: TimerSettings) => boolean;
+  onSave: (settings: TimerSettings) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [series, setSeries] = useState(String(settings.seriesSeconds));
@@ -104,12 +104,12 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
     if (distance > 64) onClose();
   }
 
-  function saveDurations() {
+  async function saveDurations() {
     if (validSeries === null || validRest === null || ongoing || saving) return;
     setSaving(true);
     setSaveError(false);
     try {
-      if (!onSave({ seriesSeconds: validSeries, restSeconds: validRest })) setSaveError(true);
+      if (!await onSave({ seriesSeconds: validSeries, restSeconds: validRest })) setSaveError(true);
     } catch {
       setSaveError(true);
     } finally { setSaving(false); }

@@ -20,7 +20,8 @@ export type MyTargetsMergeOptions = {
 };
 export type MyTargetsMergeResult = {
   diary: Diary; equipment: EquipmentLibrary;
-  addedTrainings: number; addedShots: number; skippedShots: number; warnings: MyTargetsWarning[];
+  addedTrainings: number; addedShots: number; addedPoints: number; locatedShots: number; skippedShots: number;
+  warnings: MyTargetsWarning[];
 };
 
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) =>
@@ -42,7 +43,13 @@ function mergeEquipment(existing: EquipmentLibrary, incoming: EquipmentLibrary):
     for (const item of incoming[kind]) {
       const previous = ids.get(item.id);
       if (previous) {
-        if (!existing[kind].some(candidate => candidate.id === item.id) || canonical(previous) !== canonical(item)) {
+        // These IDs encode the source name, source record or pair of source items.
+        // Keep a local edit when the same item occurs in another export.
+        const sameKind = existing[kind].some(candidate => candidate.id === item.id);
+        const sourceId = (kind === 'kits' ? /^myt-kit-[0-9a-f]{32}$/
+          : kind === 'bows' ? /^myt-(?:csv-)?bow-[0-9a-f]{32}$/
+          : /^myt-(?:csv-)?arrows-[0-9a-f]{32}$/).test(item.id);
+        if (!sameKind || (!sourceId && canonical(previous) !== canonical(item))) {
           throw new Error(`equipment_id_conflict:${item.id}`);
         }
       } else {
@@ -78,17 +85,22 @@ export function mergeMyTargets(preview: MyTargetsPreview, existingDiary: Diary, 
   };
   const blocked = new Set(preview.warnings.filter(warning => warning.blocking).map(warning => warning.sourceId));
   const knownRecords = new Set<number>();
-  const otherFingerprints = new Set<string>(), otherOverlaps = new Set<string>();
+  const otherFingerprints = new Map<string, Set<string | null>>();
+  const otherOverlaps = new Set<string>();
   for (const entry of existingDiary.entries) {
     if (!entry.source) continue;
     if (entry.source.fileHash === preview.fileHash) for (const record of entry.source.sourceRecords) knownRecords.add(record);
     else {
-      for (const fingerprint of entry.source.seriesFingerprints) otherFingerprints.add(fingerprint);
+      for (const fingerprint of entry.source.seriesFingerprints) {
+        const dates = otherFingerprints.get(fingerprint) ?? new Set<string | null>();
+        dates.add(entry.localDate ?? null);
+        otherFingerprints.set(fingerprint, dates);
+      }
       for (const fingerprint of entry.source.overlapFingerprints) otherOverlaps.add(fingerprint);
     }
   }
   const additions: DiaryEntry[] = [];
-  let addedShots = 0, skippedShots = 0;
+  let addedShots = 0, addedPoints = 0, locatedShots = 0, skippedShots = 0;
   for (const session of sessions) {
     const rounds: Round[] = [], sourceRecords: number[] = [], seriesFingerprints = new Set<string>(), overlapFingerprints = new Set<string>();
     let nextId = 1;
@@ -102,7 +114,11 @@ export function mergeMyTargets(preview: MyTargetsPreview, existingDiary: Diary, 
           if (!isConditions(conditions)) warn('conditions_mapping_required', round.sourceId, true);
           continue;
         }
-        const overlap = otherFingerprints.has(series.fingerprint) || !!series.overlapFingerprint && otherOverlaps.has(series.overlapFingerprint);
+        // Equal scores can occur in different workouts. Preserve the conservative
+        // comparison when one export has no comparable date.
+        const matchingDates = otherFingerprints.get(series.fingerprint);
+        const matchingScores = matchingDates && (session.localDate === null || matchingDates.has(null) || matchingDates.has(session.localDate));
+        const overlap = matchingScores || !!series.overlapFingerprint && otherOverlaps.has(series.overlapFingerprint);
         if (overlap && options.allowOverlaps !== true) {
           skippedShots += series.shots.length;
           warn('possible_overlap', series.sourceId);
@@ -138,6 +154,8 @@ export function mergeMyTargets(preview: MyTargetsPreview, existingDiary: Diary, 
             ...(missPoint ? { missPoint } : {}),
             ...((point || missPoint) && shot.spot !== undefined && triple ? { spot: shot.spot } : {}),
             ...(shot.rawPoint ? { sourcePoint: { ...shot.rawPoint } } : {}), ...(validNumber ? { physicalArrowNumber: number } : {}) });
+          addedPoints += shot.points;
+          if (point || missPoint) locatedShots++;
           sourceRecords.push(shot.sourceRecord);
           knownRecords.add(shot.sourceRecord);
         }
@@ -166,5 +184,5 @@ export function mergeMyTargets(preview: MyTargetsPreview, existingDiary: Diary, 
   const diary: Diary = { ...existingDiary, entries: [...existingDiary.entries, ...additions] };
   if (!isDiary(diary)) throw new Error('invalid_converted_diary');
   const equipment = additions.length ? mergeEquipment(existingEquipment, preview.equipment) : structuredClone(existingEquipment);
-  return { diary, equipment, addedTrainings: additions.length, addedShots, skippedShots, warnings };
+  return { diary, equipment, addedTrainings: additions.length, addedShots, addedPoints, locatedShots, skippedShots, warnings };
 }

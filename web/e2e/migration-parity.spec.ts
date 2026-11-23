@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -63,7 +64,7 @@ test('a completed report manages rounds and series and repeats the selected cond
   await page.getByTestId('session-repeat').click();
   await page.getByTestId('start-training').click();
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
-  const diary = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!));
+  const diary = await readDiary(page);
   expect(diary.entries).toHaveLength(3);
   expect(diary.entries[0].practice.rounds[0].series[0].shots).toHaveLength(2);
   expect(diary.entries[2].practice.roundRule).toEqual({ unit: 'series', limit: 10 });
@@ -79,6 +80,7 @@ test('arrow history aggregates saved sessions and progress exports the selected 
   await expect(history.getByTestId('numbered-arrow-point')).toHaveCount(4);
   await page.keyboard.press('Escape');
   await page.getByTestId('nav-progress').click();
+  await page.getByTestId('progress-view-compare').click();
   await page.getByTestId('progress-trend-xShare').click();
   await expect(page.getByTestId('progress-trend-value')).toContainText('50');
   await page.getByTestId('progress-trend-missShare').click();
@@ -112,10 +114,13 @@ test('the ten streak feedback runs on new shots and never replays on reopening a
   for (let index = 1; index <= 3; index++) {
     await page.getByTestId('target').click();
     await page.getByRole('button', { name: `Стрела №${index}`, exact: true }).click();
+    await expect(page.getByTestId(`shot-${index}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
   }
-  const scores = page.getByTestId('arrow-panel').locator('.arrow-score');
-  await expect.poll(() => scores.evaluateAll(nodes => nodes.filter(node => node.getAnimations().length).length)).toBe(3);
+  const effect = page.getByTestId('clean-series-effect');
+  await expect(effect).toHaveCount(0);
   await page.getByTestId('next-end').click();
+  await expect(effect).toHaveText('Чистая серия30/30');
   await page.getByRole('button', { name: 'Предыдущая серия' }).click();
-  expect(await scores.evaluateAll(nodes => nodes.filter(node => node.getAnimations().length).length)).toBe(0);
+  await expect(effect).toHaveCount(0);
+  await expect(page.getByTestId('arrow-panel').locator('[data-shot-motion]')).toHaveCount(0);
 });

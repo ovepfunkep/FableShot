@@ -190,10 +190,12 @@ test('changing an ongoing phase requires confirmation and the new phase waits fo
 
 test('a settings write failure keeps the draft and does not change the countdown duration', async ({ page }) => {
   await page.addInitScript(() => {
-    const write = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key: string, value: string) {
-      if (key === 'app.fableshot.timer-settings.v1') throw new DOMException('Storage full', 'QuotaExceededError');
-      return write.call(this, key, value);
+    const write = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === 'snapshots' && key === 'active' && value.records['app.fableshot.timer-settings.v1']) {
+        throw new DOMException('Storage full', 'QuotaExceededError');
+      }
+      return write.call(this, value, key);
     };
   });
   await page.goto('./');

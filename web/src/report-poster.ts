@@ -26,6 +26,21 @@ export function posterCards(snapshot: ReportSnapshot): { cards: Card[]; columns:
   return { cards, columns };
 }
 
+async function encodePoster(canvas: HTMLCanvasElement): Promise<Uint8Array> {
+  let timeout = 0;
+  try {
+    const blob = await Promise.race([
+      new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png')),
+      // Chromium can defer an idle canvas encode while another report is open.
+      new Promise<null>(resolve => { timeout = window.setTimeout(() => resolve(null), 1_000); }),
+    ]);
+    if (blob) return new Uint8Array(await blob.arrayBuffer());
+    const data = canvas.toDataURL('image/png');
+    if (!data.startsWith('data:image/png;base64,')) throw new Error('Не удалось создать картинку.');
+    return Uint8Array.from(atob(data.slice('data:image/png;base64,'.length)), character => character.charCodeAt(0));
+  } finally { window.clearTimeout(timeout); }
+}
+
 export async function createReportPosters(snapshot: ReportSnapshot): Promise<Uint8Array[]> {
   await document.fonts.ready;
   const { cards, columns } = posterCards(snapshot);
@@ -113,9 +128,7 @@ export async function createReportPosters(snapshot: ReportSnapshot): Promise<Uin
     });
     text('Каждая стрела — часть истории.', 56, canvas.height - 62, 24, palette.muted);
     text(`${pageIndex + 1} / ${pages}`, 937, canvas.height - 62, 22, palette.muted);
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value)
-      : reject(new Error('Не удалось создать картинку.')), 'image/png'));
-    result.push(new Uint8Array(await blob.arrayBuffer()));
+    result.push(await encodePoster(canvas));
   }
   return result;
 }

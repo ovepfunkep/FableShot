@@ -1,5 +1,5 @@
 /** A single writable app per origin makes synchronous localStorage commands safe across tabs. */
-export function withStorageOwner(start: () => void, unavailable: (message: string) => void): void {
+export function withStorageOwner(start: () => void | Promise<void>, unavailable: (message: string) => void): void {
   if (!navigator.locks) {
     unavailable('Для безопасного хранения нужен современный браузер с Web Locks. Обнови браузер.');
     return;
@@ -9,7 +9,8 @@ export function withStorageOwner(start: () => void, unavailable: (message: strin
     await new Promise<void>((release, reject) => {
       window.addEventListener('pagehide', () => release(), { once: true });
       window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
-      try { start(); } catch (error) { reject(error); }
+      Promise.resolve().then(start).catch(reject);
     });
-  }).catch(() => unavailable('Не удалось получить безопасный доступ к дневнику. Перезапусти приложение.'));
+  }).catch(error => unavailable(error instanceof Error && error.message ? error.message
+    : 'Не удалось получить безопасный доступ к дневнику. Перезапусти приложение.'));
 }

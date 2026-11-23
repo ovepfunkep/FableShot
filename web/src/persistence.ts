@@ -174,11 +174,11 @@ export function loadPractice(): Practice {
   return value.savedAt === null ? practice : completePractice(practice, value.savedAt);
 }
 
-export function savePractice(value: Practice): void {
+export function savePractice(value: Practice): Promise<void> | void {
   if (!isPractice(value)) throw new Error('Тренировка содержит недопустимые данные.');
   // A retry must not silently overwrite an unreadable diary entry.
   loadPractice();
-  appStorage.setItem(practiceKey, JSON.stringify(value));
+  return appStorage.setItem(practiceKey, JSON.stringify(value));
 }
 
 export function isDiary(value: unknown): value is Diary {
@@ -227,6 +227,8 @@ export function isDiary(value: unknown): value is Diary {
 }
 
 export function loadDiary(legacyDate = new Date().toISOString()): Diary {
+  const opened = appStorage.readDiary();
+  if (opened) return opened;
   const stored = appStorage.getItem(DIARY_KEY);
   if (stored !== null) {
     const value = decode(stored);
@@ -240,11 +242,11 @@ export function loadDiary(legacyDate = new Date().toISOString()): Diary {
   return { version: 1, entries: [{ id: 'pilot', startedAt: practice.savedAt ?? legacyDate, practice }] };
 }
 
-export function saveDiary(next: Diary, previous: Diary): void {
+export function saveDiary(next: Diary, previous: Diary): Promise<void> | void {
   if (!isDiary(next)) throw new Error('Дневник содержит недопустимые данные.');
   const current = loadDiary(previous.entries.find(entry => entry.id === 'pilot')?.startedAt);
-  if (JSON.stringify(current) !== JSON.stringify(previous)) throw new Error('Дневник изменён в другом окне. Открой приложение заново.');
-  appStorage.setItem(DIARY_KEY, JSON.stringify(next));
+  if (current !== previous && (appStorage.readDiary() || JSON.stringify(current) !== JSON.stringify(previous))) throw new Error('Дневник изменён в другом окне. Открой приложение заново.');
+  return appStorage.writeDiary(next, previous);
 }
 
 /** Outbox changes are committed atomically with the practice edit that produced them. */
@@ -258,11 +260,11 @@ export function updateGroupSeriesInDiary(diary: Diary, entryId: string, practice
 
 /** Use the current diary for each receipt so an edit made during upload stays queued. */
 export async function sendPendingGroupSeries(entryId: string, transport: GroupSeriesTransport,
-  read: () => Diary | null, write: (change: (diary: Diary) => Diary) => boolean): Promise<void> {
+  read: () => Diary | null, write: (change: (diary: Diary) => Diary) => boolean | Promise<boolean>): Promise<void> {
   const journal = read()?.groupSeries?.find(item => item.entryId === entryId);
   if (!journal) return;
-  await flushGroupSeries(journal, transport, receipt => {
-    const saved = write(diary => {
+  await flushGroupSeries(journal, transport, async receipt => {
+    const saved = await write(diary => {
       const current = diary.groupSeries?.find(item => item.entryId === entryId && item.roomId === journal.roomId);
       if (!current) return diary;
       const updated = acknowledgeGroupSeries(current, receipt);

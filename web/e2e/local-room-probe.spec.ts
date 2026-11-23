@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { createHash, createHmac, createPublicKey, verify } from 'node:crypto';
 import { appendShot, emptyPractice } from '../src/practice.ts';
@@ -25,6 +26,7 @@ test('the host can restore a saved room on the current hotspot address', async (
     } });
   }, invitation);
   await page.goto('./');
+  await expect(page.getByTestId('home-group-room')).toBeVisible();
   const positions = await page.locator('.journal-home-training-actions button').evaluateAll(buttons =>
     buttons.map(button => ({ id: button.getAttribute('data-testid'), x: button.getBoundingClientRect().x })));
   expect(positions.sort((a, b) => a.x - b.x).map(button => button.id))
@@ -90,7 +92,7 @@ test('Android group training keeps its series queued during an outage and sends 
   await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
   await page.getByRole('button', { name: 'Выбрать условия' }).click();
   await page.getByTestId('start-training').click();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).entries[0])).toMatchObject({
+  expect((await readDiary(page)).entries[0]).toMatchObject({
     id: 'personal', paused: true, practice: { rounds: [{ series: [{ shots: [{ code: 'M' }] }] }] },
   });
   await page.getByRole('button', { name: 'Отметить промах' }).click();

@@ -1,3 +1,4 @@
+import { readStoredJournal, writeStoredSetting } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -171,14 +172,12 @@ test('individual switches hide readings without preventing target input or chang
   const total = await page.getByTestId('cg3-total').innerText();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   // Only display preferences change; the same active diary is reopened after reload.
-  await page.evaluate(() => {
-    const key = 'app.fableshot.training-preferences.v1';
-    const current = JSON.parse(localStorage.getItem(key) ?? '{}');
-    localStorage.setItem(key, JSON.stringify({ version: 1, preferences: { ...current.preferences,
-      hideScores: false, averageHundredths: false, animations: true, haptics: false, keepAwake: true,
-      disabledStatistics: ['result', 'volume', 'grouping', 'offset', 'stability', 'norms', 'distribution'],
-    } }));
-  });
+  const key = 'app.fableshot.training-preferences.v1';
+  const current = JSON.parse((await readStoredJournal(page)).records[key] ?? '{}');
+  await writeStoredSetting(page, key, JSON.stringify({ version: 1, preferences: { ...current.preferences,
+    hideScores: false, averageHundredths: false, animations: true, haptics: false, keepAwake: true,
+    disabledStatistics: ['result', 'volume', 'grouping', 'offset', 'stability', 'norms', 'distribution'],
+  } }));
   await page.reload();
   await page.getByTestId('home-start-training').click();
   await expect(page.getByTestId('series-score')).toHaveCount(0);

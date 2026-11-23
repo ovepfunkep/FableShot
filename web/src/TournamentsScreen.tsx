@@ -69,8 +69,8 @@ function StartEditor({ start, index, entries, occupied, onChange, onRemove }: {
 
 export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemove, onFinish, onOpenSession }: {
   tournaments: readonly Tournament[]; entries: readonly DiaryEntry[]; onBack: () => void;
-  onSave: (value: Tournament) => boolean; onRemove: (id: string) => boolean; onOpenSession: (id: string) => void;
-  onFinish: (id: string) => boolean;
+  onSave: (value: Tournament) => Promise<boolean>; onRemove: (id: string) => Promise<boolean>; onOpenSession: (id: string) => void;
+  onFinish: (id: string) => Promise<boolean>;
 }) {
   const { preferences } = useTrainingPreferences();
   const [draft, setDraft] = useState<Tournament | null>(null);
@@ -167,13 +167,13 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
       </article>)}
     </div>
     {draft && <BottomSheet title={tournaments.some(item => item.id === draft.id) ? 'Редактировать турнир' : 'Участие в турнире'} tag="tournament-editor" onClose={closeEditor}>
-      <form className="tournament-form" onSubmit={event => {
+      <form className="tournament-form" onSubmit={async event => {
         event.preventDefault();
         if (readingFile) return;
         const value = { ...draft, title: draft.title.trim(), venue: draft.venue.trim(), note: draft.note.trim(), protocol: draft.protocol.trim(),
           starts: draft.starts.map(start => ({ ...start, category: start.category.trim(), result: start.result.trim() })) };
         if (!isTournament(value)) { setError('Проверь даты, ссылку и место. Место не может превышать число участников.'); return; }
-        if (onSave(value)) closeEditor();
+        if (await onSave(value)) closeEditor();
         else setError('Не удалось сохранить турнир. Проверь связанные тренировки и общий размер вложений.');
       }}>
         <div className="tournament-fields">
@@ -210,8 +210,8 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
     {finishing && <BottomSheet title="Завершить турнир?" onClose={() => setFinishing(null)}>
       <p>Завершённый турнир можно редактировать из паспорта.</p>
       {error && <p role="alert">{error}</p>}
-      <button type="button" className="primary" onClick={() => {
-        if (!onFinish(finishing.id)) { setError('Не удалось завершить турнир.'); return; }
+      <button type="button" className="primary" onClick={async () => {
+        if (!await onFinish(finishing.id)) { setError('Не удалось завершить турнир.'); return; }
         if (preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
           setCelebration({ id: finishing.id, prize: finishing.starts.some(start => start.status === 'participated' && start.place !== null && start.place <= 3) });
         }
@@ -221,8 +221,8 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
     {removing && <BottomSheet title="Удалить турнир?" onClose={() => setRemoving(null)}>
       <p>Паспорт и отметки турнира будут удалены. Связанные тренировки останутся в дневнике.</p>
       {error && <p role="alert">{error}</p>}
-      <button type="button" className="primary" onClick={() => {
-        if (onRemove(removing.id)) setRemoving(null); else setError('Не удалось удалить турнир.');
+      <button type="button" className="primary" onClick={async () => {
+        if (await onRemove(removing.id)) setRemoving(null); else setError('Не удалось удалить турнир.');
       }}>Удалить турнир</button>
     </BottomSheet>}
   </main>;

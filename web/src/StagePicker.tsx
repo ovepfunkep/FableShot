@@ -18,8 +18,8 @@ type StagePickerProps = {
   seriesId: number;
   onChoose: (seriesId: number) => void;
   onClose: () => void;
-  onNewRound?: () => boolean;
-  onDelete: (id: number) => boolean;
+  onNewRound?: () => Promise<boolean>;
+  onDelete: (id: number) => Promise<boolean>;
   keepOneShot?: boolean;
 };
 
@@ -97,9 +97,9 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
     if (start?.id === event.pointerId && event.clientY - start.y >= 60) onClose();
   }
 
-  function finishConfirmation() {
+  async function finishConfirmation() {
     if (!confirmation) return;
-    const saved = confirmation.type === 'new-round' ? onNewRound?.() : onDelete(confirmation.entry.id);
+    const saved = await (confirmation.type === 'new-round' ? onNewRound?.() : onDelete(confirmation.entry.id));
     if (saved) onClose();
     else setConfirmation(null);
   }

@@ -77,16 +77,22 @@ function TimelinePlot({ group, metric }: { group: TimelineGroup; metric: Timelin
   </>;
 }
 
-export function ProgressTimeline({ groups }: { groups: readonly TimelineGroup[] }) {
+export function ProgressTimeline({ groups, history, comparisonKey, onCompare }: {
+  groups: readonly TimelineGroup[]; history: TimelineGroup; comparisonKey: string | null; onCompare: (key: string) => void;
+}) {
   const { preferences } = useTrainingPreferences();
   const [requestedMetric, setMetric] = useState<TimelineMetric>('average');
   const [help, setHelp] = useState(false);
+  const [view, setView] = useState<'history' | 'compare'>('history');
   const supported = groups.filter(group => availableTimelineMetrics(group, preferences).length > 0);
-  const group = supported[0];
-  if (!group) return null;
-  const metrics = availableTimelineMetrics(group, preferences), metric = metrics.includes(requestedMetric) ? requestedMetric : metrics[0];
+  const historyMetrics = availableTimelineMetrics(history, preferences);
+  if (!historyMetrics.length && !supported.length) return null;
+  const comparing = view === 'compare' || !historyMetrics.length;
+  const group = comparing ? supported.find(item => item.key === comparisonKey) ?? supported[0] : history;
+  const metrics = group ? availableTimelineMetrics(group, preferences) : [];
+  const metric = metrics.includes(requestedMetric) ? requestedMetric : metrics[0];
   const comparisons = (['average', 'rms'] as const).flatMap(key => {
-    if (!metrics.includes(key)) return [];
+    if (!group || !metrics.includes(key)) return [];
     const result = timelineComparison(group, key);
     return result ? [{ key, ...result }] : [];
   });
@@ -94,12 +100,21 @@ export function ProgressTimeline({ groups }: { groups: readonly TimelineGroup[] 
     <header><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 4v16h16M7 15l4-5 4 2 5-7" /></svg><h2>Динамика прогресса</h2>
       <button type="button" className="progress-timeline-help" aria-label="О динамике прогресса" onClick={() => setHelp(true)}>?</button>
     </header>
-    <p className="progress-timeline-condition-label">{group.label}</p>
-    <div className="progress-timeline-metrics" role="group" aria-label="Показатель графика">
+    {historyMetrics.length > 0 && <div className="progress-timeline-metrics" role="group" aria-label="Выбор тренировок для графика">
+      <button type="button" aria-pressed={!comparing} onClick={() => setView('history')} data-testid="progress-view-history">Все тренировки</button>
+      <button type="button" aria-pressed={comparing} onClick={() => setView('compare')} data-testid="progress-view-compare">По условиям</button>
+    </div>}
+    {comparing && (supported.length > 1 ? <select className="progress-timeline-conditions" aria-label="Условия сравнения"
+      value={group?.key} onChange={event => onCompare(event.currentTarget.value)}>
+      {supported.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+    </select> : <p className="progress-timeline-condition-label">
+      {group?.label ?? 'Для сравнения нужны тренировки с указанным классом лука и одинаковыми условиями.'}
+    </p>)}
+    {group && metric && <><div className="progress-timeline-metrics" role="group" aria-label="Показатель графика">
       {TIMELINE_METRICS.filter(item => metrics.includes(item.key)).map(item => <button type="button" key={item.key} aria-pressed={metric === item.key}
         data-testid={`progress-trend-${item.key}`} onClick={() => setMetric(item.key)}>{item.label}</button>)}
     </div>
-    <TimelinePlot key={`${group.key}:${metric}`} group={group} metric={metric} />
+    <TimelinePlot key={`${group.key}:${metric}`} group={group} metric={metric} /></>}
     {comparisons.length > 0 && <div className="progress-insights" data-testid="progress-insights">
       <h3>Последняя тренировка · {label(comparisons[0].latest.day, true)}</h3>
       <div className="progress-insights-grid">
@@ -122,7 +137,7 @@ export function ProgressTimeline({ groups }: { groups: readonly TimelineGroup[] 
       </div>
     </div>}
     {help && <BottomSheet title="Динамика прогресса" onClose={() => setHelp(false)} tag="progress-trend-help">
-      <p className="round-help">Каждая точка — сохранённая тренировка при выбранных условиях. На экране 30 дней; листай график вбок, чтобы увидеть всю историю. Нажми на точку для точного значения. RMS — разброс отмеченных попаданий в миллиметрах; меньше — плотнее. Для RMS нужны три отметки. Десятки включают X. Отдельная доля X доступна для тренировок, где её можно определить. CG3 доступен для полных серий с достаточными координатами. При неизвестном классе лука тренировки показаны отдельно.</p>
+      <p className="round-help">В режиме «Все тренировки» каждая точка показывает результат занятия с известной датой. Если выбран комплект или условия, учитываются подходящие серии. В режиме «По условиям» совпадают класс лука, дистанция и мишень. Листай график вбок или нажми на точку, чтобы увидеть число. Для RMS нужны три отметки. CG3 доступен для полных серий с достаточными координатами.</p>
       <p>Сводка сравнивает последнюю тренировку со средним значением за 3–5 предыдущих занятий на более ранних датах в этой выборке. База считается отдельно для каждого показателя.</p>
     </BottomSheet>}
   </section>;

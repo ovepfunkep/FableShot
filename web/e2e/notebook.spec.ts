@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, completePractice, emptyPractice } from '../src/practice.ts';
 
@@ -41,7 +42,7 @@ test('notebook creates and deletes standalone notes while preserving hidden data
   await open();
   await page.getByTestId('notebook-search').fill('выдох');
   await expect(page.getByTestId('notebook-item')).toHaveCount(0);
-  const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!));
+  const restored = await readDiary(page);
   expect(restored.entries[0].notes).toHaveLength(1);
   expect(restored.notes).toHaveLength(2);
   expect(restored.notes.find((note: { id: string }) => note.id === 'archived').deletedAtMs).toBe(now + 1);

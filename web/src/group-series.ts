@@ -180,13 +180,13 @@ export function receiveGroupSeries(accepted: readonly GroupSeriesRevision[], ope
 
 /** One pass over the pending revisions. Read the latest diary again when committing each receipt. */
 export async function flushGroupSeries(journal: GroupSeriesJournal, transport: GroupSeriesTransport,
-  recordReceipt: (receipt: Pick<GroupSeriesRevision, 'endId' | 'revision'>) => void) {
+  recordReceipt: (receipt: Pick<GroupSeriesRevision, 'endId' | 'revision'>) => void | Promise<void>) {
   for (const end of pendingGroupSeries(journal)) {
     const response = await transport.publish(journal.roomId, journal.entryId, end);
     if (!response || typeof response !== 'object' || !('endId' in response) || response.endId !== end.endId ||
       !('revision' in response) || !positiveInt(response.revision) || response.revision < end.revision) {
       throw new Error('Комната не подтвердила сохранение серии.');
     }
-    recordReceipt({ endId: end.endId, revision: end.revision });
+    await recordReceipt({ endId: end.endId, revision: end.revision });
   }
 }

@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, completePractice, emptyPractice } from '../src/practice.ts';
 
@@ -70,7 +71,7 @@ test('one tournament holds several starts, links history, and can be removed wit
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await expect(training).toBeVisible();
   await expect(training).not.toHaveClass(/is-tournament/);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!));
+  const saved = await readDiary(page);
   expect(saved.entries).toHaveLength(1);
   expect(saved.entries[0].practice).toEqual(practice);
 });

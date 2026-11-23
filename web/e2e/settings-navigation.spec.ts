@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 
 test('motion previews switch styles and respect the global animation toggle', async ({ page }) => {
@@ -107,5 +108,5 @@ test('achievement visibility hides earned previews and the help section opens th
   await expect(page.getByTestId('tutorial-screen')).toBeVisible();
   await expect(page.getByTestId('onboarding-screen')).toHaveCount(0);
   await page.getByTestId('tutorial-exit').click();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!))).toEqual(diary);
+  expect(await readDiary(page)).toEqual(diary);
 });

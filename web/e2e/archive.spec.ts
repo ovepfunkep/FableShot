@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { openSettingsCategory } from './journal-navigation.ts';
 import { expect, test } from '@playwright/test';
 import { DATA_KEYS } from '../src/app-storage.ts';
@@ -155,16 +156,15 @@ test('Android diary activates after confirmation and round-trips the original ZI
   await page.getByTestId('native-archive-activate').click();
   await page.getByTestId('archive-confirm-apply').click();
   await expect(page.getByTestId('home-screen')).toBeVisible();
-  const totals = await page.evaluate(() => {
-    const { records } = JSON.parse(localStorage.getItem('app.fableshot.active-data.v1')!);
-    const { entries } = JSON.parse(records['app.fableshot.practice-diary.v1']);
+  const { entries } = await readDiary(page);
+  const totals = (() => {
     const series = entries.flatMap(entry => entry.practice.rounds.flatMap(round => round.series));
     const shots = series.flatMap(end => end.shots);
     return { entries: entries.length, series: series.length, arrows: shots.length,
       points: shots.reduce((total, shot) => total + shot.points, 0), firstPoint: shots[0].point,
       bowCategory: series[0].conditions.equipment.bow.category,
-      numberedCount: series[0].conditions.equipment.arrows.numberedCount ?? null };
-  });
+      numberedCount: series[0].conditions.equipment!.arrows.numberedCount ?? null };
+  })();
   expect(totals).toEqual({ entries: 120, series: 1191, arrows: 3571, points: 35710, firstPoint: { x: .04, y: -.06 },
     bowCategory: 'barebow', numberedCount: null });
   await page.getByTestId('nav-history').click();

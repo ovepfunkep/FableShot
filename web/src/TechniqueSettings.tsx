@@ -10,7 +10,7 @@ type SettingsState = {
   settings: TechniqueDisplaySettings;
   error: string;
   canUpdate: boolean;
-  update: (settings: TechniqueDisplaySettings) => boolean;
+  update: (settings: TechniqueDisplaySettings) => Promise<boolean>;
   retry: () => void;
 };
 const SettingsContext = createContext<SettingsState | null>(null);
@@ -35,10 +35,10 @@ export function TechniqueSettingsProvider({ children }: { children: ReactNode })
     window.addEventListener('storage', changed);
     return () => window.removeEventListener('storage', changed);
   }, []);
-  function update(settings: TechniqueDisplaySettings): boolean {
+  async function update(settings: TechniqueDisplaySettings): Promise<boolean> {
     if (!current.current) return false;
     try {
-      saveTechniqueSettings(settings, current.current);
+      await saveTechniqueSettings(settings, current.current);
       current.current = { ...settings };
       setState({ value: current.current, error: '' });
       return true;

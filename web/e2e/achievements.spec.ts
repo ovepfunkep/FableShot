@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -22,10 +23,7 @@ test('the first completed barebow series awards a rank-pace group and keeps its 
   await page.getByTestId('conditions-equipment').click();
   await page.getByTestId('equipment-select-kit').click();
   await page.getByTestId('start-training').click();
-  const stageAwards = () => page.evaluate(() => {
-    const diary = JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!);
-    return diary.achievementLedger.grants.filter((grant: { stageRank?: unknown }) => grant.stageRank);
-  });
+  const stageAwards = async () => (await readDiary(page)).achievementLedger!.grants.filter(grant => grant.stageRank);
   for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
   expect(await stageAwards()).toHaveLength(0);
   await page.getByRole('button', { name: 'Следующая серия', exact: true }).click();
@@ -84,7 +82,7 @@ test('deleting and restoring achievement evidence updates its status without a s
   await page.getByRole('button', { name: 'Все достижения', exact: true }).click();
   await expect(page.getByTestId('achievement-earned-START01')).toHaveClass(/achievement-state-earned/);
   await expect(page.getByTestId('achievement-notice')).toHaveCount(0);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).achievementLedger.grants)).toHaveLength(1);
+  expect((await readDiary(page)).achievementLedger!.grants).toHaveLength(1);
 });
 
 test('profile and memo actions earn only from new explicit actions and distinct publications', async ({ page }) => {
@@ -103,7 +101,7 @@ test('profile and memo actions earn only from new explicit actions and distinct 
   await page.getByTestId('technique-step-short').fill('Выдохнуть');
   await page.getByTestId('technique-step-done').click();
   await page.getByTestId('technique-publish').click();
-  const ids = () => page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).achievementLedger.grants.map((grant: { id: string }) => grant.id));
+  const ids = async () => (await readDiary(page)).achievementLedger!.grants.map(grant => grant.id);
   await expect.poll(ids).toEqual(['APP08', 'MIND03']);
   await page.getByLabel('Действия памятки Мой выстрел').click();
   await page.locator('[data-testid^="technique-edit-"]').click();
@@ -200,7 +198,7 @@ test('new performance earns grouped notices, persists in report/gallery, and res
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('open-profile').click();
   await expect(page.getByTestId('profile-achievements')).toContainText('0');
-  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!));
+  const state = await readDiary(page);
   expect(state.entries).toHaveLength(2);
   expect(state.achievementLedger.grants).toEqual([]);
 });

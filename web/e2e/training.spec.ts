@@ -1,3 +1,4 @@
+import { readDiary } from './stored-journal.ts';
 import { openTraining, openHistoryEntry } from './journal-navigation.ts';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
@@ -530,6 +531,33 @@ test('aim reacts to the first movement without waiting for the hold timer', asyn
   await target.dispatchEvent('pointercancel', { pointerId: 1, clientX, clientY });
   await page.mouse.up();
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
+});
+
+test('two fast taps in the same spot both score and persist', async ({ page, context }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const bounds = await targetBounds(page);
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const client = await context.newCDPSession(page);
+  for (const offset of [0, 2]) {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x + offset, y }] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+  await expect(page.getByTestId('series-score')).toHaveText('20/20');
+  await client.detach();
+  const diary = await readDiary(page);
+  expect(diary.entries[0].practice.rounds[0].series[0].shots).toHaveLength(2);
+});
+
+test('immediate exit keeps an arrow that is still being saved', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const bounds = await targetBounds(page);
+  await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.getByRole('button', { name: /^(На главную|Завершить тренировку)$/ }).tap();
+  await expect(page.getByRole('heading', { name: 'Завершить тренировку?' })).toBeVisible();
+  expect((await readDiary(page)).entries[0].practice.rounds[0].series[0].shots).toHaveLength(1);
 });
 
 test('the second touch drags the target until release, then single taps score again', async ({ page, context }) => {

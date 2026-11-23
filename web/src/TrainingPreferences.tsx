@@ -10,7 +10,7 @@ import { ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
 import { zoneColor } from './target.ts';
 import './training-preferences.css';
 
-type PreferencesState = { preferences: TrainingPreferences; error: string; readable: boolean; update: (value: TrainingPreferences) => boolean };
+type PreferencesState = { preferences: TrainingPreferences; error: string; readable: boolean; update: (value: TrainingPreferences) => Promise<boolean> };
 const PreferencesContext = createContext<PreferencesState | null>(null);
 
 function initialPreferences() {
@@ -21,15 +21,28 @@ function initialPreferences() {
 export function TrainingPreferencesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(initialPreferences);
   const preferences = state.value ?? DEFAULT_PREFERENCES;
+  const writes = useRef(Promise.resolve());
   useWebTheme(preferences);
   useNativeAppScale(preferences.useSystemScale === true);
   useLayoutEffect(() => {
     document.documentElement.dataset.motion = preferences.animations ? 'on' : 'off';
   }, [preferences.animations]);
-  function update(value: TrainingPreferences) {
-    try { savePreferences(value); setState({ value, error: '' }); return true; }
-    catch (cause) { setState(previous => ({ ...previous, error: cause instanceof Error ? cause.message : 'Не удалось сохранить настройки.' })); }
-    return false;
+  function update(value: TrainingPreferences): Promise<boolean> {
+    const keys = Object.keys({ ...preferences, ...value }) as (keyof TrainingPreferences)[];
+    const patch = Object.fromEntries(keys.filter(key => preferences[key] !== value[key]).map(key => [key, value[key]]));
+    const result = writes.current.then(async () => {
+      try {
+        const next = { ...loadPreferences(), ...patch };
+        await savePreferences(next);
+        setState({ value: next, error: '' });
+        return true;
+      } catch (cause) {
+        setState(previous => ({ ...previous, error: cause instanceof Error ? cause.message : 'Не удалось сохранить настройки.' }));
+        return false;
+      }
+    });
+    writes.current = result.then(() => {});
+    return result;
   }
   return <PreferencesContext.Provider value={{ preferences, update, readable: state.value !== null, error: state.error }}>{children}</PreferencesContext.Provider>;
 }
@@ -112,8 +125,8 @@ export function ShotMotionControl() {
     <strong>Анимация попаданий</strong>
     <div className="shot-motion-selector" role="group" aria-label="Стиль анимации попаданий">
       {SHOT_MOTION_STYLES.map(option => <button key={option.id} type="button" disabled={!canPreview}
-        aria-pressed={style === option.id} onClick={() => {
-          if (update({ ...preferences, shotMotionStyle: option.id })) setDemo(previous => ({ points: 10, id: previous.id + 1 }));
+        aria-pressed={style === option.id} onClick={async () => {
+          if (await update({ ...preferences, shotMotionStyle: option.id })) setDemo(previous => ({ points: 10, id: previous.id + 1 }));
         }}>{option.label}</button>)}
     </div>
     <div className="shot-motion-demo" aria-hidden="true">

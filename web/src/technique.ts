@@ -110,11 +110,11 @@ export function loadTechniques(): TechniqueLibrary {
 }
 
 /** A changed or unreadable stored library is never silently overwritten. */
-export function saveTechniques(value: TechniqueLibrary, expected: TechniqueLibrary): void {
+export function saveTechniques(value: TechniqueLibrary, expected: TechniqueLibrary): void | Promise<void> {
   if (!isTechniqueLibrary(value)) throw new Error('Проверь данные памятки.');
   const current = loadTechniques();
   if (JSON.stringify(current) !== JSON.stringify(expected)) throw new Error('Памятки изменены в другом окне. Повтори чтение перед сохранением.');
-  try { appStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(value)); }
+  try { return appStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(value)); }
   catch (cause) { throw new Error('Не удалось сохранить памятку. Возможно, хранилище заполнено. Текст остаётся в редакторе.', { cause }); }
 }
 

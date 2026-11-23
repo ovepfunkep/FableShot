@@ -86,10 +86,10 @@ export function loadPreferences(): TrainingPreferences {
   return { ...envelope.preferences };
 }
 
-export function savePreferences(value: TrainingPreferences): void {
+export function savePreferences(value: TrainingPreferences): void | Promise<void> {
   if (!valid(value)) throw new Error('Проверь настройки тренировки.');
   loadPreferences();
-  appStorage.setItem(storageKey, JSON.stringify({ version: 1, preferences: value }));
+  return appStorage.setItem(storageKey, JSON.stringify({ version: 1, preferences: value }));
 }
 
 export function formatAverage(value: number | null, hundredths: boolean): string {

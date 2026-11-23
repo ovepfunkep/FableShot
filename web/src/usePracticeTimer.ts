@@ -63,10 +63,10 @@ export function usePracticeTimer(active: boolean, haptics = false) {
     } catch { return false; }
   }
 
-  function save(next: TimerSettings): boolean {
+  async function save(next: TimerSettings): Promise<boolean> {
     if (live.current.status === 'Running' || live.current.status === 'Paused') return false;
     try {
-      saveTimerSettings(next);
+      await saveTimerSettings(next);
       sound.cancel();
       settingsRef.current = next;
       setSettings(next);

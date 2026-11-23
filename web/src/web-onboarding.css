@@ -63,3 +63,7 @@
 .web-onboard-example-controls { display: flex; flex-wrap: wrap; gap: 6px; }
 .web-onboard-example-controls button { flex: 1; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .web-onboard-example-controls button:first-child { flex: 0 0 48px; }
+
+.web-onboard-report-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.web-onboard-report-distribution > p { display: flex; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); }
+.web-onboard-report-distribution > p strong { color: var(--ink); }

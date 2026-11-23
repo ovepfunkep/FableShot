@@ -36,12 +36,12 @@ export function loadTechniqueSettings(): TechniqueDisplaySettings {
 }
 
 /** Never replace an unreadable or concurrently changed settings record. */
-export function saveTechniqueSettings(value: TechniqueDisplaySettings, expected: TechniqueDisplaySettings): void {
+export function saveTechniqueSettings(value: TechniqueDisplaySettings, expected: TechniqueDisplaySettings): void | Promise<void> {
   if (!isTechniqueDisplaySettings(value) || !isTechniqueDisplaySettings(expected)) throw new Error('Проверь настройки показа техники.');
   const current = loadTechniqueSettings();
   if (current.techniqueFocus !== expected.techniqueFocus || current.techniqueReflection !== expected.techniqueReflection) {
     throw new Error('Настройки показа техники изменены в другом окне. Повтори чтение.');
   }
-  try { appStorage.setItem(TECHNIQUE_SETTINGS_STORAGE_KEY, JSON.stringify({ version: 1, settings: value })); }
+  try { return appStorage.setItem(TECHNIQUE_SETTINGS_STORAGE_KEY, JSON.stringify({ version: 1, settings: value })); }
   catch (cause) { throw new Error('Не удалось сохранить настройки показа техники. Возможно, хранилище заполнено. Повтори действие.', { cause }); }
 }

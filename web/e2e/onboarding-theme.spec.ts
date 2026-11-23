@@ -1,4 +1,8 @@
+import { readStoredJournal } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
+import { DATA_KEYS } from '../src/app-storage.ts';
+import { appendShot, completePractice, emptyPractice } from '../src/practice.ts';
+import { createWebArchive } from '../src/web-archive.ts';
 import { openSettingsCategory } from './journal-navigation.ts';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -18,8 +22,17 @@ test('first launch offers an isolated example and lets the user reopen it from s
   await page.getByTestId('tutorial-save').click();
   await expect(page.getByTestId('tutorial-shot-0')).toContainText('M');
   await page.getByTestId('tutorial-next').click();
-  await page.getByTestId('tutorial-home').click();
-  expect(await page.evaluate(() => localStorage.getItem('app.fableshot.practice-diary.v1'))).toBeNull();
+  await page.getByTestId('tutorial-open-report').click();
+  const report = page.getByTestId('tutorial-report');
+  await expect(report.getByTestId('hit-map-hit')).toHaveCount(6);
+  await report.getByTestId('hit-map-series').selectOption('2');
+  await expect(report.getByTestId('hit-map-hit')).toHaveCount(3);
+  await report.getByRole('button', { name: 'Распределение', exact: true }).click();
+  await report.getByTestId('report-zone-10').click();
+  await expect(report.getByTestId('shot-distribution-reading')).toContainText('Оценка 10');
+  await report.getByRole('button', { name: 'Выйти из примера' }).click();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  expect((await readStoredJournal(page)).diary).toBeNull();
   await page.reload();
   await expect(page.getByTestId('home-screen')).toBeVisible();
   await page.getByTestId('open-settings').click();
@@ -59,4 +72,23 @@ test('style and light theme persist and System follows an appearance change', as
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   const background = await page.getByTestId('home-hero').evaluate(hero => getComputedStyle(hero).backgroundImage);
   expect(background).toMatch(/0\.032/);
+});
+
+test('a new installation can restore a FableShot archive directly from welcome', async ({ page }) => {
+  const practice = completePractice(appendShot(emptyPractice(), { code: '10', points: 10, point: { x: 0, y: 0 } }), '2026-10-21T11:00:00Z');
+  const diary = { version: 1, entries: [{ id: 'restored', startedAt: '2026-10-21T10:00:00Z', practice }] };
+  const records = Object.fromEntries(DATA_KEYS.map(key => [key, key === DATA_KEYS[0] ? JSON.stringify(diary) : null]));
+  const bytes = await createWebArchive(records, 'restore-test');
+  await page.goto('./');
+  await page.getByTestId('onboard-restore').click();
+  await expect(page.getByTestId('archive-screen')).toBeVisible();
+  await page.getByTestId('archive-file').setInputFiles({ name: 'from-old-phone.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+  await expect(page.getByTestId('archive-preview')).toContainText('Стрелы');
+  expect((await readStoredJournal(page)).diary).toBeNull();
+  await page.getByTestId('archive-restore').click();
+  await page.getByTestId('archive-confirm-apply').click();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+  await page.getByTestId('nav-history').click();
+  await expect(page.getByTestId('session-restored')).toBeVisible();
+  expect((await readStoredJournal(page)).diary).toEqual(diary);
 });

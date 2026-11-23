@@ -69,7 +69,7 @@ export function loadPresets(): TrainingPreset[] {
   return presets;
 }
 
-export function savePreset(name: string, conditions: Conditions, rule: RoundRule, numberedArrows?: boolean | null): TrainingPreset[] {
+export function savePreset(name: string, conditions: Conditions, rule: RoundRule, numberedArrows?: boolean | null): TrainingPreset[] | Promise<TrainingPreset[]> {
   const cleanName = name.trim();
   if (!validName(cleanName)) throw new Error('Имя должно содержать от 1 до 60 символов.');
   if (!isConditions(conditions) || !isRoundRule(rule)) throw new Error('Проверь условия тренировки.');
@@ -81,13 +81,14 @@ export function savePreset(name: string, conditions: Conditions, rule: RoundRule
   const preset = { id: crypto.randomUUID(), name: cleanName, conditions: structuredClone(conditions), rule: { ...rule },
     ...(numberedArrows == null ? {} : { numberedArrows }) };
   const next = [...previous, preset];
-  appStorage.setItem(presetsKey, JSON.stringify({ version: 1, presets: next }));
-  return next;
+  const saved = appStorage.setItem(presetsKey, JSON.stringify({ version: 1, presets: next }));
+  return saved?.then(() => next) ?? next;
 }
 
-export function removePreset(id: string): TrainingPreset[] {
+export function removePreset(id: string): TrainingPreset[] | Promise<TrainingPreset[]> {
   const previous = loadPresets();
   const next = previous.filter(preset => preset.id !== id);
-  if (next.length !== previous.length) appStorage.setItem(presetsKey, JSON.stringify({ version: 1, presets: next }));
-  return next;
+  if (next.length === previous.length) return next;
+  const saved = appStorage.setItem(presetsKey, JSON.stringify({ version: 1, presets: next }));
+  return saved?.then(() => next) ?? next;
 }

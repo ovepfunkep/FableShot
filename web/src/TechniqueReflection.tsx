@@ -55,7 +55,7 @@ function ReflectionEditor({ entry, error, onChange, onSave, onClose }: {
 
 export function TechniqueReflection({ practice, onChange, onOpenMemo }: {
   practice: Practice;
-  onChange: (next: Practice) => boolean;
+  onChange: (next: Practice) => Promise<boolean>;
   onOpenMemo: (selection: TechniqueSelection) => void;
 }) {
   const { settings } = useTechniqueSettings();
@@ -78,7 +78,7 @@ export function TechniqueReflection({ practice, onChange, onOpenMemo }: {
     }
     setEditing(useIndex);
   }
-  function save() {
+  async function save() {
     if (editing === null || !draft) return;
     const key = String(editing);
     try {
@@ -87,7 +87,7 @@ export function TechniqueReflection({ practice, onChange, onOpenMemo }: {
         JSON.stringify(current.techniqueReflections?.[key] ?? emptyTechniqueReflection()) !== draft.original) {
         throw new Error('Рефлексия изменена в другом окне. Твой текст остаётся в форме.');
       }
-      if (!onChange(updateTechniqueReflection(current, editing, draft.entry))) {
+      if (!await onChange(updateTechniqueReflection(current, editing, draft.entry))) {
         throw new Error('Не удалось сохранить рефлексию. Текст остаётся в форме; повтори действие.');
       }
       setDrafts(previous => {

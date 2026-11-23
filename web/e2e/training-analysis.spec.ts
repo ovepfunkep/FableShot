@@ -100,6 +100,7 @@ test('map and zone distribution share conditions while the map can isolate one s
   const map = page.getByTestId('training-hit-map');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-score')).toHaveText('39/50');
+  await expect(page.getByTestId('report-result-score')).toHaveText(/49\s*\/\s*60/);
   await expect(map.getByRole('list', { name: 'Попадания по зонам' })).toHaveCount(0);
   await expect(page.getByTestId('report-zone-M')).toHaveAccessibleName('Промах, стрел: 1');
   await expect(page.getByTestId('report-zone-10')).toHaveAccessibleName('Оценка 10, стрел: 3');
@@ -150,8 +151,10 @@ test('map and zone distribution share conditions while the map can isolate one s
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-score')).toHaveText('10/10');
-  await expect(page.getByTestId('report-result-average')).toHaveText('10,0');
-  await expect(page.getByTestId('report-result-grouping')).toHaveText('—');
+  await expect(page.getByTestId('report-result-score')).toHaveText(/49\s*\/\s*60/);
+  await expect(page.getByTestId('report-result-average')).toHaveText('8,2');
+  await expect(page.getByTestId('report-result-volume')).toHaveText('6');
+  await expect(page.getByTestId('report-result-grouping')).toHaveCount(0);
   await expect(page.getByTestId('report-zone-M')).toHaveCount(0);
   await expect(page.getByTestId('cg3-card')).toHaveCount(0);
 });

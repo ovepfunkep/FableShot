@@ -1,3 +1,4 @@
+import { readDiary, readStoredJournal, writeStoredSetting } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { openHistoryEntry, openTraining } from './journal-navigation.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
@@ -59,12 +60,10 @@ test('Home shows the current kit shaft diameter and its missing value', async ({
   }, conditions);
   await page.goto('./');
   await expect(page.getByLabel('Диаметр стрелы 12 мм')).toContainText('12 мм');
-  await page.evaluate(() => {
-    const key = 'app.fableshot.equipment.v1';
-    const equipment = JSON.parse(localStorage.getItem(key)!);
-    equipment.arrows[0].diameterMm = null;
-    localStorage.setItem(key, JSON.stringify(equipment));
-  });
+  const key = 'app.fableshot.equipment.v1';
+  const equipment = JSON.parse((await readStoredJournal(page)).records[key]!);
+  equipment.arrows[0].diameterMm = null;
+  await writeStoredSetting(page, key, JSON.stringify(equipment));
   await page.reload();
   await expect(page.locator('.home-arrow-diameter')).toHaveCount(0);
 });
@@ -208,7 +207,7 @@ test('training notes retain historical condition labels and new notes use traini
   await page.getByTestId('note-body').fill('Болит голова');
   await page.getByTestId('note-save').click();
   await expect(historical).toBeVisible();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('app.fableshot.practice-diary.v1')!).entries[0].notes);
+  const saved = (await readDiary(page)).entries[0].notes;
   expect(saved[0].conditionKey).toBe(conditionKey);
   expect(saved[1]).not.toHaveProperty('conditionKey');
 });

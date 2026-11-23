@@ -69,13 +69,13 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onSelectSeries: (seriesId: number) => void;
   onResume: () => void;
   onTechnique: () => void;
-  onChange: (next: Practice) => boolean;
+  onChange: (next: Practice) => Promise<boolean>;
   onOpenMemo: (selection: TechniqueSelection) => void;
   onRank: (roundId: number) => void;
   onRankReference: () => void;
-  onTrash: (deleted: boolean) => boolean;
+  onTrash: (deleted: boolean) => Promise<boolean>;
   onNotes: (scope: DiaryNoteScope) => void;
-  onRename: (title: string) => boolean;
+  onRename: (title: string) => Promise<boolean>;
   grants: readonly AchievementGrant[];
   onAchievement: (id: 'APP04') => void;
   onOpenRecordSession: (id: string) => void;
@@ -83,7 +83,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onRepeat?: () => void;
   onRoomLeaderboard?: () => void;
   roomFinalized?: boolean;
-  onDeleteStage: (kind: 'round' | 'series', id: number) => boolean;
+  onDeleteStage: (kind: 'round' | 'series', id: number) => Promise<boolean>;
 }) {
   const { preferences, update } = useTrainingPreferences();
   const [exportOpen, setExportOpen] = useState(false);
@@ -145,7 +145,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         <span aria-hidden="true">☷</span><span>{focus.length ? focus.join(' · ') : technique?.title}</span>
       </button>}
       {practice.savedAt !== null && !deleted && <TechniqueReflection practice={practice} onChange={onChange} onOpenMemo={onOpenMemo} />}
-      {deleted && <button type="button" className="report-resume" onClick={() => { if (onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
+      {deleted && <button type="button" className="report-resume" onClick={async () => { if (await onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
       <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} overview={{
@@ -219,9 +219,9 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     {renameOpen && <dialog ref={rename} className="confirm report-rename" aria-labelledby="report-rename-title"
       onCancel={event => { event.preventDefault(); setRenameDraft(null); }}
       onClick={event => { if (event.target === event.currentTarget) setRenameDraft(null); }}>
-      <form onSubmit={event => {
+      <form onSubmit={async event => {
         event.preventDefault();
-        if (onRename(renameDraft)) setRenameDraft(null);
+        if (await onRename(renameDraft)) setRenameDraft(null);
         else setRenameError(true);
       }}>
         <h2 id="report-rename-title">Редактировать название</h2>
@@ -256,7 +256,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     </BottomSheet>}
     {trashOpen && <BottomSheet title="Удалить тренировку?" onClose={() => setTrashOpen(false)}>
       <p>Тренировка переместится в корзину. Её можно восстановить из истории.</p>
-      <button type="button" className="report-resume" onClick={() => { if (onTrash(true)) { setTrashOpen(false); onBack(); } }}>В корзину</button>
+      <button type="button" className="report-resume" onClick={async () => { if (await onTrash(true)) { setTrashOpen(false); onBack(); } }}>В корзину</button>
     </BottomSheet>}
   </main>;
 }

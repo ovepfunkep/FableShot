@@ -6,16 +6,57 @@ import type { Conditions } from './conditions.ts';
 import type { EquipmentLibrary } from './equipment.ts';
 import { mergeMyTargets } from './mytargets-conversion.ts';
 import { parseMyTargets } from './mytargets-import.ts';
+import type { MyTargetsMergeResult } from './mytargets-conversion.ts';
 import type { MyTargetsPreview, MyTargetsRound } from './mytargets-import.ts';
 import { DIARY_KEY } from './persistence.ts';
 import type { Diary } from './persistence.ts';
 import { awardServiceAction } from './achievement-diary.ts';
+import { Icon } from './TrainingChrome.tsx';
 import { TARGET_PROFILES } from './target.ts';
 import { captureArchiveState, replaceArchiveRecords } from './web-archive.ts';
 import './mytargets-import.css';
 
 const EQUIPMENT_KEY = 'app.fableshot.equipment.v1';
 const PAGE_SIZE = 40;
+const receiptKey = 'fableshot-mytargets-import';
+type ImportReceipt = Pick<MyTargetsMergeResult, 'addedTrainings' | 'addedShots' | 'addedPoints' | 'locatedShots' | 'skippedShots'>;
+
+export function readImportReceipt(): ImportReceipt | null {
+  const receipt = window.history.state?.[receiptKey];
+  return receipt && ['addedTrainings', 'addedShots', 'addedPoints', 'locatedShots', 'skippedShots']
+    .every(key => Number.isSafeInteger(receipt[key]) && receipt[key] >= 0) ? receipt : null;
+}
+
+export function clearImportReceipt() {
+  if (window.history.state?.[receiptKey]) {
+    const state = { ...window.history.state };
+    delete state[receiptKey];
+    window.history.replaceState(state, '');
+  }
+}
+
+function ImportNumbers({ result }: { result: ImportReceipt }) {
+  return <dl className="mytargets-numbers">
+    <div><dt>Тренировки</dt><dd>{result.addedTrainings}</dd></div>
+    <div><dt>Стрелы</dt><dd>{result.addedShots}</dd></div>
+    <div><dt>Очки</dt><dd>{result.addedPoints}</dd></div>
+    <div><dt>С координатами</dt><dd>{result.locatedShots} / {result.addedShots}</dd></div>
+  </dl>;
+}
+
+export function MyTargetsImportReceipt({ result, onHistory, onClose }: {
+  result: ImportReceipt; onHistory: () => void; onClose: () => void;
+}) {
+  return <section className="mytargets-receipt" aria-label="Итог переноса из MyTargets" data-testid="mytargets-receipt">
+    <h2>История из MyTargets добавлена</h2>
+    <ImportNumbers result={result} />
+    {result.skippedShots > 0 && <p>Пропущено стрел: {result.skippedShots}</p>}
+    <div className="mytargets-selection-actions">
+      <button type="button" className="primary" onClick={onHistory} data-testid="mytargets-open-history">Открыть историю</button>
+      <button type="button" className="icon-button" aria-label="Скрыть итог переноса" onClick={onClose}><Icon name="close" /></button>
+    </div>
+  </section>;
+}
 type Mapping = { distance: string; profile: string; diameter: string };
 type ImportContext = {
   preview: MyTargetsPreview; expected: ReturnType<typeof captureArchiveState>;
@@ -133,21 +174,27 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
     setDrafts(current => ({ ...current, [round.sourceId]: { ...draftFor(round, current), ...patch } }));
     setConfirmed(false); setError('');
   }
-  function apply() {
+  async function apply() {
     if (!context || !proposal.result?.addedShots || running.current || required.length && !confirmed) return;
     running.current = true; setBusy(true); setError('');
     try {
       const records = structuredClone(context.expected.records);
       records[DIARY_KEY] = JSON.stringify(awardServiceAction(proposal.result.diary, 'APP01', new Date().toISOString()));
       records[EQUIPMENT_KEY] = JSON.stringify(proposal.result.equipment);
-      replaceArchiveRecords(records, context.expected);
-      window.location.reload();
+      await replaceArchiveRecords(records, context.expected);
+      const { addedTrainings, addedShots, addedPoints, locatedShots, skippedShots } = proposal.result;
+      try {
+        window.history.replaceState({ ...window.history.state, [receiptKey]: { addedTrainings, addedShots, addedPoints, locatedShots, skippedShots } }, '');
+      } finally { window.location.reload(); }
     } catch (cause) { setError(errorMessage(cause)); running.current = false; setBusy(false); }
   }
 
-  return <BottomSheet title="Импорт из MyTargets" onClose={onClose} tag="mytargets-import">
+  return <BottomSheet title="Импорт из MyTargets" onClose={() => { if (!running.current) onClose(); }} tag="mytargets-import" startAtTop>
     <div className="mytargets-import">
-      <p>Добавьте тренировки из ZIP или CSV MyTargets. Перед сохранением можно проверить данные и выбрать тренировки.</p>
+      {!context && <div className="mytargets-formats">
+        <p><strong>ZIP из MyTargets</strong> сохраняет больше данных о тренировках, мишенях и снаряжении.</p>
+        <p><strong>CSV</strong> подходит, если у тебя уже есть экспорт таблицей. Часть условий может потребовать подтверждения.</p>
+      </div>}
       <label className="mytargets-file">Выбрать ZIP или CSV · до 25 МБ
         <input type="file" accept=".zip,.csv,application/zip,text/csv" disabled={busy} onChange={event => void choose(event)} data-testid="mytargets-file" />
       </label>
@@ -158,6 +205,13 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
           <span>Найдено тренировок: {context.preview.sessions.length}. Выбрано: {selectedSessions.length}, стрел: {selectedShots}.</span>
           {context.preview.skippedEmptySlots > 0 && <span>Пустых ячеек в источнике: {context.preview.skippedEmptySlots}. Они не считаются стрелами.</span>}
         </div>
+        {proposal.result && <div className="mytargets-result" data-testid="mytargets-result">
+          <p role="status">Будет добавлено тренировок: {proposal.result.addedTrainings}, стрел: {proposal.result.addedShots}. Пропущено стрел: {proposal.result.skippedShots}.</p>
+          <p>Очки: <strong>{proposal.result.addedPoints}</strong> · С координатами: <strong>{proposal.result.locatedShots} / {proposal.result.addedShots}</strong></p>
+          {context.preview.ignoredAttachments > 0 && <p>Вложения остаются в исходном ZIP: {context.preview.ignoredAttachments}</p>}
+        </div>}
+        <details className="mytargets-details">
+        <summary>Выбрать тренировки ({selectedSessions.length} из {context.preview.sessions.length})</summary>
         <label className="mytargets-search">Найти тренировку<input type="search" value={search} onChange={event => { setSearch(event.target.value); setVisibleCount(PAGE_SIZE); }} placeholder="Название или дата" data-testid="mytargets-search" /></label>
         <div className="mytargets-selection-actions">
           <button type="button" disabled={busy} onClick={() => select(context.preview.sessions.map(session => session.sourceId))}>Выбрать все</button>
@@ -171,6 +225,7 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
           {!filtered.length && <p>Тренировки не найдены.</p>}
         </div>
         {filtered.length > visibleCount && <button type="button" className="mytargets-more" onClick={() => setVisibleCount(count => count + PAGE_SIZE)}>Показать ещё ({filtered.length - visibleCount})</button>}
+        </details>
         {unknownRounds.length > 0 && <details className="mytargets-details">
           <summary>Указать неизвестные условия ({unknownRounds.length})</summary>
           <p>Выберите мишень, дистанцию и диаметр. Пока условия не заданы, стрелы этого раунда будут пропущены.</p>
@@ -197,7 +252,6 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
         </>}
         <label className="mytargets-check"><input type="checkbox" checked={allowOverlaps} disabled={busy} onChange={event => setAllowOverlaps(event.target.checked)} data-testid="mytargets-allow-overlaps" /><span>Разрешить возможные совпадения с другими файлами. Это может добавить повторные тренировки.</span></label>
         {warnings.length > 0 && <details className="mytargets-details"><summary>Замечания к данным ({warnings.length})</summary><ul>{[...warningGroups].map(([code, count]) => <li key={code}>{warningMessages[code] ?? 'Особенность исходных данных требует проверки'}: {count}</li>)}</ul></details>}
-        {proposal.result && <p role="status" data-testid="mytargets-result">Будет добавлено тренировок: {proposal.result.addedTrainings}, стрел: {proposal.result.addedShots}. Пропущено стрел: {proposal.result.skippedShots}.</p>}
         {proposal.result && !proposal.result.addedShots && <p className="mytargets-warning">Новых стрел для добавления нет. Проверьте выбор, условия и замечания о совпадениях.</p>}
         {!selectedSessions.length && <p className="mytargets-warning">Выберите хотя бы одну тренировку для добавления.</p>}
         {selectedSessions.length > 0 && required.length > 0 && !confirmed && <p>Чтобы увидеть итог и добавить стрелы, отметьте подтверждение особенностей выбранных данных.</p>}

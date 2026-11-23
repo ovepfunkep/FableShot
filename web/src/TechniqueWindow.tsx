@@ -86,7 +86,7 @@ async function download(text: TechniqueText, format: 'pdf' | 'json' | 'txt', ver
 }
 
 export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, onPublication }: {
-  onClose: () => void; onSelect?: (selection: TechniqueSelection) => boolean; initial: TechniqueSelection | null; readOnly?: boolean;
+  onClose: () => void; onSelect?: (selection: TechniqueSelection) => Promise<boolean>; initial: TechniqueSelection | null; readOnly?: boolean;
   onPublication?: (publication: TechniquePublication) => void;
 }) {
   const { settings } = useTechniqueSettings();
@@ -120,11 +120,11 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
 
   useLayoutEffect(() => { modal.current?.showModal(); }, []);
 
-  function commit(next: TechniqueLibrary): boolean {
+  async function commit(next: TechniqueLibrary): Promise<boolean> {
     const expected = libraryRef.current;
     if (!expected) return false;
     try {
-      saveTechniques(next, expected);
+      await saveTechniques(next, expected);
       libraryRef.current = next;
       setState({ library: next, error: '' });
       return true;
@@ -133,7 +133,7 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
       return false;
     }
   }
-  function saveDraft(value = draft): boolean {
+  async function saveDraft(value = draft): Promise<boolean> {
     if (!value || !editorId || !libraryRef.current) return true;
     const previous = libraryRef.current.documents.find(item => item.id === editorId)?.draft;
     if (JSON.stringify(previous) === JSON.stringify(value)) {
@@ -142,7 +142,7 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     }
     try {
       checkDraftConflict(editorId);
-      if (commit(updateTechniqueDraft(libraryRef.current, editorId, value))) {
+      if (await commit(updateTechniqueDraft(libraryRef.current, editorId, value))) {
         expectedDraft.current = { documentId: editorId, raw: JSON.stringify(value) };
         setStatus('Черновик сохранён'); return true;
       }
@@ -156,10 +156,10 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
       throw new Error('Черновик изменён в другом окне. Экспортируй свой текст и переоткрой памятку.');
     }
   }
-  function back() {
+  async function back() {
     if (exportBusy) return;
     if (overlay) { setOverlay(null); return; }
-    if (editorId) { if (saveDraft()) { setEditorId(null); setDraft(null); } return; }
+    if (editorId) { if (await saveDraft()) { setEditorId(null); setDraft(null); } return; }
     if (reading || ownFocus) { setReading(null); setOwnFocus(false); setApplyingError(''); return; }
     onClose();
   }
@@ -187,11 +187,11 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     expectedDraft.current = { documentId: document.id, raw: JSON.stringify(document.draft) };
     setEditorId(document.id); setDraft(structuredClone(document.draft)); setMetadata(false); setStatus('Черновик сохраняется автоматически');
   }
-  function create(text?: TechniqueText): boolean {
+  async function create(text?: TechniqueText): Promise<boolean> {
     if (!libraryRef.current) return false;
     try {
       const result = createTechnique(libraryRef.current, text);
-      if (commit(result.library)) { openEditor(result.library.documents.find(item => item.id === result.documentId)!); return true; }
+      if (await commit(result.library)) { openEditor(result.library.documents.find(item => item.id === result.documentId)!); return true; }
     } catch (error) { setState(previous => ({ ...previous, error: error instanceof Error ? error.message : 'Не удалось создать памятку.' })); }
     return false;
   }
@@ -204,14 +204,14 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     setReading({ documentId, version }); setOwnFocus(false); setCompact(false); setPhaseIndex(0); setApplyingError('');
     setFocus1(initial?.versionId === version.id ? initial.focus1 : ''); setFocus2(initial?.versionId === version.id ? initial.focus2 : ''); setOverlay(null);
   }
-  function publish() {
+  async function publish() {
     if (!draft || !editorId || !libraryRef.current) return;
     try {
       checkDraftConflict(editorId);
       const document = libraryRef.current.documents.find(document => document.id === editorId);
       const previous = document ? latestTechnique(document) : null;
       const result = publishTechnique(libraryRef.current, editorId, draft);
-      if (commit(result.library)) {
+      if (await commit(result.library)) {
         setEditorId(null); setDraft(null);
         const content = publicationContent(result.version.payload);
         if (content && (!previous || content !== publicationContent(previous.payload))) {
@@ -233,11 +233,11 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     } catch (cause) { setExportError(cause instanceof Error ? cause.message : 'Не удалось сохранить файл. Повтори экспорт.'); }
     finally { setExportBusy(false); }
   }
-  function apply() {
+  async function apply() {
     if (readOnly || !onSelect) return;
     const selection: TechniqueSelection = { versionId: reading?.version.id ?? null, title: text?.title ?? 'Мой фокус',
       versionNumber: reading?.version.number ?? null, focus1, focus2, payload: text ? structuredClone(text) : null };
-    if (!onSelect(selection)) setApplyingError('Не удалось сохранить фокус тренировки. Повтори действие.');
+    if (!await onSelect(selection)) setApplyingError('Не удалось сохранить фокус тренировки. Повтори действие.');
   }
   function chooseFocus(value: string) {
     if (focus1 === value) setFocus1(''); else if (focus2 === value) setFocus2(''); else if (!focus1.trim()) setFocus1(value); else setFocus2(value);
@@ -253,14 +253,14 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
     const next = [...items]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; return next;
   }
   function openPaste(append: boolean) { setPaste(''); setPasteError(''); setOverlay({ kind: 'paste', append }); }
-  function importPaste(append: boolean) {
+  async function importPaste(append: boolean) {
     try {
       const imported = append ? techniqueFromText(paste) : decodeTechnique(paste);
       if (append && draft) {
         const next = { ...draft, phases: [...draft.phases.filter(phase => phase.steps.length), ...imported.phases] };
         if (next.phases.length > 30) throw new Error('В памятке может быть не больше 30 фаз.');
         setDraft(next);
-      } else if (!create(imported)) { setPasteError('Не удалось сохранить импорт. Текст остаётся здесь; проверь хранилище и повтори.'); return; }
+      } else if (!await create(imported)) { setPasteError('Не удалось сохранить импорт. Текст остаётся здесь; проверь хранилище и повтори.'); return; }
       setOverlay(null);
     } catch (error) { setPasteError(error instanceof Error ? error.message : 'Не удалось добавить текст.'); }
   }
@@ -348,11 +348,11 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
           </div>}
           {applyingError && !settings.techniqueFocus && <p className="technique-error" role="alert">{applyingError}</p>}
           {!readOnly && onSelect && <button type="button" className="primary" data-testid="technique-apply" onClick={apply}>Использовать на тренировке</button>}
-          {reading?.documentId && !library?.documents.find(item => item.id === reading.documentId)?.archived && <button type="button" className="technique-text-button" onClick={() => {
+          {reading?.documentId && !library?.documents.find(item => item.id === reading.documentId)?.archived && <button type="button" className="technique-text-button" onClick={async () => {
             if (!libraryRef.current || !text) return;
             try {
               const result = publishTechnique(libraryRef.current, reading.documentId!, { ...text, discussed: null, change: `Возврат к версии ${reading.version.number}` });
-              if (commit(result.library)) setReading(null);
+              if (await commit(result.library)) setReading(null);
             } catch (error) { setState(previous => ({ ...previous, error: error instanceof Error ? error.message : 'Не удалось восстановить версию.' })); }
           }}>Создать новую версию из этой</button>}
         </div> : <div className="technique-scroll technique-library" data-testid="technique-library">

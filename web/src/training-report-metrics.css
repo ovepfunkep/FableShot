@@ -30,3 +30,6 @@
 .report-metric-grid dd { margin: 3px 0 0; color: var(--ink); font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .report-result-metrics { padding-top: 9px; border-top: 1px solid var(--edge); }
 .report-metrics-scope select { width: 100%; }
+
+.report-scoped-controls { display: grid; gap: 10px; }
+.report-scoped-geometry { padding: 10px 12px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); }

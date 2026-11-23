@@ -110,11 +110,11 @@ export function loadEquipment(): EquipmentLibrary {
   return value;
 }
 
-export function saveEquipment(value: EquipmentLibrary, expected?: EquipmentLibrary): void {
+export function saveEquipment(value: EquipmentLibrary, expected?: EquipmentLibrary): void | Promise<void> {
   if (!isLibrary(value)) throw new Error('Проверьте название и параметры снаряжения.');
   const current = loadEquipment();
   if (expected && JSON.stringify(current) !== JSON.stringify(expected)) throw new Error('Снаряжение изменилось после открытия. Откройте редактор заново.');
-  appStorage.setItem(storageKey, JSON.stringify(value));
+  return appStorage.setItem(storageKey, JSON.stringify(value));
 }
 
 export function kitAvailable(library: EquipmentLibrary, kit: EquipmentKit): boolean {

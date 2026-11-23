@@ -59,7 +59,9 @@ test('reflection survives reload and hiding its editor does not remove the saved
   await expect(page.getByTestId('report-technique-use-0')).toContainText('Получалось');
   await page.locator('.reflection-memo').click();
   await page.getByTestId('technique-back').click();
-  await page.getByTestId('setting-technique-reflection').uncheck();
+  const showReflection = page.getByTestId('setting-technique-reflection');
+  await showReflection.click();
+  await expect(showReflection).not.toBeChecked();
   await page.getByTestId('technique-back').click();
   await expect(page.getByTestId('reflection-edit-0')).toHaveCount(0);
   await expect(page.getByTestId('report-technique-use-0')).toContainText('Повторялась стойка');

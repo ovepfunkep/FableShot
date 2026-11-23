@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { TargetBoard } from './TargetBoard.tsx';
-import { DEFAULT_TARGET, scorePoint } from './target.ts';
+import { DEFAULT_CONDITIONS } from './conditions.ts';
+import { ShotDistribution } from './ShotDistribution.tsx';
+import { TrainingHitMap } from './TrainingHitMap.tsx';
+import { DEFAULT_TARGET, scorePoint, summarize } from './target.ts';
 import type { Shot } from './target.ts';
 import { Icon } from './TrainingChrome.tsx';
 import './web-onboarding.css';
 
-type OnboardingActions = { onStart: () => void; onImport: () => void; onClose: () => void };
+export type OnboardingChapter = 'welcome' | 'target' | 'report';
+
+type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void };
 
 const tutorial = [
   { title: 'Поймай свою точку', hint: 'Удержи палец, уточни попадание в лупе и отпусти. Короткое касание тоже работает.' },
@@ -23,7 +28,7 @@ function Brand() {
   </span>;
 }
 
-function Welcome({ onStart, onImport, onClose, onExample }: OnboardingActions & { onExample: () => void }) {
+function Welcome({ onStart, onImport, onRestore, onClose, onExample }: OnboardingActions & { onExample: () => void }) {
   return <main className="web-onboard web-onboard-welcome" data-testid="onboarding-screen">
     <header className="web-onboard-header">
       <Brand />
@@ -40,12 +45,13 @@ function Welcome({ onStart, onImport, onClose, onExample }: OnboardingActions & 
       <button type="button" className="primary" data-testid="onboard-start" onClick={onStart}>Начать тренировку</button>
       <button type="button" className="web-onboard-outline" data-testid="onboard-example" onClick={onExample}>Попробовать на примере</button>
       <button type="button" className="web-onboard-link" data-testid="onboard-import" onClick={onImport}>Перенести из MyTargets</button>
+      <button type="button" className="web-onboard-link" data-testid="onboard-restore" onClick={onRestore}>Восстановить архив FableShot</button>
     </div>
     <p className="web-onboard-storage">Дневник хранится на устройстве. Историю можно сохранить в резервную копию.</p>
   </main>;
 }
 
-function TargetTutorial({ onStart, onClose }: Pick<OnboardingActions, 'onStart' | 'onClose'>) {
+function TargetTutorial({ onStart, onClose, onReport }: Pick<OnboardingActions, 'onStart' | 'onClose'> & { onReport: () => void }) {
   const [step, setStep] = useState(0);
   const [history, setHistory] = useState<Shot[][]>([[]]);
   const [edit, setEdit] = useState<{ index: number; shot: Shot } | null>(null);
@@ -116,10 +122,11 @@ function TargetTutorial({ onStart, onClose }: Pick<OnboardingActions, 'onStart' 
     </> : <>
       <div className="web-onboard-copy">
         <h1 ref={heading} tabIndex={-1}>Готово</h1>
-        <p>Теперь можешь начать свою тренировку.</p>
+        <p>Открой учебный отчёт, чтобы попробовать карту и распределение попаданий.</p>
       </div>
       <div className="web-onboard-actions">
-        <button type="button" className="primary" data-testid="tutorial-start" onClick={onStart}>К своей тренировке</button>
+        <button type="button" className="primary" data-testid="tutorial-open-report" onClick={onReport}>Посмотреть отчёт</button>
+        <button type="button" className="web-onboard-outline" data-testid="tutorial-start" onClick={onStart}>К своей тренировке</button>
         <button type="button" className="web-onboard-outline" data-testid="tutorial-replay" onClick={replay}>Повторить пример</button>
         <button type="button" className="web-onboard-link" data-testid="tutorial-home" onClick={onClose}>На Главную</button>
       </div>
@@ -127,9 +134,44 @@ function TargetTutorial({ onStart, onClose }: Pick<OnboardingActions, 'onStart' 
   </main>;
 }
 
-/** Welcome and practice example. The host owns first-open state and real routes. */
-export function WebOnboarding(actions: OnboardingActions & { initialExample?: boolean }) {
-  const [example, setExample] = useState(actions.initialExample ?? false);
-  return example ? <TargetTutorial onStart={actions.onStart} onClose={actions.onClose} /> :
-    <Welcome {...actions} onExample={() => setExample(true)} />;
+const demoSeries = [[{ x: .04, y: .02 }, { x: .12, y: -.07 }, { x: -.15, y: .08 }],
+  [{ x: .22, y: .06 }, { x: .07, y: -.05 }, { x: -.04, y: .05 }]].map((points, index) => ({
+    id: index + 1, round: 1, number: index + 1, shots: points.map(point => ({ point, ...scorePoint(point, DEFAULT_TARGET) })),
+  }));
+const demoShots = demoSeries.flatMap(series => series.shots);
+const demoCounts = Array.from({ length: 11 }, (_, score) => demoShots.filter(shot => shot.points === score).length);
+const demoResult = summarize(demoShots);
+
+function TutorialReport({ onStart, onClose, onBack }: Pick<OnboardingActions, 'onStart' | 'onClose'> & { onBack: () => void }) {
+  const [display, setDisplay] = useState<'map' | 'distribution'>('map');
+  return <main className="web-onboard web-onboard-tutorial" data-testid="tutorial-report">
+    <header className="web-onboard-header">
+      <span className="web-onboard-example-label">Пример · не сохраняется в историю</span>
+      <button type="button" className="icon-button" aria-label="Выйти из примера" onClick={onClose}><Icon name="close" /></button>
+    </header>
+    <div className="web-onboard-copy">
+      <h1>Отчёт тренировки</h1>
+      <p>{display === 'map' ? 'Выбери серию, чтобы увидеть на мишени только её попадания.' : 'Нажми на оценку, чтобы увидеть число попаданий и их долю.'}</p>
+    </div>
+    <div className="web-onboard-report-modes" role="group" aria-label="Учебный отчёт">
+      <button type="button" className="web-onboard-outline" aria-pressed={display === 'map'} onClick={() => setDisplay('map')}>Карта</button>
+      <button type="button" className="web-onboard-outline" aria-pressed={display === 'distribution'} onClick={() => setDisplay('distribution')}>Распределение</button>
+    </div>
+    {display === 'map' ? <TrainingHitMap series={demoSeries} conditions={DEFAULT_CONDITIONS} /> :
+      <section className="report-metrics-card web-onboard-report-distribution" aria-label="Распределение в примере">
+        <p>Результат <strong>{demoResult.points}/{demoResult.maximum}</strong></p>
+        <ShotDistribution counts={demoCounts} total={demoShots.length} view="mosaic" />
+      </section>}
+    <div className="web-onboard-actions">
+      <button type="button" className="primary" data-testid="tutorial-report-start" onClick={onStart}>К своей тренировке</button>
+      <button type="button" className="web-onboard-link" onClick={onBack}>К отметке попаданий</button>
+    </div>
+  </main>;
+}
+
+export function WebOnboarding(actions: OnboardingActions & { initialChapter: OnboardingChapter }) {
+  const [chapter, setChapter] = useState(actions.initialChapter);
+  if (chapter === 'report') return <TutorialReport onStart={actions.onStart} onClose={actions.onClose} onBack={() => setChapter('target')} />;
+  if (chapter === 'target') return <TargetTutorial onStart={actions.onStart} onClose={actions.onClose} onReport={() => setChapter('report')} />;
+  return <Welcome {...actions} onExample={() => setChapter('target')} />;
 }
