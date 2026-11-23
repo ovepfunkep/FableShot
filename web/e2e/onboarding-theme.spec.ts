@@ -95,6 +95,8 @@ test('style and light theme persist and System follows an appearance change', as
   await page.getByTestId('onboard-skip').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'sport');
   expect(await page.locator('html').evaluate(root => getComputedStyle(root).fontVariantNumeric)).toBe('tabular-nums');
+  const hero = page.getByTestId('home-hero');
+  await expect(hero).not.toHaveCSS('background-image', 'none');
   await page.getByTestId('open-settings').click();
   await openSettingsCategory(page, 'appearance', 'style-pop');
   const choose = (id: string) => page.locator('.web-theme-settings label').filter({ has: page.getByTestId(id) }).click({ timeout: 5000 });
@@ -106,6 +108,22 @@ test('style and light theme persist and System follows an appearance change', as
   await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
   await expect(page.locator('html')).toHaveAttribute('data-theme-appearance', 'light');
   await page.screenshot({ path: '../artifacts/web-0.18.0-pop-light.png' });
+  const tabCards = [
+    ['home', '.journal-home-hero'],
+    ['history', '.journal-tab-empty'],
+    ['progress', '.journal-tab-empty'],
+    ['equipment', '.equipment-catalog-empty'],
+  ];
+  const backgrounds = new Set<string>();
+  for (const [tab, card] of tabCards) {
+    await page.getByTestId(`nav-${tab}`).click();
+    const shell = page.locator(`.journal-shell[data-tab="${tab}"]`);
+    for (const surface of [shell, shell.locator(card)]) {
+      await expect(surface).not.toHaveCSS('background-image', 'none');
+      backgrounds.add(await surface.evaluate(element => getComputedStyle(element).backgroundImage));
+    }
+  }
+  expect(backgrounds.size).toBe(tabCards.length * 2);
   await page.getByTestId('open-settings').click();
   await openSettingsCategory(page, 'appearance', 'style-minimal');
   await choose('style-minimal');
@@ -117,8 +135,12 @@ test('style and light theme persist and System follows an appearance change', as
   await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'minimal');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
-  const background = await page.getByTestId('home-hero').evaluate(hero => getComputedStyle(hero).backgroundImage);
-  expect(background).toMatch(/0\.032/);
+  for (const [tab, card] of tabCards) {
+    await page.getByTestId(`nav-${tab}`).click();
+    const shell = page.locator(`.journal-shell[data-tab="${tab}"]`);
+    await expect(shell).toHaveCSS('background-image', 'none');
+    await expect(shell.locator(card)).toHaveCSS('background-image', 'none');
+  }
 });
 
 test('a new installation can restore a FableShot archive directly from welcome', async ({ page }) => {

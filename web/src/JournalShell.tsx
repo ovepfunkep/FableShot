@@ -47,7 +47,31 @@ export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, c
   children: ReactNode;
 }) {
   const content = useRef<HTMLElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const marker = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => { if (content.current) content.current.scrollTop = 0; }, [tab]);
+  useLayoutEffect(() => {
+    const nav = navigation.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current] .journal-navigation-icon');
+    const indicator = marker.current;
+    if (!nav || !active || !indicator) return;
+    const move = () => {
+      const frame = nav.getBoundingClientRect();
+      if (!frame.width || !nav.offsetWidth) return;
+      const scale = frame.width / nav.offsetWidth;
+      const icon = active.getBoundingClientRect();
+      Object.assign(indicator.style, {
+        width: `${icon.width / scale}px`, height: `${icon.height / scale}px`,
+        transform: `translate(${(icon.left - frame.left) / scale}px, ${(icon.top - frame.top) / scale}px)`,
+      });
+      nav.dataset.markerReady = 'true';
+    };
+    move();
+    const observer = new ResizeObserver(move);
+    observer.observe(nav);
+    observer.observe(active);
+    return () => observer.disconnect();
+  }, [tab]);
   return <div className="journal-shell" data-tab={tab}>
     <header className="journal-topbar">
       <img src={`${import.meta.env.BASE_URL}icons/fableshot-192.png`} width="32" height="32" alt="" />
@@ -64,7 +88,8 @@ export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, c
       </button>}
     </header>
     <main className="journal-content" ref={content}>{children}</main>
-    <nav className="journal-navigation" aria-label="Разделы дневника">
+    <nav className="journal-navigation" aria-label="Разделы дневника" ref={navigation}>
+      <span ref={marker} className="journal-navigation-marker" aria-hidden="true" />
       {(Object.keys(destinations) as JournalTab[]).map(id => <button type="button" key={id} onClick={() => onTab(id)}
         data-testid={`nav-${id}`} aria-current={tab === id ? 'page' : undefined}>
         <span className="journal-navigation-icon"><JournalGlyph name={id} /></span>

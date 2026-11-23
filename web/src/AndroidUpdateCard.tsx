@@ -20,7 +20,7 @@ function AndroidUpdateDetails({ installed, update, onClose }: { installed: numbe
   const { highlights, fallback } = androidUpdateNotes(installed, update, history);
   return <BottomSheet title={`Что нового в FableShot ${update.version}`} onClose={onClose}>
     {highlights.length > 0 && <ul className="web-release-highlights">{highlights.map(text => <li key={text}>{text}</li>)}</ul>}
-    {loading && <p role="status" className="android-update-notes">Загружаю список изменений…</p>}
+    {loading && <p role="status" className="android-update-notes motion-status" data-busy="true">Загружаю список изменений…</p>}
     {!loading && fallback && <p className="android-update-notes">{fallback}</p>}
     {!loading && !highlights.length && !fallback && <p className="android-update-notes">
       {Array.isArray(history) ? 'За этот период нет крупных изменений.' : 'Список изменений пока недоступен.'}
@@ -51,7 +51,8 @@ export function AndroidUpdateCard({ updates, manual = false }: { updates: Return
       {detailsOpen && updates.installed !== null && <AndroidUpdateDetails key={updates.update.code}
         installed={updates.installed} update={updates.update} onClose={() => setDetailsOpen(false)} />}
     </>}
-    {manual && <button type="button" className="technique-condition-link" disabled={updates.checking} onClick={updates.check}>Проверить обновления</button>}
-    {manual && updates.status && <small role="status">{updates.status}</small>}
+    {manual && <button type="button" className="technique-condition-link motion-status" data-busy={updates.checking ? 'true' : undefined}
+      disabled={updates.checking} onClick={updates.check}>Проверить обновления</button>}
+    {manual && updates.status && <small role="status" className="motion-status" data-busy="false" key={updates.status}>{updates.status}</small>}
   </section>;
 }

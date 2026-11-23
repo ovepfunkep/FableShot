@@ -8,7 +8,6 @@ html[data-theme-appearance] {
   --accent-line: color-mix(in srgb, var(--accent) 58%, transparent);
   --accent-wash: color-mix(in srgb, var(--accent) 8%, transparent);
   --danger-wash: color-mix(in srgb, var(--danger) 12%, var(--surface));
-  --geometry-line: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 html[data-theme-appearance="dark"] {
   color-scheme: dark;
@@ -36,10 +35,7 @@ html[data-theme-appearance="light"] {
 }
 html[data-theme-style="sport"] { --card-radius: 24px; --action: #c6f43d; --on-action: #14200d; }
 html[data-theme-style="pop"] { --card-radius: 28px; }
-html[data-theme-style="minimal"] {
-  --card-radius: 18px;
-  --geometry-line: color-mix(in srgb, var(--accent) 3.2%, transparent);
-}
+html[data-theme-style="minimal"] { --card-radius: 18px; }
 
 html[data-theme-style="sport"][data-theme-appearance="dark"] {
   --app-bg: #101610; --surface: #1a231c; --raised: #263129; --accent: #c6f43d;
@@ -68,12 +64,7 @@ html[data-theme-appearance] .mytargets-import .mytargets-apply { border-color: v
 
 html[data-theme-appearance] .journal-home-hero {
   color: var(--ink);
-  --hero-print:
-    radial-gradient(circle at 78% 45%, transparent 52px, var(--geometry-line) 53px, transparent 54px 104px, var(--geometry-line) 105px, transparent 106px),
-    radial-gradient(circle at 12% 15%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px),
-    radial-gradient(circle at 25% 80%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px),
-    radial-gradient(circle at 70% 95%, transparent 13px, var(--geometry-line) 14px, transparent 15px 27px, var(--geometry-line) 28px, transparent 29px);
-  background: var(--hero-print), var(--raised);
+  background: var(--raised);
 }
 html[data-theme-appearance] :is(.journal-home-eyebrow, .journal-home-conditions > div) { color: var(--muted); }
 html[data-theme-appearance] .journal-home-edit { color: var(--ink); }
@@ -138,6 +129,8 @@ html[data-theme-appearance] :is(.condition-sheet, .equipment-sheet, .practice-ti
 html[data-theme-style="sport"] { --flare: #c6f43d; --flare-secondary: #26cb8b; --flare-ink: #14200d; }
 html[data-theme-style="pop"] { --flare: #ceb1ff; --flare-secondary: #ff91d3; --flare-ink: #271337; }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) {
+  --geometry-line: color-mix(in srgb, var(--accent) 15%, transparent);
+  --geometry-wash: color-mix(in srgb, var(--accent) 6%, transparent);
   --highlight-field: radial-gradient(ellipse at 105% -35%, color-mix(in srgb, var(--flare) 26%, transparent), transparent 68%),
     radial-gradient(ellipse at 16% 118%, color-mix(in srgb, var(--flare-secondary) 18%, transparent), transparent 72%);
 }
@@ -145,9 +138,6 @@ html:is([data-theme-style="sport"], [data-theme-style="pop"])[data-theme-appeara
   background: radial-gradient(ellipse at 101% -48%, var(--flare-secondary), transparent 76%), var(--flare);
   color: var(--flare-ink);
   border-color: transparent;
-}
-html:is([data-theme-style="sport"], [data-theme-style="pop"])[data-theme-appearance] .journal-home-hero {
-  background: var(--hero-print), var(--highlight-field), var(--raised);
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"])[data-theme-appearance] .report-metrics-result {
   background: var(--highlight-field), var(--raised);

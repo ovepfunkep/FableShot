@@ -31,7 +31,7 @@
 .profile-achievements-heading { display: flex; gap: 8px; align-items: center; }
 .profile-achievements-heading svg { color: var(--accent); }
 .profile-achievements-heading > span { margin-inline-start: auto; color: var(--muted); font-size: .875rem; }
-.profile-achievements {
+html:is([data-theme-style="sport"], [data-theme-style="pop"]) .profile-achievements {
   background-image:
     radial-gradient(circle at 98% 24%, transparent 16px, var(--geometry-line) 17px, transparent 18px 27px, var(--geometry-line) 28px, transparent 29px),
     radial-gradient(circle at 83% 80%, transparent 9px, var(--geometry-line) 10px, transparent 11px);

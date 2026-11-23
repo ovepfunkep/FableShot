@@ -4,8 +4,7 @@ import { DEFAULT_TARGET, getTargetProfile, isOnTargetInput, markTargetPoint, MIS
 import type { Point, Shot, TargetSpec, TargetSpot } from './target.ts';
 import { clampTargetZoom, MAX_TARGET_ZOOM, MovableTargetZoom, TargetZoom } from './TargetZoom.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
-import { AIM_SPEED_SETTING, LENS_ZOOM_SETTING } from './preferences.ts';
-import { CleanSeriesEffect } from './ShotMotion.tsx';
+import { AIM_SPEED_SETTING, DEFAULT_SHOT_MOTION_STYLE, LENS_ZOOM_SETTING } from './preferences.ts';
 import type { ShotMotionEvent } from './ShotMotion.tsx';
 
 type Size = { width: number; height: number };
@@ -182,15 +181,15 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, celebration, feedback, showZoom = true }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, feedback, removed, showZoom = true }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
   selectedIndex?: number | null; onBlockedTap?: () => void;
   spec?: TargetSpec;
   panOnly?: boolean;
   zoomScope?: ZoomScope;
   realArrowDiameter?: number;
-  celebration?: { id: number; arrows: number };
   feedback?: ShotMotionEvent;
+  removed?: { id: number; shot: Shot };
   showZoom?: boolean;
 }) {
   const { preferences } = useTrainingPreferences();
@@ -468,19 +467,24 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }
 
   const Zoom = zoomScope ? MovableTargetZoom : TargetZoom;
-  const ten = feedback?.points === 10 && preferences.shotMotionStyle !== 'pulse' ? shots[feedback.index] : undefined;
-  const flash = ten?.points === 10 && ten.point && spotPoint(ten.point, ten.spot);
+  const marked = feedback && !feedback.cleanSeries ? shots[feedback.index] : undefined;
+  const flash = marked?.point && spotPoint(marked.point, marked.spot);
+  const removedPoint = removed?.shot.point ?? removed?.shot.missPoint;
+  const ghost = removedPoint && spotPoint(removedPoint, removed?.shot.spot);
+  const markerStyle = (point: Point) => ({ left: size.width / 2 + view.x + point.x * baseRadius * view.zoom,
+    top: size.height / 2 + view.y + point.y * baseRadius * view.zoom });
+  const goldFlash = feedback?.points === 10 && (feedback.firstTen || (preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE) === 'cards');
   return <section className="target-stage" aria-label="Отметка попаданий">
     <div ref={surface} className="target-surface" data-testid="target" data-target-profile={spec.profileId}
       onPointerDown={start} onPointerMove={move} onPointerUp={event => end(event, true)}
       onPointerCancel={event => end(event, false)} onLostPointerCapture={event => end(event, false)}>
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
-      {feedback && flash && <span key={feedback.id} className="target-ten-wave" data-testid="target-ten-wave" aria-hidden="true"
-        style={{ left: size.width / 2 + view.x + flash.x * baseRadius * view.zoom,
-          top: size.height / 2 + view.y + flash.y * baseRadius * view.zoom }} />}
+      {feedback && flash && <span key={feedback.id} className={goldFlash ? 'target-ten-wave' : 'target-shot-pulse'}
+        data-testid={goldFlash ? 'target-ten-wave' : 'target-shot-pulse'} aria-hidden="true"
+        style={markerStyle(flash)} />}
+      {removed && ghost && <span key={removed.id} className="removed-shot-ghost" aria-hidden="true" style={markerStyle(ghost)} />}
     </div>
     {showZoom && <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />}
-    {celebration && <CleanSeriesEffect key={celebration.id} arrows={celebration.arrows} />}
     {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;

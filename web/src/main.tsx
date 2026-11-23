@@ -10,15 +10,15 @@ import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.t
 import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
 import { LensControls, RecentPracticeLimitControl, ShotMotionControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
-import type { ShotMotionEvent } from './ShotMotion.tsx';
-import { CLEAN_SERIES_MS, SHOT_FEEDBACK_MS } from './ShotMotion.tsx';
+import type { CleanSeriesMotion, ShotMotionEvent } from './ShotMotion.tsx';
+import { SHOT_FEEDBACK_MS } from './ShotMotion.tsx';
 import { supportsAppScale } from './native-app-scale.ts';
 import { TechniqueWindow } from './TechniqueWindow.tsx';
 import type { TechniqueSelection } from './technique.ts';
 import { TechniqueSettingsProvider } from './TechniqueSettings.tsx';
 import { StagePicker } from './StagePicker.tsx';
 import { LensTestTarget, TargetBoard } from './TargetBoard.tsx';
-import { Icon, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
+import { Icon, shotStripCapacity, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
 import { JournalHistory, JournalProgress } from './JournalTabs.tsx';
@@ -41,6 +41,8 @@ import { PersonalRecordsScreen } from './PersonalRecordsScreen.tsx';
 import { PersonalRanksScreen } from './PersonalRanksScreen.tsx';
 import { calculatePersonalRecordEvents } from './personal-record-events.ts';
 import type { PersonalRecordEvent } from './personal-record-events.ts';
+import { hasFinishedCleanSeries, trainingMoment } from './training-moments.ts';
+import type { TrainingMoment } from './training-moments.ts';
 import { groupAchievementGrants, queueAchievementGrants, recentAchievementNotices } from './achievement-ledger.ts';
 import type { AchievementGroup } from './achievement-ledger.ts';
 import { ACHIEVEMENT_ACTION_RULE_IDS, awardPublication, awardServiceAction, awardTrainingChange, eligibleForAchievements } from './achievement-diary.ts';
@@ -83,6 +85,7 @@ import type { Practice } from './practice.ts';
 import type { Shot } from './target.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
 import './style.css';
+import './interaction-motion.css';
 
 type Edit = { seriesId: number; index: number; shot: Shot };
 const LocalRoomProbe = lazy(() => import('./LocalRoomProbe.tsx'));
@@ -143,8 +146,7 @@ function App() {
   const [setupMemo, setSetupMemo] = useState<TechniqueSelection | null>(null);
   const [historyFilters, setHistoryFilters] = useState(DEFAULT_HISTORY_FILTERS);
   const [notesScope, setNotesScope] = useState<DiaryNoteScope | null>(null);
-  const [postHit, setPostHit] = useState<Edit | null>(null);
-  const [postHitReady, setPostHitReady] = useState(false);
+  const [postHit, setPostHit] = useState<(Edit & { celebrated: boolean }) | null>(null);
   const [numberEditOpen, setNumberEditOpen] = useState(false);
   const [numberSaveError, setNumberSaveError] = useState(false);
   const [rankScope, setRankScope] = useState<{ kind: 'round' | 'series'; id: number } | null>(null);
@@ -158,7 +160,13 @@ function App() {
   const primary = useRef<HTMLButtonElement>(null);
   const motionId = useRef(0);
   const [shotFeedback, setShotFeedback] = useState<(ShotMotionEvent & { sessionId: string; seriesId: number }) | null>(null);
-  const [cleanSeries, setCleanSeries] = useState<{ id: number; arrows: number; sessionId: string; seriesId: number } | null>(null);
+  const cleanSeriesMilestones = useRef(new Map<string, number>());
+  const firstTens = useRef(new Set<string>());
+  const [finishMoment, setFinishMoment] = useState<{ sessionId: string; moment: TrainingMoment } | null>(null);
+  const [finishHighlighting, setFinishHighlighting] = useState(false);
+  const reportWasVisible = useRef(false);
+  const [seriesTransition, setSeriesTransition] = useState<{ id: number; direction: 'previous' | 'next' }>();
+  const [removedMarker, setRemovedMarker] = useState<{ id: number; seriesId: number; sessionId: string | null; shot: Shot; index: number }>();
   const pulse = useRef<Animation | null>(null);
   const [offline, setOffline] = useState<'pending' | 'ready' | 'error'>('pending');
   const [timerOpen, setTimerOpen] = useState(false);
@@ -191,11 +199,14 @@ function App() {
         : { diary: proposed, added: [] };
       let next = trainingId ? awardRoomAchievements(awarded.diary, trainingId, new Date().toISOString()) : awarded.diary;
       let newRecords: PersonalRecordEvent[] = [];
+      let moment: TrainingMoment | undefined;
       if (trainingId) {
         const before = previous.entries.find(entry => entry.id === trainingId);
         const current = next.entries.find(entry => entry.id === trainingId);
         if (before && current && !before.practice.savedAt && current.practice.savedAt && current.personalRecords === undefined) {
           newRecords = calculatePersonalRecordEvents(current, previous.entries, preferences.rankCategory ?? null, Date.parse(current.practice.savedAt));
+          if (!preferences.hideScores) moment = trainingMoment(current, previous.entries, preferences.rankCategory ?? null, newRecords,
+            preferences.showAchievementNotices === false ? [] : next.achievementLedger?.grants);
           if (preferences.showAchievementNotices === false || preferences.hideScores) {
             newRecords = newRecords.map(record => ({ ...record, notifiedAtMs: record.recordedAtMs }));
           }
@@ -210,6 +221,11 @@ function App() {
       await saveDiary(next, previous);
       diaryRef.current = next;
       setState({ diary: next, error: '' });
+      if (moment && trainingId) {
+        setFinishMoment({ sessionId: trainingId, moment });
+        setFinishHighlighting(preferences.animations && preferences.celebrationEffects !== false
+          && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      }
       if (added.length && preferences.showAchievementNotices !== false) {
         setAchievementQueue(queue => queueAchievementGrants(queue, added));
       }
@@ -340,6 +356,8 @@ function App() {
 
   async function showSeries(seriesId: number) {
     if (!await saveEdit()) return;
+    const nextIndex = seriesIds.indexOf(seriesId);
+    if (nextIndex !== -1 && nextIndex !== position) setSeriesTransition({ id: seriesId, direction: nextIndex < position ? 'previous' : 'next' });
     setSelection(seriesId);
     setPage('training');
     setPicker(null);
@@ -401,6 +419,10 @@ function App() {
   }
 
   function selectEntry(item: DiaryEntry, next: 'training' | 'report' | 'conditions') {
+    setFinishMoment(null);
+    setFinishHighlighting(false);
+    setSeriesTransition(undefined);
+    setRemovedMarker(undefined);
     setSessionId(item.id);
     setSelection(null);
     setEdit(null);
@@ -531,17 +553,8 @@ function App() {
   const numbering = arrowCount > 0 && (practice.numberedArrows ?? true);
   const pendingShot = page === 'training' && postHit?.seriesId === series.id && series.shots[postHit.index] === postHit.shot ? postHit : null;
   useEffect(() => {
-    if (!postHit) return;
-    if (!pendingShot) { setPostHit(null); setPostHitReady(false); return; }
-    if (!preferences.animations || preferences.hideScores || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setPostHitReady(true);
-      return;
-    }
-    // Let the score slide finish before presenting a modal above the target.
-    let timeout: number | undefined;
-    const frame = requestAnimationFrame(() => { timeout = window.setTimeout(() => setPostHitReady(true), 220); });
-    return () => { cancelAnimationFrame(frame); window.clearTimeout(timeout); };
-  }, [postHit, pendingShot, preferences.animations, preferences.hideScores]);
+    if (postHit && !pendingShot) setPostHit(null);
+  }, [postHit, pendingShot]);
   const shots = editing ? series.shots.map((shot, index) => index === editing.index ? editing.shot : shot) : series.shots;
   const roundShown = round.series.flatMap(item => item.id === series.id ? shots : item.shots);
   const rankCategory = preferences.rankCategory ?? null;
@@ -567,36 +580,62 @@ function App() {
     : !past && roundFull ? 'Следующий раунд' : 'Следующая серия';
   const suggestRound = !seriesEditor && roundFull && !canAppend && !past && !editing && !completed;
   useEffect(() => {
-    if (!suggestRound) pulse.current?.cancel();
+    if (!suggestRound) {
+      pulse.current?.cancel();
+      pulse.current = null;
+    }
   }, [suggestRound]);
   const showTrainingMotion = page === 'training' && preferences.animations && !preferences.hideScores && !editing;
+  useEffect(() => {
+    if (reportWasVisible.current && page !== 'report') setFinishMoment(null);
+    reportWasVisible.current = page === 'report';
+  }, [page]);
+  useEffect(() => {
+    if (page !== 'report' || !finishHighlighting) return;
+    const timeout = setTimeout(() => setFinishHighlighting(false), 1050);
+    return () => clearTimeout(timeout);
+  }, [page, finishHighlighting]);
+  const activeRemovedMarker = removedMarker?.sessionId === sessionId && removedMarker.seriesId === series.id ? removedMarker : undefined;
   const activeShotFeedback = showTrainingMotion && shotFeedback?.sessionId === sessionId && shotFeedback?.seriesId === series.id
     ? shotFeedback : undefined;
   useEffect(() => {
-    if (!shotFeedback && !cleanSeries) return;
-    if (!showTrainingMotion || shotFeedback && (shotFeedback.sessionId !== sessionId || shotFeedback.seriesId !== series.id)) setShotFeedback(null);
-    if (!showTrainingMotion || cleanSeries && (cleanSeries.sessionId !== sessionId || cleanSeries.seriesId !== series.id)) setCleanSeries(null);
-  }, [showTrainingMotion, shotFeedback, cleanSeries, sessionId, series.id]);
+    if (shotFeedback && (!showTrainingMotion || shotFeedback.sessionId !== sessionId || shotFeedback.seriesId !== series.id)) setShotFeedback(null);
+  }, [showTrainingMotion, shotFeedback, sessionId, series.id]);
   useEffect(() => {
     if (!shotFeedback) return;
     const timeout = setTimeout(() => setShotFeedback(null), SHOT_FEEDBACK_MS);
     return () => clearTimeout(timeout);
   }, [shotFeedback]);
   useEffect(() => {
-    if (!cleanSeries) return;
-    const timeout = setTimeout(() => setCleanSeries(null), CLEAN_SERIES_MS);
+    if (!removedMarker) return;
+    const timeout = setTimeout(() => setRemovedMarker(undefined), 190);
     return () => clearTimeout(timeout);
-  }, [cleanSeries]);
-
+  }, [removedMarker]);
   function canPlayTrainingMotion() {
     return showTrainingMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  function playShotMotion(index: number, shot: Shot) {
+  function playShotMotion(index: number, shot: Shot, cleanSeries?: CleanSeriesMotion) {
     if (sessionId && canPlayTrainingMotion()) {
-      setCleanSeries(null);
-      setShotFeedback({ id: ++motionId.current, sessionId, seriesId: series.id, index, points: shot.points });
+      const bow = series.conditions.equipment?.bow.category ?? null;
+      const key = `${sessionId}:${bow ?? 'unknown'}`;
+      const firstTen = shot.points === 10 && preferences.celebrationEffects !== false && !firstTens.current.has(key)
+        && !practice.rounds.some(item => item.series.some(end => (end.conditions.equipment?.bow.category ?? null) === bow
+          && (end.id === series.id ? end.shots.slice(0, index) : end.shots).some(previous => previous.points === 10)))
+        && !hasFinishedCleanSeries(diaryRef.current?.entries ?? [], bow, sessionId);
+      if (shot.points === 10) firstTens.current.add(key);
+      setShotFeedback({ id: ++motionId.current, sessionId, seriesId: series.id, index, points: shot.points, cleanSeries, firstTen });
     }
+  }
+
+  function cleanSeriesMotion(index: number, savedShots: readonly Shot[]): CleanSeriesMotion | undefined {
+    const arrows = index + 1;
+    if (!sessionId || preferences.celebrationEffects === false || !canPlayTrainingMotion() || arrows !== shotStripCapacity(arrows, previousVolume)
+      || !savedShots.slice(0, arrows).every(shot => shot.points === 10)) return;
+    const key = `${sessionId}:${series.id}`;
+    if (arrows <= (cleanSeriesMilestones.current.get(key) ?? 0)) return;
+    cleanSeriesMilestones.current.set(key, arrows);
+    return arrows === shotStripCapacity(0, previousVolume) ? 'jump' : 'glint';
   }
 
   async function mark(shot: Shot) {
@@ -616,20 +655,21 @@ function App() {
         return appendShot(previous, shot);
       });
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
-      const recorded = index >= 0 && saved && stored && findSeries(stored, series.id)?.series.shots[index] === shot;
-      if (recorded && preferences.haptics) performTrainingHaptic();
-      if (recorded && numbering) {
-        setPostHitReady(false);
+      const savedShots = stored && findSeries(stored, series.id)?.series.shots;
+      if (index < 0 || !saved || !savedShots || savedShots[index] !== shot) return;
+      const cleanSeries = cleanSeriesMotion(index, savedShots);
+      if (preferences.haptics) performTrainingHaptic();
+      if (numbering) {
         setNumberSaveError(false);
-        setPostHit({ seriesId: series.id, index, shot });
-      } else if (recorded) playShotMotion(index, shot);
+        setPostHit({ seriesId: series.id, index, shot, celebrated: cleanSeries !== undefined });
+        if (cleanSeries) playShotMotion(index, shot, cleanSeries);
+      } else playShotMotion(index, shot, cleanSeries);
     }
   }
 
   function closeNumberPicker() {
-    if (pendingShot) playShotMotion(pendingShot.index, pendingShot.shot);
+    if (pendingShot && !pendingShot.celebrated) playShotMotion(pendingShot.index, pendingShot.shot);
     setPostHit(null);
-    setPostHitReady(false);
     setNumberEditOpen(false);
     setNumberSaveError(false);
   }
@@ -650,14 +690,10 @@ function App() {
     else if (completed) setPage('report');
     else if (past) showSeries(seriesIds[position + 1]);
     else if (await update(advanceSeries)) {
+      const next = diaryRef.current?.entries.find(item => item.id === sessionId);
+      const id = next && currentSeries(next.practice)?.series.id;
+      if (id !== undefined && id !== series.id) setSeriesTransition({ id, direction: 'next' });
       setSelection(null);
-      if (sessionId && canPlayTrainingMotion() && shots.length >= 3 && shots.every(shot => shot.points === 10)) {
-        const saved = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
-        const next = saved && currentSeries(saved);
-        if (next && next.series.id !== series.id) {
-          setCleanSeries({ id: ++motionId.current, sessionId, seriesId: next.series.id, arrows: shots.length });
-        }
-      }
     }
   }
 
@@ -672,9 +708,18 @@ function App() {
     setEdit({ seriesId: series.id, index, shot });
   }
 
+  async function removeMarkedShot(index: number) {
+    const shot = series.shots[index];
+    if (!shot || !await update(previous => removeShot(previous, series.id, index))) return false;
+    if (preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setRemovedMarker({ id: ++motionId.current, seriesId: series.id, sessionId, shot, index });
+    }
+    return true;
+  }
+
   function undo() {
     if (editing) setEdit(seriesEditor ? { ...editing, shot: series.shots[editing.index] } : null);
-    else if (!past && !completed && shots.length) update(previous => removeShot(previous, series.id, shots.length - 1));
+    else if (!past && !completed && shots.length) void removeMarkedShot(shots.length - 1);
   }
 
   async function openPicker(kind: 'round' | 'series') {
@@ -705,7 +750,7 @@ function App() {
     if (confirm === 'discard') {
       setEdit(null);
     } else if (confirm === 'delete' && editing) {
-      if (await update(previous => removeShot(previous, series.id, editing.index))) {
+      if (await removeMarkedShot(editing.index)) {
         setEdit(null);
         if (!diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
         else if (seriesEditor && series.shots.length === 1) closeSeriesEditor();
@@ -719,8 +764,7 @@ function App() {
   }
 
   function pulseNextRound() {
-    if (!suggestRound || !preferences.animations || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    pulse.current?.cancel();
+    if (pulse.current || !suggestRound || !preferences.animations || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     pulse.current = primary.current?.animate([
       { boxShadow: 'inset 0 0 0 0 transparent' },
       { boxShadow: 'inset 0 0 0 3px var(--on-action)', offset: .14 },
@@ -791,7 +835,8 @@ function App() {
       })}
       onNext={() => setAchievementQueue(queue => queue.slice(activeNoticeIndex + 1))} />;
   const nextRecord = recordQueue[0];
-  const notice = achievementNotice || (nextRecord && preferences.showAchievementNotices !== false && !preferences.hideScores &&
+  const notice = page === 'report' && finishHighlighting && finishMoment?.sessionId === sessionId ? null
+    : achievementNotice || (nextRecord && preferences.showAchievementNotices !== false && !preferences.hideScores &&
     <PersonalRecordNotice key={nextRecord.id} record={nextRecord}
       onShown={() => writeDiary(previous => ({
         ...previous,
@@ -988,7 +1033,7 @@ function App() {
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}
     motion={<div className="settings-panel">
-      <TrainingPreferenceControls keys={['animations', 'haptics']} />
+      <TrainingPreferenceControls keys={['animations', 'celebrationEffects', 'haptics']} />
       <ShotMotionControl />
       {achievementPreference}
     </div>}
@@ -1065,6 +1110,7 @@ function App() {
         return refreshRoomHistory(entry.id, membership, true);
       } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
+      moment={finishMoment?.sessionId === sessionId ? finishMoment?.moment : undefined}
       onRoomLeaderboard={entry?.groupRoomHistory ? () => setRoomLeaderboardOpen(true) : undefined}
       roomFinalized={!!entry?.groupRoomHistory?.finalizedAt}
       onPause={pauseEntry}
@@ -1102,7 +1148,7 @@ function App() {
     {rankWindow}
   </>;
 
-  const numberTarget = postHitReady ? pendingShot : numberEditOpen ? editing : null;
+  const numberTarget = pendingShot ?? (numberEditOpen ? editing : null);
 
   return <main className="practice" data-testid={seriesEditor ? 'history-shot-editor' : 'training-screen'}>
     {offlineLabel}
@@ -1152,13 +1198,14 @@ function App() {
       seriesRank={currentRanks && <RankTag rank={currentRanks.series} testId="rank-series" onOpen={() => setRankScope({ kind: 'series', id: series.id })} />} />}
     <TrainingShotStrip key={series.id} shots={shots} previousVolume={previousVolume} selected={editing?.index ?? null}
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot}
-      feedback={activeShotFeedback} />
+      feedback={activeShotFeedback} direction={seriesTransition?.id === series.id ? seriesTransition.direction : undefined}
+      removing={activeRemovedMarker?.index} />
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
       realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
       feedback={activeShotFeedback}
-      celebration={showTrainingMotion && cleanSeries?.sessionId === sessionId && cleanSeries?.seriesId === series.id ? cleanSeries : undefined}
+      removed={activeRemovedMarker}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}
     <TrainingFooter mainText={mainText} showPrevious={!seriesEditor}

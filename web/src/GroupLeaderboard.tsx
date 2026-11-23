@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { BOW_CATEGORIES } from './equipment.ts';
 import { groupStandings, readRoomHistory, roomConditionChoices } from './group-leaderboard.ts';
@@ -12,6 +12,7 @@ import { Icon } from './TrainingChrome.tsx';
 import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
 import { shareReport } from './share-report.ts';
 import { roomResultCard } from './room-result-card.ts';
+import { useTrainingPreferences } from './TrainingPreferences.tsx';
 
 function CompositeBreakdown({ score }: { score: CompositeScore }) {
   if (score.total === undefined) return <small>{{
@@ -38,6 +39,9 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
   onRefresh?: () => Promise<RoomHistory>;
   onFinalSnapshot?: (history: RoomHistory, name?: string) => void;
 }) {
+  const { preferences } = useTrainingPreferences();
+  const table = useRef<HTMLDivElement>(null);
+  const lastStandings = useRef<{ view: string; scores: Map<string, { top: number; result: string }> } | null>(null);
   const [live, setLive] = useState<RoomHistory>();
   const [selected, setSelected] = useState<number | null>(null);
   const [category, setCategory] = useState('all');
@@ -91,6 +95,39 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
   const conditionFilter = conditions.has(condition) ? condition : undefined;
   const rows = groupStandings(series, ordinal, category === 'all' ? undefined : category === 'unknown' ? null : category, participants, conditionFilter, mode);
   const cards = layout === 'cards' || layout === 'auto' && new Set([...series, ...participants].map(end => end.entryId)).size <= 8;
+  useLayoutEffect(() => {
+    const board = table.current;
+    if (!board) return;
+    const view = JSON.stringify([ordinal, category, mode, conditionFilter, cards]);
+    const previous = lastStandings.current;
+    const frame = board.getBoundingClientRect();
+    const animate = previous?.view === view && preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scores = new Map<string, { top: number; result: string }>();
+    const scroll = board.closest('dialog');
+    const viewport = scroll?.getBoundingClientRect();
+    const scale = frame.width / (board.offsetWidth || frame.width || 1);
+    for (const node of board.querySelectorAll<HTMLElement>('[data-room-member]')) {
+      const { roomMember, roomResult } = node.dataset;
+      if (!roomMember || !roomResult) continue;
+      const top = node.getBoundingClientRect().top - frame.top;
+      scores.set(roomMember, { top, result: roomResult });
+      const old = animate ? previous?.scores.get(roomMember) : undefined;
+      if (!old) continue;
+      const delta = old.top - top;
+      if (Math.abs(delta) > 1) {
+        if (node.dataset.own === 'true' && viewport && old.top + frame.top >= viewport.top && old.top + frame.top < viewport.bottom) {
+          node.scrollIntoView({ block: 'nearest' });
+        }
+        node.animate([{ transform: `translateY(${delta / (scale || 1)}px)` }, { transform: 'none' }],
+          { duration: 165, easing: 'ease-out' });
+      }
+      if (old.result !== roomResult) {
+        node.animate([{ backgroundColor: 'color-mix(in srgb, var(--accent) 24%, var(--surface))' }, {}],
+          { duration: 650, easing: 'ease-out' });
+      }
+    }
+    lastStandings.current = { view, scores };
+  }, [history, ordinal, category, mode, conditionFilter, cards, preferences.animations]);
   const name = (row: typeof rows[number]) => row.displayName || (row.id === entryId ? 'Вы' : `Стрелок ${row.id.slice(0, 5).toUpperCase()}`);
   const bow = (row: typeof rows[number]) => BOW_CATEGORIES.find(item => item.value === row.bow)?.label ?? 'Без категории';
   const format = (value: number | undefined) => value === undefined ? '—' : displayCompositeScore(value);
@@ -120,7 +157,7 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
   const count = new Set([...series, ...participants].map(end => end.entryId)).size;
   return <BottomSheet title={roomName || 'Таблица комнаты'} onClose={onClose} tag="room-leaderboard"
     headerAction={<RoomHelpButton onClick={() => setHelpOpen(true)} />}>
-    <div className="room-leaderboard">
+    <div className="room-leaderboard" ref={table}>
       <div className="room-toolbar">
         <div className="room-status" role="status" data-offline={!!error}>
           <Icon name="group" /><span>{finalizedAt ? 'Итоги зафиксированы' : error ? archived ? 'Обновление недоступно' : 'Нет связи' : archived ? 'Сохранённая таблица'
@@ -184,7 +221,7 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
       {error && <small>{error}{received && ' Показана сохранённая таблица.'}</small>}
       {received && !rows.length && <p>{conditionFilter || category !== 'all' ? 'На этом срезе нет результатов по выбранным фильтрам.' : 'Здесь появятся опубликованные серии.'}</p>}
       {rows.length > 0 && (cards ? <ul className="room-standing-cards">
-        {rows.map(row => <li key={row.id} data-own={row.id === entryId}>
+        {rows.map(row => <li key={row.id} data-own={row.id === entryId} data-room-member={row.id} data-room-result={`${score(row)} · ${total(row)}`}>
           <div className="room-standing-person"><span className="room-place" aria-label={row.place ? `Место ${row.place}` : 'Без места'}>{row.place ?? '—'}</span>
             <span><strong>{name(row)}</strong><small>{bow(row)}</small></span></div>
           <dl><div><dt>За серию</dt><dd>{score(row)}</dd></div><div><dt>{row.arrows && !row.complete ? 'Частичный итог' : 'Итог'}</dt><dd>{total(row)}</dd></div></dl>
@@ -192,7 +229,7 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
           {progressDetails(row)}
         </li>)}
       </ul> : <table><thead><tr><th>Стрелок</th><th>За серию</th><th>Итог</th></tr></thead><tbody>
-        {rows.map(row => <tr key={row.id} data-own={row.id === entryId}>
+        {rows.map(row => <tr key={row.id} data-own={row.id === entryId} data-room-member={row.id} data-room-result={`${score(row)} · ${total(row)}`}>
           <th scope="row">{row.place ? `${row.place}. ` : ''}{name(row)}<small>{bow(row)}</small></th>
           <td>{score(row)}</td>
           <td>{total(row)}{mode === 'classic' && row.arrows > 0 && !row.complete && <small>Частичный</small>}

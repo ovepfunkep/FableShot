@@ -25,7 +25,7 @@ const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const initialView = { zoom: 1, x: center, y: center };
 
-function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset }: {
+function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, layerKey }: {
   points: readonly Point[];
   misses: readonly Point[];
   profile: TargetProfile;
@@ -33,6 +33,7 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset 
   mode: MapMode;
   density: ReturnType<typeof hitDensity>;
   showOffset: boolean;
+  layerKey: string;
 }) {
   const radius = gridRadius / limit;
   const at = (coordinate: number) => center + coordinate * radius;
@@ -94,6 +95,7 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset 
       fill="#536052" stroke="#758175" strokeWidth={.75} />}
     {[...profile.zones].reverse().map(zone => <circle key={zone.code} cx={center} cy={center} r={radius * zone.outerRadius}
       fill={zoneColor(zone.points)} stroke="#30352c" strokeWidth={.75} />)}
+    <g key={layerKey} className="hit-map-layer">
     {mode === 'density' ? density.cells.map(({ column, row, count }) => <rect key={`${column},${row}`}
       x={center - gridRadius + column * cellSize} y={center - gridRadius + row * cellSize} width={cellSize} height={cellSize}
       fill={densityColors[Math.ceil(count / density.peak * densityColors.length) - 1]} fillOpacity={densityOpacity} />)
@@ -111,6 +113,7 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset 
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="#111811" strokeWidth={3} />
       <circle cx={at(centroid.x)} cy={at(centroid.y)} r={7} stroke="white" strokeWidth={1} />
     </g>}
+    </g>
     </svg>
     <div className="hit-map-zoom-row"><span>Масштаб мишени</span>
       <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
@@ -193,7 +196,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
         disabled={index >= roundSeries.length - 1} onClick={() => setSelectedId(roundSeries[index + 1].id)}><Icon name="right" /></button>
     </div>
     {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
-      showOffset={visible('offset')} /> : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
+      showOffset={visible('offset')} layerKey={`${round}:${selected?.id}:${selectedSpot}:${mode}`} /> : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
       data-testid="hit-map-empty">Нет подтверждённых координат.</p>}
     {mode === 'density' && density.peak > 0 && <div className="hit-map-legend">
       <div className="hit-map-density-bands" aria-hidden="true">

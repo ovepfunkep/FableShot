@@ -170,6 +170,9 @@ test('new performance earns grouped notices, persists in report/gallery, and res
   await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
   await page.getByTestId('training-confirm').click();
   await expect(page.getByTestId('session-achievements')).toContainText('Получено достижений:');
+  const highlight = page.getByTestId('training-finish-highlight');
+  await expect(highlight.locator('span')).toHaveText('Тройной эспрессо');
+  await expect(highlight.locator('strong')).toHaveText('30/30');
   await expect(notice).toContainText('Начало пути');
   await page.clock.fastForward(4001);
   await page.screenshot({ path: '../artifacts/web-0.19.0-achievement-report.png', fullPage: true });

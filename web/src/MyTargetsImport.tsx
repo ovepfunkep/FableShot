@@ -47,7 +47,7 @@ function ImportNumbers({ result }: { result: ImportReceipt }) {
 export function MyTargetsImportReceipt({ result, onHistory, onClose }: {
   result: ImportReceipt; onHistory: () => void; onClose: () => void;
 }) {
-  return <section className="mytargets-receipt" aria-label="Итог переноса из MyTargets" data-testid="mytargets-receipt">
+  return <section className="mytargets-receipt motion-status" data-busy="false" aria-label="Итог переноса из MyTargets" data-testid="mytargets-receipt">
     <h2>История из MyTargets добавлена</h2>
     <ImportNumbers result={result} />
     {result.skippedShots > 0 && <p>Пропущено стрел: {result.skippedShots}</p>}
@@ -198,7 +198,7 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
       <label className="mytargets-file">Выбрать ZIP или CSV · до 25 МБ
         <input type="file" accept=".zip,.csv,application/zip,text/csv" disabled={busy} onChange={event => void choose(event)} data-testid="mytargets-file" />
       </label>
-      {busy && <p role="status">{context ? 'Сохраняю импорт…' : 'Читаю и проверяю файл…'}</p>}
+      {busy && <p role="status" className="motion-status" data-busy="true">{context ? 'Сохраняю импорт…' : 'Читаю и проверяю файл…'}</p>}
       {context && <>
         <div className="mytargets-summary" data-testid="mytargets-preview">
           <strong>{context.name}</strong>

@@ -5,6 +5,7 @@ import type { Conditions } from '../src/conditions.ts';
 import type { DiaryEntry } from '../src/persistence.ts';
 import type { Series } from '../src/practice.ts';
 import type { Shot } from '../src/target.ts';
+import { trainingMoment } from '../src/training-moments.ts';
 import {
   calculateProgress, freezeProgressBaseline, isProgressBaseline, progressConditionKey, progressSourceChanges,
 } from '../src/progress-scoring.ts';
@@ -32,6 +33,40 @@ function entry(id: string, day: number, series = ends(12, 5)): DiaryEntry {
 function baseline(sources: readonly DiaryEntry[], setup = conditions, startedAt = at(10), frozenAt = at(11)) {
   return freezeProgressBaseline(sources, 'active', startedAt, setup, frozenAt);
 }
+
+test('a clean series uses an earned award only when the same training still supports it', () => {
+  const candidate = entry('clean', 12, ends(3, 10));
+  const grant = { id: 'HIT01', scope: 'recurve', sessionId: candidate.id, earnedAt: at(12, 10) };
+  assert.deepEqual(trainingMoment(candidate, [], null, [], [grant]),
+    { kind: 'series', arrows: 3, achievementId: 'HIT01' });
+  assert.deepEqual(trainingMoment(candidate, [], null, [], [{ ...grant, sessionId: 'older' }]),
+    { kind: 'series', arrows: 3 });
+
+  const otherDistance = entry('elsewhere', 12, ends(3, 10, { ...conditions, distanceMeters: 25 }));
+  assert.deepEqual(trainingMoment(otherDistance, [], null, [], [{ ...grant, sessionId: otherDistance.id }]),
+    { kind: 'series', arrows: 3 });
+  candidate.practice.rounds[0].series[0].shots[2] = shot(9);
+  assert.equal(trainingMoment(candidate, [], null, [], [grant]), undefined);
+});
+
+test('a finished practice celebrates substantial progress inside one ready group of comparable conditions', () => {
+  const history = [entry('old-a', 1, ends(30, 9)), entry('old-b', 2, ends(30, 9)), entry('old-c', 3, ends(30, 9))];
+  const frozen = baseline(history);
+  const series = ends(30, 9).map((end, index) => ({
+    ...end, progressBaselineId: 1, shots: index % 2 === 0 ? [shot(10), shot(10), shot(10)] : end.shots,
+  }));
+  const candidate = entry('new', 12, series);
+  candidate.practice.progressBaselines = { 1: frozen };
+  // The prior clean series in the same bow category makes this a progress moment.
+  const past = entry('clean', 4, ends(3, 10));
+  assert.deepEqual(trainingMoment(candidate, [...history, past], null, []),
+    { kind: 'progress', previous: 9, value: 9.5, distance: conditions.distanceMeters });
+  const smallerImprovement = entry('slight', 12, series.map((end, index) => index === 0 ? { ...end, shots: [shot(9), shot(10), shot(10)] } : end));
+  smallerImprovement.practice.progressBaselines = { 1: frozen };
+  assert.equal(trainingMoment(smallerImprovement, [...history, past], null, []), undefined);
+  candidate.practice.rounds[0].series.pop();
+  assert.equal(trainingMoment(candidate, [...history, past], null, []), undefined);
+});
 
 test('PG1 conditions compare versioned geometry, distance, diameter and bow category across equipment instances', () => {
   const key = progressConditionKey(conditions);

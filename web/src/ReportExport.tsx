@@ -89,8 +89,8 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
       </figure>)}
       {ready && format === 'pdf' && <PdfReportPreview file={ready.files[0]} page={pdfPage} onPage={setPdfPage} />}
     </div>
-    {busy && <p role="status">Готовлю отчёт…</p>}
-    {status && <p role="status">{status}</p>}
+    {busy && <p role="status" className="motion-status" data-busy="true">Готовлю отчёт…</p>}
+    {status && <p role="status" className="motion-status" data-busy="false" key={status}>{status}</p>}
     <button type="button" className="report-export-share" data-testid="report-export-share" disabled={!ready || busy || sending} onClick={() => void share()}>
       {sending ? 'Открываю…' : 'Поделиться'}
     </button>

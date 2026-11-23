@@ -6,6 +6,8 @@ test('motion previews switch styles and respect the global animation toggle', as
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-motion').click();
   const demo = page.locator('.shot-motion-demo');
+  await expect(page.getByRole('button', { name: 'Импульс', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Карточки', exact: true }).click();
   for (const [score, animation] of [[5, 'shot-reveal'], [7, 'shot-flip'], [9, 'shot-landing']] as const) {
     await page.getByRole('button', { name: `Показать анимацию для оценки ${score}` }).click();
     await expect(demo.locator('[data-shot-motion="cards"]')).toHaveCSS('animation-name', animation);
@@ -14,7 +16,9 @@ test('motion previews switch styles and respect the global animation toggle', as
   await expect(demo.locator('[data-shot-motion="cards"][data-shot-tier="ten"]')).toHaveCSS('animation-name', 'shot-landing');
   await expect(demo.locator('.shot-sparks i')).toHaveCount(10);
   await page.getByRole('button', { name: 'Чистая серия', exact: true }).click();
-  await expect(page.getByTestId('clean-series-effect')).toHaveText('Чистая серия30/30');
+  const series = page.getByTestId('clean-series-preview');
+  await expect(series.locator('.shot-face')).toHaveText(['10', '10', '10']);
+  await expect(series.locator('.shot-face').first()).toHaveCSS('animation-name', 'clean-series-jump');
   await page.getByRole('button', { name: 'Импульс', exact: true }).click();
   await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'shot-pulse');
   await page.emulateMedia({ reducedMotion: 'reduce' });

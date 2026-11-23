@@ -166,8 +166,8 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
         const bytes = await getNativeSource(reference.sha256);
         if (alive.current) await exportDocument({ bytes, mimeType: 'application/zip', name: 'FableShot-Android-original.zip' });
       })}>Скачать исходный архив Android</button>}
-      {busy && <p role="status">Проверяю и подготавливаю данные…</p>}
-      {error && <p role="alert">{error}</p>}{status && <p role="status">{status}</p>}
+      {busy && <p role="status" className="motion-status" data-busy="true">Проверяю и подготавливаю данные…</p>}
+      {error && <p role="alert">{error}</p>}{status && <p key={status} role="status" className="motion-status" data-busy="false">{status}</p>}
       {preview && <section className="archive-panel" data-testid="archive-preview">
         <h2>Проверенный архив</h2><p>{new Date(preview.manifest.createdAt).toLocaleString('ru-RU')} · {preview.manifest.appVersion}</p>
         <Summary summary={preview.summary} />
@@ -199,7 +199,7 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
       <p>{confirm === 'reset' ? 'Тренировки, снаряжение, памятки и настройки будут сброшены. Сначала сохранится архив; локальная копия также останется для восстановления.'
         : 'Текущие данные заменятся выбранной копией. Перед заменой сохранится локальная резервная копия текущего дневника.'}</p>
       {error && <p role="alert">{error}</p>}
-      {busy && <p role="status">{confirm === 'reset' ? 'Сохраняю копию и обнуляю профиль…' : 'Восстанавливаю дневник…'}</p>}
+      {busy && <p role="status" className="motion-status" data-busy="true">{confirm === 'reset' ? 'Сохраняю копию и обнуляю профиль…' : 'Восстанавливаю дневник…'}</p>}
       <button type="button" className="archive-action" disabled={busy} data-testid="archive-confirm-apply" onClick={() => void apply()}>{confirm === 'reset' ? 'Сохранить копию и обнулить' : 'Заменить дневник'}</button>
     </BottomSheet>}
   </main>;

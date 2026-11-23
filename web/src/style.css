@@ -67,8 +67,6 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .tile-heading strong { color: #f2f6ee; }
 .tile-score { font-size: 20px; line-height: 26px; letter-spacing: -.3px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; }
 .tile-average { grid-row: 3; font-size: 12px; line-height: 18px; color: var(--muted); overflow: hidden; }
-.score-change { display: inline-block; animation: score-change 220ms ease-out; }
-@keyframes score-change { from { transform: translateY(8px); opacity: .45; } }
 
 .target-stage { position: relative; flex: 1; min-height: 0; }
 .target-surface { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
@@ -173,7 +171,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .confirm-actions button:not(.primary) { padding-inline: 12px; border: 1px solid var(--edge); background: var(--surface); }
 
 @media (prefers-reduced-motion: reduce) {
-  .arrow-entering, .score-change { animation: none; }
+  .arrow-entering { animation: none; }
 }
 .room-sync-status {
   display: block;

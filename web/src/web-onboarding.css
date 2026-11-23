@@ -24,7 +24,10 @@
   place-items: center;
   border: 1px solid var(--edge);
   border-radius: 26px;
-  background: repeating-radial-gradient(circle at center, transparent 0 29px, #8ba18f21 30px 31px, transparent 32px 43px), var(--surface);
+  background: var(--surface);
+}
+html:is([data-theme-style="sport"], [data-theme-style="pop"]) .web-onboard-scene {
+  background-image: repeating-radial-gradient(circle at center, transparent 0 29px, var(--geometry-line) 30px 31px, transparent 32px 43px);
 }
 .web-onboard-face {
   position: relative;

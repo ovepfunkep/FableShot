@@ -40,17 +40,17 @@ export function ExerciseThresholdTable({ evaluation, finalResult, saved, showAve
         style={exercise.thresholds.length > 6 ? { minWidth: `${5 + exercise.thresholds.length * 2}rem` } : undefined}>
         <thead><tr>
           <th scope="col">Разряд</th>
-          {exercise.thresholds.map(threshold => <th key={threshold.label} scope="col" data-rank-state={state(threshold)}>
+          {exercise.thresholds.map(threshold => <th key={threshold.label} scope="col" data-rank-state={state(threshold)} data-rank-selected={selected === threshold}>
             <button type="button" aria-pressed={selected === threshold}
               onClick={() => setSelectedLabel(selected === threshold ? null : threshold.label)}>{threshold.label}</button>
           </th>)}
         </tr></thead>
         <tbody>
           <tr><th scope="row">Очки</th>
-            {exercise.thresholds.map(threshold => <td key={threshold.label} data-rank-state={state(threshold)}>{threshold.score}</td>)}
+            {exercise.thresholds.map(threshold => <td key={threshold.label} data-rank-state={state(threshold)} data-rank-selected={selected === threshold}>{threshold.score}</td>)}
           </tr>
           {showAverage && <tr className="exercise-rank__averages"><th scope="row">За стрелу</th>
-            {exercise.thresholds.map(threshold => <td key={threshold.label} data-rank-state={state(threshold)}>
+            {exercise.thresholds.map(threshold => <td key={threshold.label} data-rank-state={state(threshold)} data-rank-selected={selected === threshold}>
               {formatAverage(threshold.score / exercise.arrows, true)}
             </td>)}
           </tr>}

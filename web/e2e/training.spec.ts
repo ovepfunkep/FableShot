@@ -25,24 +25,112 @@ async function cancelAim(page: Page) {
   await expect(page.getByTestId('lens')).toHaveCount(0);
 }
 
-test('a saved ten animates its arrow and closing a clean series celebrates once', async ({ page }) => {
+test('the clean-series jump starts on the saved hit and the next series opens without it', async ({ page }) => {
   await page.clock.install();
+  await page.goto('./');
+  await openTraining(page);
+  const clean = page.getByTestId('arrow-panel').locator('[data-clean-series]');
+  for (let i = 1; i <= 2; i++) {
+    await page.getByTestId('target').click();
+    await expect(page.getByTestId(`shot-${i}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
+    await expect(page.getByTestId(i === 1 ? 'target-ten-wave' : 'target-shot-pulse')).toHaveCount(1);
+    await expect(clean).toHaveCount(0);
+  }
+  await page.getByTestId('target').click();
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await expect(clean).toHaveAttribute('data-clean-series', 'jump');
+  await expect(clean.locator('.shot-face')).toHaveCount(3);
+  const sparks = clean.locator('.clean-series-sparks');
+  await expect(sparks).toHaveCount(1);
+  await expect(sparks.locator('i')).toHaveCount(10);
+  await expect(clean.locator('.arrow-slot .shot-sparks')).toHaveCount(0);
+  await page.getByTestId('next-end').click();
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  await expect(clean).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (let i = 1; i <= 3; i++) await page.getByTestId('target').click();
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await expect(page.getByTestId('target-ten-wave')).toHaveCount(0);
+  await expect(clean).toHaveCount(0);
+});
+
+test('a clean extension glints and the next series uses the remembered number of cells', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  const panel = page.getByTestId('arrow-panel');
+  const clean = panel.locator('[data-clean-series]');
+  const target = page.getByTestId('target');
+  for (let i = 1; i <= 3; i++) await target.click();
+  await expect(clean).toHaveAttribute('data-clean-series', 'jump');
+  for (let i = 4; i <= 6; i++) await target.click();
+  await expect(clean).toHaveAttribute('data-clean-series', 'glint');
+  await expect(clean.locator('.clean-series-sparks')).toHaveCount(0);
+  await expect(clean.locator('.shot-face')).toHaveCount(6);
+  const glint = clean.locator('.clean-series-glint');
+  await expect(glint).toHaveCount(1);
+  const layer = await glint.evaluate(element => ({
+    animation: getComputedStyle(element, '::before').animationName,
+    clipping: getComputedStyle(element).clipPath,
+  }));
+  expect(layer.animation).toBe('clean-series-glint');
+  expect(layer.clipping.match(/M /g)).toHaveLength(6);
+  await page.getByRole('button', { name: 'Отметить промах' }).click();
+  await expect(page.getByTestId('series-score')).toHaveText('60/70');
+  await page.getByTestId('next-end').click();
+  await expect(page.getByTestId('series-score')).toHaveText('0/0');
+  await expect(panel.locator('.arrow-page-12')).toBeVisible();
+  for (let i = 1; i <= 6; i++) await target.click();
+  await expect(page.getByTestId('series-score')).toHaveText('60/60');
+  await expect(clean).toHaveCount(0);
+  for (let i = 7; i <= 12; i++) await target.click();
+  await expect(clean).toHaveAttribute('data-clean-series', 'jump');
+  await expect(clean.locator('.shot-face')).toHaveCount(12);
+});
+
+test('finishing highlights a first clean series once even with system motion reduced', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./');
   await openTraining(page);
   for (let i = 1; i <= 3; i++) {
     await page.getByTestId('target').click();
-    await expect(page.getByTestId(`shot-${i}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
-    await expect(page.getByTestId('target-ten-wave')).toHaveCount(1);
+    await expect(page.getByTestId('series-score')).toHaveText(`${i * 10}/${i * 10}`);
   }
-  await expect(page.getByTestId('series-score')).toHaveText('30/30');
-  await page.getByTestId('next-end').click();
-  await expect(page.getByTestId('clean-series-effect')).toHaveText('Чистая серия30/30');
-  await page.clock.fastForward(1_600);
-  await expect(page.getByTestId('clean-series-effect')).toHaveCount(0);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByTestId('target').click();
-  await expect(page.getByTestId('series-score')).toHaveText('10/10');
-  await expect(page.getByTestId('target-ten-wave')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Завершить тренировку' }).click();
+  await page.getByTestId('training-confirm').click();
+  const highlight = page.getByTestId('training-finish-highlight');
+  await expect(highlight.locator('span')).toHaveText('Чистая серия');
+  await expect(highlight.locator('strong')).toHaveText('30/30');
+  await expect(highlight).toHaveCSS('animation-name', 'none');
+  await page.reload();
+  await openHistoryEntry(page);
+  await expect(page.getByTestId('report-result-score')).toHaveText(/30.*30/);
+  await expect(highlight).toHaveCount(0);
+});
+
+test('six scoring chips fit at 360px and the series values align with their headings', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('./');
+  await openTraining(page);
+  for (let index = 1; index <= 6; index++) {
+    await page.getByTestId('target').click();
+    await expect(page.getByTestId('series-score')).toHaveText(`${index * 10}/${index * 10}`);
+  }
+  await page.getByRole('button', { name: 'Завершить тренировку' }).click();
+  await page.getByTestId('training-confirm').click();
+  const round = page.getByTestId('report-round-1');
+  await expect(round.locator('.report-hit')).toHaveCount(6);
+  await page.evaluate(() => document.fonts.ready);
+  const layout = await round.evaluate(block => {
+    const steps = [...block.querySelectorAll('.report-hit')].map(hit => hit.getBoundingClientRect().top);
+    const centers = (selector: string) => [...block.querySelectorAll(selector)].map(cell => {
+      const bounds = cell.getBoundingClientRect();
+      return bounds.left + bounds.width / 2;
+    });
+    return { lines: new Set(steps).size,
+      headings: centers('.report-series-columns > span'), values: centers('.report-series-summary > *') };
+  });
+  expect(layout.lines).toBe(1);
+  expect(layout.headings).toEqual(layout.values);
 });
 
 test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {

@@ -225,7 +225,7 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
                 data-testid="numbered-arrows-toggle" className="preference-switch" onClick={() => setNumberedArrows(!(numberedArrows ?? true))}><span /></button>
             </div>}
             <LensControls />
-            <TrainingPreferenceControls keys={['hideScores', 'averageHundredths', 'showAchievementsDuringInput', 'animations', 'haptics', 'keepAwake', 'trainingOnLockScreen', 'useSystemScale']} />
+            <TrainingPreferenceControls keys={['hideScores', 'averageHundredths', 'showAchievementsDuringInput', 'animations', 'celebrationEffects', 'haptics', 'keepAwake', 'trainingOnLockScreen', 'useSystemScale']} />
             <ShotMotionControl />
             {achievementPreference}
           </div>

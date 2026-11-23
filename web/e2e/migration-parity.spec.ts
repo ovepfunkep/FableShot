@@ -111,15 +111,15 @@ test('arrow history aggregates saved sessions and progress exports the selected 
 test('the ten streak feedback runs on new shots and never replays on reopening a series', async ({ page }) => {
   await page.goto('./');
   await openTraining(page);
+  const effect = page.getByTestId('arrow-panel').locator('[data-clean-series]');
   for (let index = 1; index <= 3; index++) {
     await page.getByTestId('target').click();
+    if (index === 3) await expect(effect).toHaveAttribute('data-clean-series', 'jump');
     await page.getByRole('button', { name: `Стрела №${index}`, exact: true }).click();
-    await expect(page.getByTestId(`shot-${index}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
+    if (index < 3) await expect(page.getByTestId(`shot-${index}`).locator('[data-shot-tier="ten"]')).toHaveCount(1);
   }
-  const effect = page.getByTestId('clean-series-effect');
-  await expect(effect).toHaveCount(0);
   await page.getByTestId('next-end').click();
-  await expect(effect).toHaveText('Чистая серия30/30');
+  await expect(effect).toHaveCount(0);
   await page.getByRole('button', { name: 'Предыдущая серия' }).click();
   await expect(effect).toHaveCount(0);
   await expect(page.getByTestId('arrow-panel').locator('[data-shot-motion]')).toHaveCount(0);

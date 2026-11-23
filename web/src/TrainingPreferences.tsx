@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, LENS_ZOOM_SETTING, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
+import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, DEFAULT_SHOT_MOTION_STYLE, LENS_ZOOM_SETTING, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
 import type { TrainingPreferences } from './preferences.ts';
 import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
 import { setTrainingWindowActive } from './native-training-window.ts';
 import { supportsAppScale, useNativeAppScale } from './native-app-scale.ts';
-import { CleanSeriesEffect, ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
+import { CleanSeriesPreview, ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
 import { zoneColor } from './target.ts';
 import './training-preferences.css';
 
@@ -91,6 +91,8 @@ const switches = [
   { key: 'hideScores', title: 'Скрывать очки', tag: 'setting-hide-scores', hint: 'Для интриги и большего места под мишень: убирает оценки стрел, суммы и средние вместе с подписями. Номера стрел, лупа и правка остаются. Результаты можно открыть в статистике. Попадания сохраняются как обычно.' },
   { key: 'averageHundredths', title: 'Средний до сотых', tag: 'setting-average-hundredths', hint: 'Показывает средний балл с двумя знаками после запятой в тренировке, списках серий и статистике.' },
   { key: 'animations', title: 'Анимации', tag: 'setting-animations', hint: 'Плавные изменения цифр и подсветка активной стрелы. Системная настройка уменьшения движения также учитывается.' },
+  { key: 'celebrationEffects', title: 'Праздничные эффекты', tag: 'setting-celebration-effects',
+    hint: 'Движение при чистой серии и важных результатах. Сами результаты, записи и обычные переходы доступны в любом положении переключателя.' },
   { key: 'haptics', title: 'Вибрация', tag: 'setting-haptics', hint: 'Короткий отклик после записи выстрела и по окончании таймера. Доступность зависит от устройства.' },
   { key: 'keepAwake', title: 'Не гасить экран', tag: 'setting-keep-awake', hint: 'Поддерживает экран включённым во время активной тренировки. Энергосбережение и ручная блокировка управляются телефоном.' },
   { key: 'trainingOnLockScreen', title: 'Тренировка на экране блокировки', tag: 'setting-training-lock-screen', hint: 'После ручной блокировки можно вернуться к активной тренировке без отпечатка. Остальные приложения остаются защищены блокировкой телефона. Работает только в Android-приложении.' },
@@ -120,7 +122,7 @@ export function LensControls({ preview }: { preview?: ReactNode }) {
 export function ShotMotionControl() {
   const { preferences, update, error, readable } = useTrainingPreferences();
   const [demo, setDemo] = useState<{ points: number | null; id: number }>({ points: 10, id: 0 });
-  const style = preferences.shotMotionStyle ?? 'cards';
+  const style = preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE;
   const canPreview = readable && preferences.animations;
   return <div className="shot-motion-settings">
     <strong>Анимация попаданий</strong>
@@ -131,7 +133,7 @@ export function ShotMotionControl() {
         }}>{option.label}</button>)}
     </div>
     <div className="shot-motion-preview" aria-hidden="true">
-      {canPreview && demo.points === null ? <CleanSeriesEffect key={demo.id} arrows={3} /> : <div className="shot-motion-demo">
+      {canPreview && demo.points === null ? <CleanSeriesPreview key={demo.id} /> : <div className="shot-motion-demo">
         <ShotFace key={`${style}:${demo.id}`} points={canPreview && demo.id > 0 ? demo.points ?? undefined : undefined} style={style}
           background={zoneColor(demo.points ?? 10)} color="#111811">{demo.points ?? 10}</ShotFace>
       </div>}

@@ -2,10 +2,10 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { summarize, zoneColor } from './target.ts';
 import type { Shot } from './target.ts';
-import { formatAverage } from './preferences.ts';
+import { DEFAULT_SHOT_MOTION_STYLE, formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
-import { ShotFace } from './ShotMotion.tsx';
+import { CleanSeriesEffects, ShotFace } from './ShotMotion.tsx';
 import type { ShotMotionEvent } from './ShotMotion.tsx';
 
 const paths = {
@@ -47,11 +47,31 @@ function ScoreTile({ label, number, shots, onOpen, tag, rank }: {
   const average = formatAverage(result.average, preferences.averageHundredths);
   return <div className="stage-tile-container"><button type="button" className="stage-tile" data-testid={`training-${tag === 'round' ? 'rounds' : 'series'}-open`} onClick={onOpen}>
     <span className="tile-heading">{label} <strong>{number}</strong></span>
-    {statisticVisible(preferences, 'result') && <span className="tile-score" data-testid={`${tag}-score`} aria-live={tag === 'series' ? 'polite' : undefined}>
-      <span className="score-change" key={score}>{score}</span>
+    {statisticVisible(preferences, 'result') && <span className="tile-score" data-testid={`${tag}-score`}
+      aria-live={tag === 'series' ? 'polite' : undefined} aria-atomic={tag === 'series' ? true : undefined}>
+      <ChangingScore text={score} />
     </span>}
-    {statisticVisible(preferences, 'average') && <span className="tile-average">Ср. <span className="score-change" key={average}>{average}</span></span>}
+    {statisticVisible(preferences, 'average') && <span className="tile-average">Ср. <ChangingScore text={average} /></span>}
   </button>{rank && <div className="stage-rank-slot">{rank}</div>}</div>;
+}
+
+function ChangingScore({ text }: { text: string }) {
+  const previous = useRef(text);
+  const digits = useRef<HTMLSpanElement>(null);
+  const { preferences } = useTrainingPreferences();
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = text;
+    if (!preferences.animations || before === text || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    digits.current?.querySelectorAll('span').forEach((cell, index) => {
+      if (/\d/.test(text[index]) && text[index] !== before[index]) {
+        cell.getAnimations().forEach(animation => animation.cancel());
+        cell.animate([{ opacity: .55, transform: 'translateY(32%)' }, { opacity: 1, transform: 'none' }],
+          { duration: 155, easing: 'ease-out' });
+      }
+    });
+  }, [text, preferences.animations]);
+  return <span ref={digits} className="changing-score">{Array.from(text, (character, index) => <span key={index}>{character}</span>)}</span>;
 }
 
 export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesShots, onRound, onSeries, roundRank, seriesRank }: {
@@ -70,16 +90,23 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
   </section>;
 }
 
-export function TrainingShotStrip({ shots, previousVolume, selected, entering, onPick, feedback }: {
+export function shotStripCapacity(shots: number, previousVolume: number) {
+  const volume = Math.max(shots, previousVolume);
+  return volume > 6 ? 12 : volume > 3 ? 6 : 3;
+}
+
+export function TrainingShotStrip({ shots, previousVolume, selected, entering, onPick, feedback, direction, removing }: {
   shots: readonly Shot[]; previousVolume: number; selected: number | null; entering: number | null;
   onPick: (index: number) => void;
   feedback?: ShotMotionEvent;
+  direction?: 'previous' | 'next';
+  removing?: number;
 }) {
   const { preferences } = useTrainingPreferences();
   const strip = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ left: false, right: false });
-  const volume = Math.max(shots.length, previousVolume);
-  const capacity = volume > 6 ? 12 : volume > 3 ? 6 : 3;
+  const capacity = shotStripCapacity(shots.length, previousVolume);
+  const cleanSeries = feedback?.index === capacity - 1 && shots.length === capacity ? feedback.cleanSeries : undefined;
   const pageCount = Math.max(1, Math.ceil(shots.length / capacity));
   const scrollable = pageCount > 1;
   const focusedPage = Math.floor((selected ?? Math.max(0, shots.length - 1)) / capacity);
@@ -102,10 +129,11 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
     return () => observer.disconnect();
   }, [focusedPage, pageCount, capacity]);
 
-  return <div className="training-hit-strip">
+  return <div className="training-hit-strip training-series-motion" data-direction={direction}>
     <div className="arrow-panel" data-testid="arrow-panel">
       <div ref={strip} className={`arrow-list${scrollable ? ' arrow-list-scroll' : ''}`} onScroll={updateFade}>
         {Array.from({ length: pageCount }, (_, page) => <ol key={page} className={`arrow-page arrow-page-${capacity}`}
+          data-clean-series={page === 0 ? cleanSeries : undefined}
           aria-label={pageCount > 1 ? `Стрелы серии · ${page + 1}/${pageCount}` : 'Стрелы серии'}>
           {Array.from({ length: capacity }, (_, slot) => {
             const index = page * capacity + slot;
@@ -114,12 +142,12 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
             const compact = capacity > 3;
             const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
             const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
-            const effect = shot && index === feedback?.index ? feedback : undefined;
-            return <li key={index}>
+            const effect = shot && !feedback?.cleanSeries && index === feedback?.index ? feedback : undefined;
+            return <li key={index} data-shot-shifted={shot && removing !== undefined && index >= removing ? true : undefined}>
               <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
                 data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
                 aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
-                <ShotFace key={effect?.id ?? 'static'} points={effect?.points} style={preferences.shotMotionStyle ?? 'cards'}
+                <ShotFace key={effect?.id ?? 'static'} points={effect?.points} style={preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE}
                   background={background} color={color}>
                   <span className="arrow-number" aria-hidden="true">{index + 1}</span>
                   <span className="arrow-score">{shot ? preferences.hideScores ? '✓' : shot.code : '—'}</span>
@@ -128,6 +156,7 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
               </button>
             </li>;
           })}
+          {page === 0 && cleanSeries && <CleanSeriesEffects key={feedback?.id} as="li" landing={cleanSeries === 'jump'} />}
         </ol>)}
       </div>
       {scrollable && fade.left && <span className="arrow-fade fade-left" aria-hidden="true" />}

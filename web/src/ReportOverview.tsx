@@ -15,6 +15,7 @@ import { RankTag } from './SportRanks.tsx';
 import { roundRank } from './sport-ranks.ts';
 import { TrainingMeanTrend } from './TrainingMeanTrend.tsx';
 import { TrainingReportMetrics } from './TrainingReportMetrics.tsx';
+import type { TrainingMoment } from './training-moments.ts';
 import { ExerciseRankCard } from './ExerciseRankCard.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { ReportExport } from './ReportExport.tsx';
@@ -61,7 +62,7 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized, moment }: {
   practice: Practice;
   entries: readonly DiaryEntry[];
   entryId: string | null;
@@ -83,6 +84,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onRepeat?: () => void;
   onRoomLeaderboard?: () => void;
   roomFinalized?: boolean;
+  moment?: TrainingMoment;
   onDeleteStage: (kind: 'round' | 'series', id: number) => Promise<boolean>;
 }) {
   const { preferences, update } = useTrainingPreferences();
@@ -148,7 +150,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {deleted && <button type="button" className="report-resume" onClick={async () => { if (await onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
-      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} overview={{
+      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} moment={moment} overview={{
       records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
         onSession={onOpenRecordSession} />,

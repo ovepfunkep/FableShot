@@ -47,15 +47,18 @@ test('average precision and disabled animation apply to training, selectors and 
   await page.getByTestId('setting-animations').click();
   await closeSettings(page);
   await expect(page.locator('.tile-average').first()).toHaveText('Ср. 10,00');
-  expect(await page.locator('.score-change').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  await hit(page);
+  const score = page.getByTestId('series-score');
+  await expect(score).toHaveText('20/20');
+  expect(await score.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
   await page.reload();
   await openTraining(page);
   await page.getByTestId('training-series-open').click();
-  await expect(page.getByTestId('training-series-result-1').locator('.report-series-score')).toHaveText('10/10');
+  await expect(page.getByTestId('training-series-result-1').locator('.report-series-score')).toHaveText('20/20');
   await expect(page.getByTestId('training-series-result-1').locator('.report-series-average')).toHaveText('10,00');
   await page.getByTestId('training-select-series-1').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
-  await expect(page.getByTestId('report-round-total-1')).toHaveText('Раунд 1 · 10/10 · 10,00');
+  await expect(page.getByTestId('report-round-total-1')).toHaveText('Раунд 1 · 20/20 · 10,00');
 });
 
 test('screen lock follows training visibility and the keep-awake preference', async ({ page }) => {

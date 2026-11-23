@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { getAchievementDefinition } from './achievement-catalog.ts';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { CompositeScoreCard } from './CompositeScoreCard.tsx';
 import { conditionsKey } from './composite-scoring.ts';
@@ -17,6 +18,7 @@ import { ReportRoundFilter } from './ReportRoundFilter.tsx';
 import { ShotDistribution } from './ShotDistribution.tsx';
 import type { DistributionView } from './ShotDistribution.tsx';
 import { exerciseRank } from './exercise-rank.ts';
+import type { TrainingMoment } from './training-moments.ts';
 import { RankDetails, RankMedal } from './SportRanks.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
@@ -47,7 +49,23 @@ function scopeLabel(scope: Scope): string {
     equipment?.name].filter(Boolean).join(' · ');
 }
 
-function ResultCard({ shots, diameterMm, practice, onRankReference }: { shots: readonly Shot[]; diameterMm: number | null; practice: Practice; onRankReference: () => void }) {
+function FinishHighlight({ moment }: { moment: TrainingMoment }) {
+  const { preferences } = useTrainingPreferences();
+  const average = (value: number) => formatAverage(value, preferences.averageHundredths);
+  const labels = { rank: 'Новый норматив', series: 'Чистая серия', record: 'Личный рекорд', progress: 'Заметный прогресс' };
+  const achievement = moment.kind === 'series' && moment.achievementId ? getAchievementDefinition(moment.achievementId) : undefined;
+  const detail = moment.kind === 'rank' ? moment.level : moment.kind === 'series' ? `${moment.arrows * 10}/${moment.arrows * 10}`
+    : moment.kind === 'record' ? `${moment.previous} → ${moment.value}`
+    : `${average(moment.previous)} → ${average(moment.value)} · ${moment.distance} м`;
+  return <div className="training-finish-highlight" data-testid="training-finish-highlight" data-moment={moment.kind}
+    data-celebrate={preferences.celebrationEffects !== false}>
+    <span>{achievement?.title ?? labels[moment.kind]}</span><strong>{detail}</strong>
+  </div>;
+}
+
+function ResultCard({ shots, diameterMm, practice, onRankReference, moment }: {
+  shots: readonly Shot[]; diameterMm: number | null; practice: Practice; onRankReference: () => void; moment?: TrainingMoment;
+}) {
   const { preferences, update } = useTrainingPreferences();
   const [rankOpen, setRankOpen] = useState(false);
   const { points, maximum, average } = summarize(shots);
@@ -59,7 +77,9 @@ function ResultCard({ shots, diameterMm, practice, onRankReference }: { shots: r
   const rank = useMemo(() => exerciseRank(practice, preferences.rankCategory ?? null), [practice, preferences.rankCategory]);
   if (!(['result', 'average', 'volume', 'norms'] as const).some(visible) && !showGrouping && !showOffset) return null;
   const hasMetrics = visible('average') || showGrouping || visible('volume') || showOffset;
-  return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result">
+  const highlight = moment && (moment.kind === 'rank' ? visible('norms') : moment.kind === 'progress' ? visible('average') : visible('result'));
+  return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result" data-finish-moment={highlight ? moment.kind : undefined}>
+    {highlight && <FinishHighlight moment={moment} />}
     <div className="report-result-score-row">
       <div className="report-result-main">
         <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
@@ -125,8 +145,8 @@ function ZoneDistribution({ series, view, onView }: {
   </section>;
 }
 
-export function TrainingReportMetrics({ practice, entries, overview, onRankReference }: {
-  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void;
+export function TrainingReportMetrics({ practice, entries, overview, onRankReference, moment }: {
+  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void; moment?: TrainingMoment;
 }) {
   const { preferences } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
@@ -143,7 +163,7 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
   if (scope && (['result', 'average', 'volume', 'grouping', 'offset', 'norms', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) {
     Object.assign(blocks, {
       result: mayShowResult && <ResultCard shots={shots} diameterMm={mixed ? null : scope.conditions.targetDiameterMm}
-        practice={practice} onRankReference={onRankReference} />,
+        practice={practice} onRankReference={onRankReference} moment={moment} />,
       general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
       hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,

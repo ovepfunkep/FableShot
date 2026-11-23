@@ -22,7 +22,7 @@
   font: inherit;
   cursor: pointer;
 }
-.settings-entries .settings-entry:nth-child(3n + 1) {
+html:is([data-theme-style="sport"], [data-theme-style="pop"]) .settings-entries .settings-entry:nth-child(3n + 1) {
   background: radial-gradient(circle at 92% 0%, transparent 22px, var(--geometry-line) 23px, transparent 24px 43px,
     var(--geometry-line) 44px, transparent 45px), var(--surface);
 }

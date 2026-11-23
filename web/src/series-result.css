@@ -1,15 +1,21 @@
-.report-round { --series-score-width: 8ch; --series-average-width: 5ch; --series-sum-width: 6ch; --series-gap: 6px; }
+.report-round {
+  --series-score-width: 4.25em; --series-average-width: 3em; --series-sum-width: 3em;
+  --series-gap: 5px; --series-start: 37px; --series-number-width: 32px; --series-column-gap: 6px;
+}
 .report-series {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
-  column-gap: 8px; width: 100%; min-height: 46px; padding: 6px 10px 6px 41px;
+  column-gap: var(--series-column-gap, 8px); width: 100%; min-height: 46px;
+  padding-block: 6px; padding-inline: var(--series-start, 41px) 10px;
   overflow: hidden; border: 1px solid var(--accent-line, var(--edge)); border-radius: 16px;
   background: var(--surface); text-align: start;
 }
 .report-hits { grid-column: 1; display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .report-hit { flex: 0 0 auto; min-width: 18px; padding: 1px 2px; border: .5px solid var(--edge); border-radius: 5px; text-align: center; font-size: 12px; line-height: 16px; font-weight: 600; }
+.report-round .report-hits { column-gap: 2px; }
+.report-round .report-hit { min-width: 19px; padding-inline: 1px; }
 .report-series-number {
   position: absolute; inset-inline-start: 2px; top: 50%; transform: translateY(-50%);
-  width: 36px; text-align: center; color: var(--ink); opacity: .2;
+  width: var(--series-number-width, 36px); text-align: center; color: var(--ink); opacity: .2;
   font-size: 52px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums;
 }
 .report-series-number[data-digits="2"] { font-size: 30px; }
@@ -17,7 +23,7 @@
 .report-series-number[data-digits="4"] { font-size: 12px; }
 .report-series-summary, .report-series-columns {
   display: grid; grid-auto-flow: column; align-items: center; justify-content: end;
-  gap: var(--series-gap, 6px); text-align: end; font-size: 12px; font-variant-numeric: tabular-nums;
+  gap: var(--series-gap, 6px); text-align: center; font-size: 12px; font-variant-numeric: tabular-nums;
 }
 .report-series-summary { grid-column: 2; }
 .report-series-columns { color: var(--muted); font-size: 12px; padding-inline: 11px; }

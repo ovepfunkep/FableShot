@@ -1,0 +1,118 @@
+.training-finish-highlight {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; justify-content: space-between; flex-wrap: wrap; align-items: baseline;
+  gap: 4px 12px; margin-bottom: 12px; padding: 8px 12px;
+  background: color-mix(in srgb, gold 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, #b98613 52%, var(--edge)); border-radius: 12px; color: var(--ink);
+}
+.training-finish-highlight strong { font-variant-numeric: tabular-nums; }
+.training-finish-highlight[data-celebrate="true"] { animation: finish-emphasis 1000ms ease-out both; }
+.training-finish-highlight[data-celebrate="true"]::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: repeating-linear-gradient(115deg, transparent 0 24px, #ffe2845c 25px 27px, transparent 28px 43px);
+  animation: finish-sweep 950ms ease-out both;
+}
+.training-finish-highlight[data-moment="progress"][data-celebrate="true"]::before,
+html[data-theme-style="pop"] .training-finish-highlight[data-celebrate="true"]::before {
+  background: radial-gradient(circle at 12% 22%, #ffc447 0 2px, transparent 3px),
+    radial-gradient(circle at 24% 78%, #ef799b 0 2px, transparent 3px),
+    radial-gradient(circle at 40% 54%, #9be362 0 3px, transparent 4px),
+    radial-gradient(circle at 60% 20%, #e4bcff 0 2px, transparent 3px),
+    radial-gradient(circle at 72% 72%, #68c5ff 0 3px, transparent 4px),
+    radial-gradient(circle at 92% 35%, #ffc447 0 3px, transparent 4px);
+  background-size: 170px 100%;
+}
+html[data-theme-style="minimal"] .training-finish-highlight::before { display: none; }
+[data-finish-moment="rank"]:has([data-celebrate="true"]) .report-result-rank { animation: finish-emphasis 1000ms ease-out both; }
+@keyframes finish-emphasis {
+  0% { box-shadow: inset 0 0 0 1px #ffc64f; }
+  36% { box-shadow: inset 0 0 0 2px #ffc64f91; }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+@keyframes finish-sweep {
+  from { opacity: 0; transform: translate(-9%, 18%) scale(.92); }
+  28% { opacity: .72; }
+  to { opacity: 0; transform: translate(12%, -18%) scale(1.12); }
+}
+
+.condition-sheet[open]:not([data-testid="physical-arrow-picker"]) > .condition-sheet-body,
+.rank-dialog[open] > .rank-dialog__body,
+.practice-timer-sheet[open] > .practice-timer-content,
+.equipment-sheet[open] > :is(.equipment-sheet-header, .equipment-sheet-content),
+.technique-sheet[open] { animation: panel-arrival 150ms ease-out both; }
+@keyframes panel-arrival { from { transform: translateY(10px); opacity: .76; } }
+.journal-home-primary:active { transform: scale(.98); }
+.journal-home-primary, .preference-switch span, .journal-timeline-frame::before, .journal-timeline-frame::after {
+  transition: transform 120ms ease-out, opacity 160ms ease-out;
+}
+.journal-navigation { position: relative; isolation: isolate; }
+.journal-navigation-marker {
+  position: absolute; inset: 0 auto auto 0; z-index: -1; pointer-events: none;
+  background: var(--accent); border-radius: 999px;
+  transition: transform 185ms ease-out;
+}
+.journal-navigation[data-marker-ready="true"] [aria-current] .journal-navigation-icon { background: transparent; }
+.practice-timer-face, .practice-timer-badge,
+.rank-summary-level, .exercise-rank__table td, .exercise-rank__table th,
+.report-order li, .equipment-catalog-card, .equipment-card,
+.hit-map-modes button, .hit-map-spots button, .progress-timeline-metrics button, .progress-timeline-dot {
+  transition: color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out, fill 150ms ease-out;
+}
+.equipment-catalog-star svg { transition: fill 150ms ease-out, stroke 150ms ease-out; }
+.exercise-rank__table [data-rank-selected="true"] { background-color: color-mix(in srgb, var(--accent) 13%, var(--surface)); }
+.hit-map-layer { animation: map-layer-arrival 140ms ease-out; }
+@keyframes map-layer-arrival { from { opacity: .52; } }
+.progress-timeline-dot { transition: fill 150ms ease-out, r 150ms ease-out; }
+.equipment-chip, .journal-tab-history-card { transition: background-color 150ms ease-out, border-color 150ms ease-out; }
+.motion-status[data-busy="true"]::before {
+  content: ''; display: inline-block; margin-inline-end: .48em; width: .7em; height: .7em;
+  border: 2px solid var(--edge); border-top-color: var(--accent); border-radius: 50%;
+  animation: status-progress 780ms linear infinite;
+}
+.motion-status[data-busy="false"] { animation: status-confirmed 420ms ease-out; }
+@keyframes status-progress { to { transform: rotate(1turn); } }
+@keyframes status-confirmed { from { opacity: .62; } }
+.training-series-motion[data-direction] { animation: training-series-step 150ms ease-out; }
+.training-series-motion[data-direction="previous"] { --series-step: -9px; }
+.training-series-motion[data-direction="next"] { --series-step: 9px; }
+@keyframes training-series-step { from { transform: translateX(var(--series-step)); opacity: .78; } }
+.changing-score { display: inline-flex; overflow: hidden; vertical-align: bottom; }
+.removed-shot-ghost {
+  position: absolute; translate: -50% -50%; pointer-events: none; z-index: 1;
+  width: 19px; height: 19px; border: 2px solid #fff; border-radius: 50%; background: #15221a;
+  animation: removed-shot 180ms ease-out both;
+}
+@keyframes removed-shot {
+  from { opacity: .7; }
+  to { opacity: 0; transform: scale(.6); }
+}
+[data-shot-shifted="true"] .shot-face { animation: moved-shot 155ms ease-out; }
+@keyframes moved-shot { from { transform: translateX(5px); opacity: .65; } }
+
+html[data-motion="off"] :is(.training-finish-highlight, .motion-status, .training-series-motion,
+  .technique-sheet, .hit-map-layer, .removed-shot-ghost, [data-shot-shifted] .shot-face) { animation: none; }
+html[data-motion="off"] .training-finish-highlight::before,
+html[data-motion="off"] .motion-status::before { display: none; }
+html[data-motion="off"] :is(.condition-sheet > .condition-sheet-body, .rank-dialog > .rank-dialog__body, .practice-timer-sheet > .practice-timer-content),
+html[data-motion="off"] .equipment-sheet > :is(.equipment-sheet-header, .equipment-sheet-content),
+html[data-motion="off"] [data-finish-moment="rank"] .report-result-rank { animation: none; }
+html[data-motion="off"] :is(.journal-home-primary, .journal-navigation-marker, .preference-switch span, .practice-timer-face, .practice-timer-badge, .rank-summary-level,
+  .exercise-rank__table td, .exercise-rank__table th, .report-order li, .equipment-catalog-card, .equipment-card,
+  .hit-map-modes button, .hit-map-spots button, .progress-timeline-metrics button, .progress-timeline-dot,
+  .equipment-catalog-star svg, .equipment-chip, .journal-tab-history-card) { transition: none; }
+html[data-motion="off"] .journal-timeline-frame::before, html[data-motion="off"] .journal-timeline-frame::after { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .condition-sheet[open]:not([data-testid="physical-arrow-picker"]) > .condition-sheet-body,
+  .rank-dialog[open] > .rank-dialog__body,
+  .equipment-sheet[open] > :is(.equipment-sheet-header, .equipment-sheet-content),
+  .practice-timer-sheet[open] > .practice-timer-content, .technique-sheet[open],
+  .training-finish-highlight[data-celebrate="true"], [data-finish-moment="rank"]:has([data-celebrate="true"]) .report-result-rank,
+  .motion-status[data-busy], .training-series-motion[data-direction],
+  .removed-shot-ghost, [data-shot-shifted] .shot-face, .hit-map-layer { animation: none; }
+  .training-finish-highlight[data-celebrate="true"]::before, .motion-status[data-busy="true"]::before { display: none; }
+  .journal-home-primary, .journal-navigation-marker, .preference-switch span, .journal-timeline-frame::before, .journal-timeline-frame::after,
+  .practice-timer-face, .practice-timer-badge, .rank-summary-level, .exercise-rank__table td, .exercise-rank__table th,
+  .report-order li, .equipment-catalog-card, .equipment-card, .hit-map-modes button,
+  .hit-map-spots button, .progress-timeline-metrics button, .progress-timeline-dot,
+  .equipment-catalog-star svg, .equipment-chip, .journal-tab-history-card { transition: none; }
+}
