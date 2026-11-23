@@ -174,100 +174,70 @@
   background: var(--surface); color: var(--accent);
 }
 
-/* Keep the journal's background and each card's print independent of its surface color. */
+/* The page atmosphere is quieter than the curves on its cards. */
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell {
-  --journal-background-line: color-mix(in srgb, var(--accent) 5%, transparent);
-  --journal-background-wash: color-mix(in srgb, var(--accent) 2%, transparent);
+  --journal-background-curve: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="home"] {
   background-image:
-    radial-gradient(ellipse at -8% 38%, transparent 65px, var(--journal-background-line) 66px 67px, transparent 68px 110px, var(--journal-background-line) 111px 112px, transparent 113px),
-    radial-gradient(ellipse at 105% 76%, transparent 65px, var(--journal-background-line) 66px, transparent 67px 123px, var(--journal-background-line) 124px, transparent 125px),
-    linear-gradient(156deg, transparent 78%, var(--journal-background-wash) 78.2% 78.4%, transparent 78.6%);
+    radial-gradient(ellipse 115% 52% at 104% 13%, transparent calc(53% - 1px), var(--journal-background-curve) 53%, transparent calc(53% + 1px)),
+    radial-gradient(ellipse 95% 47% at -12% 73%, transparent calc(66% - 1px), var(--journal-background-curve) 66%, transparent calc(66% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell .journal-home-hero {
   background-image:
-    radial-gradient(circle at 92% 48%, transparent 48px, var(--geometry-line) 49px 50px, transparent 51px 70px, var(--geometry-line) 71px 72px, transparent 73px 105px, var(--geometry-line) 106px 107px, transparent 108px),
-    radial-gradient(circle at 75% 17%, var(--geometry-line) 0 3px, transparent 4px),
+    radial-gradient(ellipse 55% 115% at 100% 57%, transparent calc(34% - 1px), var(--geometry-line) 34%, transparent calc(34% + 1px) calc(53% - 1px), var(--geometry-line) 53%, transparent calc(53% + 1px) calc(73% - 1px), var(--geometry-wash) 73%, transparent calc(73% + 1px)),
     var(--highlight-field);
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-home-totals > div {
-  background-image:
-    linear-gradient(136deg, transparent 67%, var(--geometry-line) 67.5% 68.2%, transparent 69% 77%, var(--geometry-line) 77.5% 78.2%, transparent 79% 86%, var(--geometry-wash) 86.5% 87.2%, transparent 87.7%);
+  background-image: radial-gradient(ellipse 62% 110% at 111% 105%, transparent calc(62% - 1px), var(--geometry-line) 62%, transparent calc(62% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-home-totals .journal-home-history {
-  background:
-    radial-gradient(circle at 71% 27%, var(--geometry-line) 0 2px, transparent 3px),
-    radial-gradient(circle at 84% 44%, transparent 7px, var(--geometry-line) 8px 9px, transparent 10px),
-    radial-gradient(circle at 95% 80%, transparent 15px, var(--geometry-line) 16px 17px, transparent 18px) var(--surface);
+  background: radial-gradient(ellipse 42% 106% at 105% 0%, transparent calc(48% - 1px), var(--geometry-wash) 48%, transparent calc(48% + 1px) calc(73% - 1px), var(--geometry-line) 73%, transparent calc(73% + 1px)) var(--surface);
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell .journal-home-practice {
   background-image:
-    radial-gradient(circle at 3% 96%, var(--geometry-line) 0 2px, transparent 3px),
-    radial-gradient(circle at 7% 96%, var(--geometry-line) 0 2px, transparent 3px),
-    radial-gradient(circle at 11% 96%, var(--geometry-wash) 0 2px, transparent 3px),
-    radial-gradient(ellipse at 100% 0%, transparent 62px, var(--geometry-line) 63px 64px, transparent 65px 91px, var(--geometry-line) 92px 93px, transparent 94px);
+    radial-gradient(ellipse 55% 62% at -5% 106%, transparent calc(57% - 1px), var(--geometry-wash) 57%, transparent calc(57% + 1px)),
+    radial-gradient(ellipse 65% 60% at 103% -20%, transparent calc(63% - 1px), var(--geometry-line) 63%, transparent calc(63% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell .android-update-banner {
-  background-image: linear-gradient(108deg, transparent 81%, var(--geometry-line) 81.3% 81.6%, transparent 82% 91%, var(--geometry-wash) 91.3% 91.6%, transparent 92%);
+  background-image: radial-gradient(ellipse 35% 160% at 100% 115%, transparent calc(65% - 1px), var(--geometry-wash) 65%, transparent calc(65% + 1px));
 }
 
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="history"] {
   background-image:
-    repeating-linear-gradient(149deg, transparent 0 76px, var(--journal-background-line) 77px 78px, transparent 79px 113px),
-    linear-gradient(90deg, transparent 11%, var(--journal-background-wash) 11.2% 11.5%, transparent 11.7%);
+    radial-gradient(ellipse 92% 57% at -27% 33%, transparent calc(58% - 1px), var(--journal-background-curve) 58%, transparent calc(58% + 1px)),
+    radial-gradient(ellipse 85% 59% at 110% 88%, transparent calc(53% - 1px), var(--journal-background-curve) 53%, transparent calc(53% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="history"] :is(.journal-tab-history-card, .journal-tab-empty) {
   background-image:
-    linear-gradient(var(--geometry-line), var(--geometry-line)),
-    linear-gradient(var(--geometry-line), var(--geometry-line)),
-    linear-gradient(var(--geometry-wash), var(--geometry-wash)),
-    linear-gradient(var(--geometry-wash), var(--geometry-wash));
-  background-position: right 14px bottom 16px, right 14px bottom 16px, right 25px bottom 27px, right 25px bottom 27px;
-  background-size: 28px 1px, 1px 28px, 22px 1px, 1px 22px;
-  background-repeat: no-repeat;
+    radial-gradient(ellipse 42% 150% at 107% 131%, transparent calc(59% - 1px), var(--geometry-line) 59%, transparent calc(59% + 1px)),
+    radial-gradient(ellipse 55% 120% at 119% 20%, transparent calc(65% - 1px), var(--geometry-wash) 65%, transparent calc(65% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="history"] li:nth-child(even) .journal-tab-history-card {
-  background-image:
-    radial-gradient(circle at 4px 4px, transparent 2px, var(--geometry-line) 2.5px 3px, transparent 3.5px),
-    radial-gradient(circle at 4px 4px, transparent 2px, var(--geometry-line) 2.5px 3px, transparent 3.5px),
-    linear-gradient(var(--geometry-line), var(--geometry-line));
-  background-position: right 14px bottom 24px, right 50px bottom 24px, right 21px bottom 27px;
-  background-size: 8px 8px, 8px 8px, 32px 1px;
+  background-image: radial-gradient(ellipse 48% 100% at 111% 1%, transparent calc(55% - 1px), var(--geometry-wash) 55%, transparent calc(55% + 1px) calc(77% - 1px), var(--geometry-line) 77%, transparent calc(77% + 1px));
 }
 
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="progress"] {
   background-image:
-    linear-gradient(169deg, transparent 41%, var(--journal-background-line) 41.2%, transparent 41.5% 52%, var(--journal-background-line) 52.2%, transparent 52.5%),
-    linear-gradient(24deg, transparent 19%, var(--journal-background-line) 19.2% 19.4%, transparent 19.6% 85%, var(--journal-background-wash) 85.3% 85.5%, transparent 85.8%);
+    radial-gradient(ellipse 114% 62% at 96% -7%, transparent calc(57% - 1px), var(--journal-background-curve) 57%, transparent calc(57% + 1px)),
+    radial-gradient(ellipse 124% 40% at 48% 106%, transparent calc(58% - 1px), var(--journal-background-curve) 58%, transparent calc(58% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="progress"] :is(.journal-tab-metrics, .journal-tab-empty) {
-  background:
-    linear-gradient(168deg, transparent 47%, var(--geometry-line) 47.4% 48%, transparent 48.4%) right bottom / 62% 55% no-repeat,
-    linear-gradient(160deg, transparent 73%, var(--geometry-wash) 73.2% 73.7%, transparent 74%) var(--surface);
+  background-image: radial-gradient(ellipse 58% 140% at 94% 142%, transparent calc(64% - 1px), var(--geometry-line) 64%, transparent calc(64% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="progress"] .progress-timeline:not(.geometry-trend) {
-  background-image:
-    linear-gradient(151deg, transparent 86%, var(--geometry-line) 86.2% 86.4%, transparent 86.6% 90%, var(--geometry-wash) 90.2% 90.4%, transparent 90.6%);
+  background-image: radial-gradient(ellipse 80% 43% at 114% 110%, transparent calc(64% - 1px), var(--geometry-wash) 64%, transparent calc(64% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="progress"] .geometry-trend {
-  background-image:
-    radial-gradient(circle at 92% 96%, transparent 25px, var(--geometry-line) 26px 27px, transparent 28px),
-    radial-gradient(circle at 104% 103%, transparent 57px, var(--geometry-line) 58px 59px, transparent 60px 91px, var(--geometry-line) 92px, transparent 93px);
+  background-image: radial-gradient(ellipse 46% 57% at 101% 105%, transparent calc(43% - 1px), var(--geometry-wash) 43%, transparent calc(43% + 1px) calc(66% - 1px), var(--geometry-line) 66%, transparent calc(66% + 1px));
 }
 
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="equipment"] {
-  background:
-    repeating-linear-gradient(90deg, transparent 0 31px, var(--journal-background-wash) 32px 33px, transparent 34px 40px) right bottom / 33% 100% no-repeat,
-    repeating-linear-gradient(0deg, transparent 0 31px, var(--journal-background-line) 32px, transparent 33px 40px) right bottom / 33% 100% no-repeat;
+  background-image: radial-gradient(ellipse 104% 76% at 118% 48%, transparent calc(47% - 1px), var(--journal-background-curve) 47%, transparent calc(47% + 1px) calc(72% - 1px), var(--journal-background-curve) 72%, transparent calc(72% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="equipment"] :is(.equipment-catalog-card, .equipment-catalog-empty) {
-  background-image:
-    linear-gradient(122deg, transparent 83%, var(--geometry-line) 83.2% 83.6%, transparent 83.8%),
-    linear-gradient(58deg, transparent 79%, var(--geometry-wash) 79.3% 79.6%, transparent 80% 95.5%, var(--geometry-line) 96% 96.2%, transparent 96.4%);
+  background-image: radial-gradient(ellipse 45% 150% at 120% 70%, transparent calc(56% - 1px), var(--geometry-line) 56%, transparent calc(56% + 1px) calc(74% - 1px), var(--geometry-wash) 74%, transparent calc(74% + 1px));
 }
 html:is([data-theme-style="sport"], [data-theme-style="pop"]) .journal-shell[data-tab="equipment"] .equipment-catalog-card:nth-child(even) {
-  background-image:
-    linear-gradient(113deg, transparent 75%, var(--geometry-line) 75.3%, transparent 75.6% 89%, var(--geometry-line) 89.3%, transparent 89.6%),
-    linear-gradient(0deg, transparent 12%, var(--geometry-wash) 12.2% 12.5%, transparent 12.8%);
+  background-image: radial-gradient(ellipse 49% 130% at 106% -14%, transparent calc(62% - 1px), var(--geometry-line) 62%, transparent calc(62% + 1px) calc(80% - 1px), var(--geometry-wash) 80%, transparent calc(80% + 1px));
 }
