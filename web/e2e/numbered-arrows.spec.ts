@@ -72,6 +72,8 @@ test('numbered kit records hits first, prevents duplicates and edits old assignm
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await page.getByTestId('start-training').click();
+  // The conditions screen closes after the asynchronous journal write succeeds.
+  await expect(page.getByTestId('target')).toBeVisible();
   await page.reload();
   await openTraining(page);
   await miss.click();
