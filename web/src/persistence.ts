@@ -12,7 +12,7 @@ import type { AchievementEnrollment, AchievementLedger } from './achievement-led
 import { isPersonalRecordEvent } from './personal-record-events.ts';
 import type { PersonalRecordEvent } from './personal-record-events.ts';
 import type { Point, Shot } from './target.ts';
-import { getTargetProfile, isInMissRing, isOnFace } from './target.ts';
+import { acceptsDiameter, getTargetProfile, isInMissRing, isOnFace } from './target.ts';
 import { appendShot, completePractice, emptyPractice, ROUND_LIMIT } from './practice.ts';
 import { DEFAULT_CONDITIONS, DEFAULT_ROUND_RULE, MAX_SERIES_ARROWS, isConditions, isRoundRule } from './conditions.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
@@ -56,7 +56,17 @@ function isPoint(value: unknown): value is Point {
 
 function isShot(value: unknown): value is Shot {
   if (value === null || typeof value !== 'object') return false;
-  const { point, points, code, physicalArrowNumber, imported, sourcePoint, missPoint, spot } = value as Partial<Shot>;
+  const { point, points, code, physicalArrowNumber, imported, sourcePoint, missPoint, spot, originalMark } = value as Partial<Shot>;
+  if (originalMark !== undefined) {
+    if (!originalMark || typeof originalMark !== 'object') return false;
+    const profile = typeof originalMark.profileId === 'string' ? getTargetProfile(originalMark.profileId) : undefined;
+    const { point: oldPoint, missPoint: oldMiss, spot: oldSpot, points: oldScore, code: oldCode } = originalMark;
+    if (!profile || !acceptsDiameter(profile, originalMark.diameterMm) ||
+      (oldPoint !== null && !isPoint(oldPoint)) || (oldMiss !== undefined && !isPoint(oldMiss)) ||
+      (oldSpot !== undefined && (!profile.vertical || ![0, 1, 2].includes(oldSpot))) ||
+      !Number.isInteger(oldScore) || oldScore < 0 || oldScore > 10 ||
+      (oldScore === 0 ? oldCode !== 'M' : oldCode !== String(oldScore) && !(oldScore === 10 && oldCode === 'X'))) return false;
+  }
   if (spot !== undefined && spot !== 0 && spot !== 1 && spot !== 2) return false;
   if (imported !== undefined && imported !== true) return false;
   if (sourcePoint !== undefined && (imported !== true || !isPoint(sourcePoint))) return false;
@@ -64,7 +74,8 @@ function isShot(value: unknown): value is Shot {
   if (typeof points !== 'number' || !Number.isInteger(points) || points < 0 || points > 10) return false;
   if (missPoint !== undefined && (points !== 0 || !isPoint(missPoint))) return false;
   if (points === 0) return point === null && code === 'M';
-  return (isPoint(point) || (point === null && imported === true)) && (code === String(points) || (points === 10 && code === 'X'));
+  return (isPoint(point) || (point === null && (imported === true || originalMark !== undefined))) &&
+    (code === String(points) || (points === 10 && code === 'X'));
 }
 
 function isSavedAt(value: unknown): value is string | null {

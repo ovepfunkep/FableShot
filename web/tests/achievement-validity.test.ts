@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { achievementValidity } from '../src/achievement-validity.ts';
+import { achievementValidity, removeAchievementEvidence } from '../src/achievement-validity.ts';
 import type { AchievementGrant } from '../src/achievement-ledger.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
 import type { Diary, DiaryEntry } from '../src/persistence.ts';
@@ -22,6 +22,18 @@ const grant = (id: string, scope = 'recurve', extra: Partial<AchievementGrant> &
   ({ id, scope, earnedAt, sessionId: 'source', ...extra });
 const diary = (entries: DiaryEntry[], grants: AchievementGrant[]): Diary => ({ version: 1, entries,
   achievementLedger: { epoch, grants } });
+
+test('trash suppresses the pending notice while permanent deletion removes only linked awards', () => {
+  const source = training(), neighbor = training('neighbor');
+  const awards = [grant('HIT01'), grant('APP04', 'global'), grant('START02', 'recurve', { sessionId: neighbor.id })];
+  const previous = diary([source, neighbor], awards);
+  const trash = diary([{ ...source, deletedAt: earnedAt }, neighbor], awards);
+  const hidden = removeAchievementEvidence(previous, trash, source.id, earnedAt);
+  assert.deepEqual(hidden.achievementLedger?.grants.map(item => item.notifiedAt), [earnedAt, undefined, undefined]);
+  const permanentlyRemoved = removeAchievementEvidence(previous, diary([neighbor], awards), source.id, earnedAt);
+  assert.deepEqual(permanentlyRemoved.achievementLedger?.grants.map(item => item.id), ['APP04', 'START02']);
+  assert.equal(previous.achievementLedger?.grants.length, 3);
+});
 
 test('validity recomputes issued performance receipts after a correction and can recover without new receipts', () => {
   const source = training();

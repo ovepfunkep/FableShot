@@ -129,7 +129,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     if (!evaluation) paragraph(rank.reason ?? 'Нет данных для сравнения.');
     else {
       ensure(155); box(left, y, width, 136);
-      text(`${rank.finalResult ? 'По очкам' : 'Темп'} · ${rank.label}`, left + 15, y - 12, 19, true, accent);
+      text(`${snapshot.rankDisplay.forecast ? 'Темп' : 'По очкам'} · ${snapshot.rankDisplay.label}`, left + 15, y - 12, 19, true, accent);
+      if (snapshot.rankDisplay.actual) text(snapshot.rankDisplay.actual, left + 15, y - 32, 9, false, muted);
       text(`${rank.classLabel} · ${evaluation.entered} из ${evaluation.exercise.arrows} стрел · средний ${decimal(evaluation.average)}`, left + 15, y - 42, 9, false, muted);
       const lineY = y - 82, start = left + 20, length = width - 40;
       page.drawLine({ start: { x: start, y: lineY }, end: { x: start + length, y: lineY }, color: edge, thickness: 4 });
@@ -200,7 +201,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     metrics([
       ...(shown('result') ? [{ label: 'ОЧКИ', value: `${scope.result.points}/${scope.result.maximum}` }] : []),
       ...(shown('average') ? [{ label: 'СРЕДНИЙ', value: decimal(scope.result.average) }] : []),
-      ...(shown('grouping') ? [{ label: 'КУЧНОСТЬ RMS', value: `${decimal(scope.geometry?.rmsMm)} мм` }] : []),
+      ...(shown('grouping') ? [{ label: snapshot.spreadLabel, value: scope.spread === null ? '—' : `${decimal(scope.spread)} мм` }] : []),
       ...(shown('offset') && scope.geometry ? [{ label: 'СМЕЩЕНИЕ ОТ ЦЕНТРА', value: `${decimal(scope.geometry.shiftMm)} мм` }] : []),
       ...(shown('zone_trend') ? [{ label: 'ДОЛЯ ДЕСЯТОК', value: `${decimal(scope.distribution[10] / scope.shots.length * 100)}%` }] : []),
       ...(shown('volume') ? [{ label: 'СТРЕЛ', value: String(scope.shots.length) }] : []),

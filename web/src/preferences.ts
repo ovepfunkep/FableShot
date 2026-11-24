@@ -7,7 +7,7 @@ import { isThemeMode, isThemeStyle } from './web-theme.ts';
 import type { ThemeMode, ThemeStyle } from './web-theme.ts';
 
 export const RECENT_PRACTICE_LIMIT = { min: 5, max: 20 };
-export const AIM_SPEED_SETTING = { min: 20, max: 150, default: 70 };
+export const AIM_SPEED_SETTING = { min: 20, max: 150, default: 40 };
 export const LENS_ZOOM_SETTING = { min: 150, max: 600, default: 375 };
 export type ShotMotionStyle = 'cards' | 'pulse';
 export const DEFAULT_SHOT_MOTION_STYLE: ShotMotionStyle = 'pulse';
@@ -28,6 +28,10 @@ export type TrainingPreferences = {
   rankCategory?: 'male' | 'female';
   disabledStatistics?: StatisticFeature[];
   distributionShare?: '10' | '10+9';
+  maximumSpread?: boolean;
+  colorTrainingBorders?: boolean;
+  statisticsView?: { distributionView?: 'mosaic' | 'pie'; hitMapMode?: 'points' | 'density';
+    seriesMetric?: string; progressMetric?: string; progressView?: 'history' | 'compare' };
   recentPracticeLimit?: number;
   reportOrder?: ReportBlock[];
   displayName?: string;
@@ -61,6 +65,9 @@ export function valid(value: unknown): value is TrainingPreferences {
     (record.celebrationEffects === undefined || typeof record.celebrationEffects === 'boolean') &&
     (record.disabledStatistics === undefined || isDisabledStatistics(record.disabledStatistics)) &&
     (record.distributionShare === undefined || record.distributionShare === '10' || record.distributionShare === '10+9') &&
+    (record.maximumSpread === undefined || typeof record.maximumSpread === 'boolean') &&
+    (record.statisticsView === undefined || record.statisticsView !== null && typeof record.statisticsView === 'object' && !Array.isArray(record.statisticsView)) &&
+    (record.colorTrainingBorders === undefined || typeof record.colorTrainingBorders === 'boolean') &&
     (record.recentPracticeLimit === undefined || typeof record.recentPracticeLimit === 'number' &&
       Number.isInteger(record.recentPracticeLimit) && record.recentPracticeLimit >= RECENT_PRACTICE_LIMIT.min &&
       record.recentPracticeLimit <= RECENT_PRACTICE_LIMIT.max) &&

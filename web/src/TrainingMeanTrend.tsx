@@ -2,95 +2,108 @@ import { useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
 import type { Practice } from './practice.ts';
-import { formatAverage } from './preferences.ts';
-import { summarize } from './target.ts';
+import { getTargetProfile, summarize } from './target.ts';
+import { hitGeometry, maximumSpread } from './hit-map.ts';
+import { chartLabel, chartScale, rankChartValue } from './chart-metrics.ts';
+import { seriesRank } from './sport-ranks.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './training-mean-trend.css';
 import { statisticVisible } from './statistics-visibility.ts';
 
-const width = 300;
-const top = 8;
-const bottom = 152;
+const width = 300, top = 8, bottom = 152;
+const metrics = [
+  { key: 'average', label: 'Средний балл', unit: '/ 10', feature: 'average' },
+  { key: 'rank', label: 'Норматив (темп)', unit: '', feature: 'norms' },
+  { key: 'spread', label: 'Разброс', unit: 'мм', feature: 'grouping' },
+  { key: 'rms', label: 'Кучность (RMS)', unit: 'мм', feature: 'grouping' },
+  { key: 'shift', label: 'Смещение', unit: 'мм', feature: 'offset' },
+  { key: 'tenShare', label: 'Доля десяток', unit: '%', feature: 'zone_trend' },
+  { key: 'xShare', label: 'Доля X', unit: '%', feature: 'zone_trend' },
+  { key: 'goldShare', label: 'Доля 10+9', unit: '%', feature: 'zone_trend' },
+  { key: 'missShare', label: 'Доля промахов', unit: '%', feature: 'zone_trend' },
+] as const;
 
 export function TrainingMeanTrend({ practice }: { practice: Practice }) {
-  const { preferences } = useTrainingPreferences();
+  const { preferences, update } = useTrainingPreferences();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
-  const [fullScale, setFullScale] = useState(false);
+  const choices = metrics.filter(item => statisticVisible(preferences, item.feature));
+  const metric = choices.find(item => item.key === preferences.statisticsView?.seriesMetric) ?? choices[0];
   const points = useMemo(() => practice.rounds.flatMap((round, r) =>
     round.series.flatMap((series, s) => {
-      const { average } = summarize(series.shots);
-      return average === null ? [] : [{ id: series.id, round: r + 1, series: s + 1, count: series.shots.length, average }];
-    })), [practice]);
-  const storedIndex = points.findIndex(point => point.id === selectedId);
-  const index = storedIndex < 0 ? points.length - 1 : storedIndex;
-  const selected = points[index];
-  if (!selected) return null;
-
+      const { shots, conditions } = series;
+      if (!shots.length || !metric) return [];
+      const geometry = ['spread', 'rms', 'shift'].includes(metric.key) ? hitGeometry(shots, conditions.targetDiameterMm) : null;
+      let value: number | null = null;
+      switch (metric.key) {
+        case 'average': value = summarize(shots).average; break;
+        case 'rank': value = rankChartValue(seriesRank(practice, series.id, preferences.rankCategory ?? null).label); break;
+        case 'spread': value = preferences.maximumSpread ? maximumSpread(shots, conditions.targetDiameterMm) : geometry?.rmsMm ?? null; break;
+        case 'rms': value = geometry?.rmsMm ?? null; break;
+        case 'shift': value = geometry?.shiftMm ?? null; break;
+        case 'tenShare': value = 100 * shots.filter(shot => shot.points === 10).length / shots.length; break;
+        case 'xShare': value = shots.some(shot => shot.code === 'X') || getTargetProfile(conditions.targetProfileId)?.zones.some(zone => zone.code === 'X')
+          ? 100 * shots.filter(shot => shot.code === 'X').length / shots.length : null; break;
+        case 'goldShare': value = 100 * shots.filter(shot => shot.points >= 9).length / shots.length; break;
+        case 'missShare': value = 100 * shots.filter(shot => shot.points === 0).length / shots.length; break;
+      }
+      return [{ id: series.id, round: r + 1, series: s + 1, count: shots.length, value }];
+    })), [practice, metric, preferences.maximumSpread, preferences.rankCategory]);
+  if (!metric || !points.length) return null;
+  const usable = points.flatMap((point, index) => point.value === null ? [] : [index]);
+  const index = usable.find(i => points[i].id === selectedId) ?? usable.at(-1);
+  const selected = index === undefined ? null : points[index];
+  const select = (i: number | undefined) => { if (i !== undefined) setSelectedId(points[i].id); };
+  const selectedPosition = index === undefined ? -1 : usable.indexOf(index);
   const x = (i: number) => points.length === 1 ? width / 2 : top + i * (width - 2 * top) / (points.length - 1);
-  const averages = points.map(point => point.average);
-  const minimum = Math.min(...averages);
-  const maximum = Math.max(...averages);
-  const padding = Math.max(.15, (maximum - minimum) * .1);
-  let lower = Math.max(0, Math.floor((minimum - padding) * 2) / 2);
-  let upper = Math.min(10, Math.ceil((maximum + padding) * 2) / 2);
-  if (upper - lower < 1) {
-    lower = Math.max(0, upper - 1);
-    upper = Math.min(10, lower + 1);
-  }
-  if (fullScale) { lower = 0; upper = 10; }
-  const ticks = [upper, (upper + lower) / 2, lower];
-  const y = (average: number) => bottom - (average - lower) * (bottom - top) / (upper - lower);
-  const averageText = formatAverage(selected.average, preferences.averageHundredths);
-  const seriesLabel = `Раунд ${selected.round} · серия ${selected.series}`;
-
-  function select(i: number) {
-    if (points[i]) setSelectedId(points[i].id);
-  }
+  const { lower, upper, ticks } = chartScale(usable.map(i => points[i].value!), metric.key);
+  const y = (value: number) => bottom - (value - lower) * (bottom - top) / (upper - lower);
+  const seriesLabel = selected ? `Раунд ${selected.round} · серия ${selected.series}` : '';
+  const valueLabel = selected?.value == null ? '' : chartLabel(metric.key, selected.value, metric.key === 'average' && preferences.averageHundredths);
+  const path = metric.key === 'rank' ? '' : usable.map(i =>
+    `${i > 0 && points[i - 1].value !== null ? 'L' : 'M'} ${x(i)} ${y(points[i].value!)}`).join(' ');
 
   return <section className="training-mean" aria-labelledby="training-mean-title" data-testid="training-mean-trend">
     <header>
-      <Icon name="stats" />
-      <h3 id="training-mean-title">Средний балл по сериям</h3>
-      <button type="button" className="training-mean-help" aria-label="О графике среднего балла" onClick={() => setHelp(true)}>?</button>
+      <Icon name="stats" /><h3 id="training-mean-title">По сериям</h3>
+      <select className="report-scope-select" aria-label="Показатель по сериям" value={metric.key} onChange={event => {
+        void update({ ...preferences, statisticsView: { ...preferences.statisticsView, seriesMetric: event.currentTarget.value } });
+      }}>{choices.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>
+      <button type="button" className="training-mean-help" aria-label="О графике по сериям" onClick={() => setHelp(true)}>?</button>
     </header>
-    <div className="training-mean-scale" role="group" aria-label="Шкала среднего балла">
-      <button type="button" aria-pressed={!fullScale} onClick={() => setFullScale(false)}>Авто</button>
-      <button type="button" aria-pressed={fullScale} onClick={() => setFullScale(true)}>0–10</button>
-    </div>
-    <div className="training-mean-chart">
-      <div className="training-mean-axis" aria-hidden="true">
-        {ticks.map(value => <span key={value}>{formatAverage(value, false)}</span>)}
+    {index === undefined ? <p>Нет данных для этого показателя.</p> : <>
+      <div className="training-mean-chart">
+        <div className="training-mean-axis" aria-hidden="true">
+          {[...ticks].reverse().map(value => <span key={value}>{chartLabel(metric.key, value)}</span>)}
+        </div>
+        <button type="button" className="icon-button training-mean-prev" data-testid="training-mean-prev"
+          aria-label="Предыдущая серия на графике" disabled={selectedPosition <= 0} onClick={() => select(usable[selectedPosition - 1])}><Icon name="left" /></button>
+        <svg viewBox={`0 0 ${width} 160`} preserveAspectRatio="none" role="img"
+          aria-label={`${metric.label}. ${seriesLabel}, ${valueLabel} ${metric.unit}`}
+          data-testid="training-mean-chart" onClick={event => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const relativeX = (event.clientX - rect.left) * width / rect.width;
+            select(usable.reduce((nearest, i) => Math.abs(x(i) - relativeX) < Math.abs(x(nearest) - relativeX) ? i : nearest));
+          }}>
+          {ticks.map(value => <line className="training-mean-guide" key={value} x1={0} x2={width} y1={y(value)} y2={y(value)} />)}
+          {points.map((point, i) => i > 0 && point.round !== points[i - 1].round &&
+            <line key={point.id} className="training-mean-round" x1={(x(i - 1) + x(i)) / 2} x2={(x(i - 1) + x(i)) / 2} y1={top} y2={bottom} />)}
+          <path className="training-mean-line" d={path} />
+          {usable.map(i => <ellipse key={points[i].id} cx={x(i)} cy={y(points[i].value!)} rx={2.9} ry={2.9} />)}
+          <line className="training-mean-marker" x1={x(index)} x2={x(index)} y1={top} y2={bottom} />
+          <ellipse cx={x(index)} cy={y(points[index].value!)} rx={5} ry={5} />
+        </svg>
+        <button type="button" className="icon-button training-mean-next" data-testid="training-mean-next"
+          aria-label="Следующая серия на графике" disabled={selectedPosition === usable.length - 1} onClick={() => select(usable[selectedPosition + 1])}><Icon name="right" /></button>
       </div>
-      <button type="button" className="icon-button training-mean-prev" data-testid="training-mean-prev"
-        aria-label="Предыдущая серия на графике" disabled={index === 0} onClick={() => select(index - 1)}><Icon name="left" /></button>
-      <svg viewBox={`0 0 ${width} 160`} preserveAspectRatio="none" role="img"
-        aria-label={`Средний балл от ${formatAverage(lower, false)} до ${formatAverage(upper, false)}. ${seriesLabel}, средний ${averageText}`}
-        data-testid="training-mean-chart" onClick={event => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          const relativeX = (event.clientX - rect.left) * width / rect.width;
-          const i = Math.round((relativeX - top) * (points.length - 1) / (width - 2 * top));
-          select(Math.max(0, Math.min(i, points.length - 1)));
-        }}>
-        {ticks.map(value => <line className="training-mean-guide" key={value} x1={0} x2={width} y1={y(value)} y2={y(value)} />)}
-        {points.map((point, i) => i > 0 && point.round !== points[i - 1].round &&
-          <line key={point.id} className="training-mean-round" x1={(x(i - 1) + x(i)) / 2} x2={(x(i - 1) + x(i)) / 2} y1={top} y2={bottom} />)}
-        <polyline className="training-mean-line" points={points.map((point, i) => `${x(i)},${y(point.average)}`).join(' ')} />
-        {points.map((point, i) => <ellipse key={point.id} cx={x(i)} cy={y(point.average)} rx={2.9} ry={2.9} />)}
-        <line className="training-mean-marker" x1={x(index)} x2={x(index)} y1={top} y2={bottom} />
-        <ellipse cx={x(index)} cy={y(selected.average)} rx={5} ry={5} />
-      </svg>
-      <button type="button" className="icon-button training-mean-next" data-testid="training-mean-next"
-        aria-label="Следующая серия на графике" disabled={index === points.length - 1} onClick={() => select(index + 1)}><Icon name="right" /></button>
-    </div>
-    <div className="training-mean-reading" aria-live="polite">
-      <span>{seriesLabel}</span>
-      <span data-testid="training-mean-value"><strong>{averageText}</strong> / 10</span>
-      {statisticVisible(preferences, 'volume') && <span>Стрел: {selected.count}</span>}
-    </div>
-    {help && <BottomSheet title="Средний балл по сериям" onClose={() => setHelp(false)}>
-      <p>Каждая точка — средний балл внесённых стрел одной серии, включая неполную. Промах считается за ноль. Пунктир разделяет раунды.</p>
-      <p>«Авто» подстраивает вертикальную шкалу с запасом, минимальный диапазон — один балл. Для сравнения величины колебаний между тренировками выбери «0–10».</p>
+      <div className="training-mean-reading" aria-live="polite">
+        <span>{seriesLabel}</span>
+        <span data-testid="training-mean-value"><strong>{valueLabel}</strong> {metric.unit}</span>
+        {selected && statisticVisible(preferences, 'volume') && <span>Стрел: {selected.count}</span>}
+      </div>
+    </>}
+    {help && <BottomSheet title="График по сериям" onClose={() => setHelp(false)}>
+      <p>Каждая точка соответствует серии. Шкала автоматически подстраивается под выбранный показатель. Пунктир разделяет раунды.</p>
     </BottomSheet>}
   </section>;
 }

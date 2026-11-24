@@ -1,11 +1,13 @@
 import { conditionsKey } from './composite-scoring.ts';
 import type { Practice } from './practice.ts';
 import { evaluateRank, matchingRankExercises } from './sport-ranks.ts';
-import type { RankCategory, StageRank } from './sport-ranks.ts';
+import type { RankCategory, RankEvaluation, StageRank } from './sport-ranks.ts';
 
 const bowClasses = { recurve: 'КЛ', barebow: 'КЛб', compound: 'БЛ' } as const;
 
-export function exerciseRank(practice: Practice, category: RankCategory | null): StageRank {
+export type ExerciseRank = StageRank & { forecast: RankEvaluation | null };
+
+export function exerciseRank(practice: Practice, category: RankCategory | null): ExerciseRank {
   const series = practice.rounds.flatMap(round => round.series).filter(item => item.shots.length > 0);
   const first = series[0]?.conditions ?? null;
   const key = first && conditionsKey(first);
@@ -14,8 +16,8 @@ export function exerciseRank(practice: Practice, category: RankCategory | null):
   const bow: StageRank['bow'] = bowCategory === 'recurve' || bowCategory === 'barebow' || bowCategory === 'compound' ? bowCategory : null;
   const classLabel = bow && category ? `${bowClasses[bow]}(${category === 'male' ? 'М' : 'Ж'})` : null;
   const base = { scopeLabel: 'Упражнение', classLabel, bow, category, conditions };
-  const unavailable = (reason: string): StageRank => ({
-    ...base, reason, evaluation: null, label: null, finalResult: false,
+  const unavailable = (reason: string): ExerciseRank => ({
+    ...base, reason, evaluation: null, forecast: null, label: null, finalResult: false,
   });
   if (!first) return unavailable('Нет зачётных стрел');
   if (!conditions) return unavailable('В тренировке разные условия. Общий норматив недоступен.');
@@ -31,11 +33,22 @@ export function exerciseRank(practice: Practice, category: RankCategory | null):
   const actualExercise = saved ? candidates.find(item => item.arrows === entered) : undefined;
   const exercise = actualExercise ?? candidates.find(item => item.arrows === 60) ?? candidates[0];
   const evaluation = evaluateRank(exercise, points, entered);
+  const forecastExercise = bow === 'barebow' && conditions.distanceMeters === 18 && conditions.targetDiameterMm === 400
+    ? candidates.find(item => item.arrows === 60) ?? exercise : exercise;
+  const forecast = forecastExercise === exercise ? evaluation : evaluateRank(forecastExercise, points, entered);
   // Legacy entries lack an explicit count for series of three or more arrows.
   const fullSeries = series.every(item => item.shots.length === (item.plannedCount ?? Math.max(3, item.shots.length)));
   const finalResult = saved && evaluation.complete && fullSeries;
   return {
-    ...base, reason: null, evaluation: { ...evaluation, result: finalResult ? evaluation.result : null },
-    label: evaluation.pace?.label ?? 'ниже порога', finalResult,
+    ...base, reason: null, evaluation: { ...evaluation, result: finalResult ? evaluation.result : null }, forecast,
+    label: (finalResult ? evaluation : forecast).pace?.label ?? 'ниже порога', finalResult,
   };
+}
+
+export function exerciseRankDisplay(rank: ExerciseRank) {
+  const pace = rank.forecast?.pace?.label ?? null;
+  const separate = rank.finalResult && pace !== null && pace !== rank.label;
+  const forecast = !!rank.evaluation && (!rank.finalResult || separate);
+  return { forecast, label: forecast ? pace ?? rank.label : rank.label,
+    actual: separate ? `Разряд ${rank.label} · ${rank.evaluation!.entered} стрел` : null };
 }

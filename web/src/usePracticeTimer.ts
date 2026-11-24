@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { performTrainingHaptic } from './native-training-window.ts';
-import { DEFAULT_TIMER_SETTINGS, displaySeconds, initialTimer, loadTimerSettings, resetTimer,
-  saveTimerSettings, selectTimerPhase, tickTimer, toggleTimer } from './timer.ts';
+import { advanceTimer, DEFAULT_TIMER_SETTINGS, displaySeconds, initialTimer, loadTimerSettings, resetTimer,
+  saveTimerSettings, selectTimerPhase, tickTimerSequence, timerSignals, toggleTimer } from './timer.ts';
 import type { TimerPhase, TimerSettings, TimerState } from './timer.ts';
 import { createTimerSound } from './timer-sound.ts';
 
@@ -13,7 +13,7 @@ function readSettings(): TimerSettings | null {
 export function usePracticeTimer(active: boolean, haptics = false) {
   const [settings, setSettings] = useState(readSettings);
   const settingsRef = useRef(settings);
-  const [state, setState] = useState(() => initialTimer(settings ?? DEFAULT_TIMER_SETTINGS));
+  const [state, setState] = useState(() => initialTimer(settings ?? DEFAULT_TIMER_SETTINGS, 'Preparation'));
   const live = useRef(state);
   const [sound] = useState(createTimerSound);
   useEffect(() => () => sound.dispose(), [sound]);
@@ -29,15 +29,15 @@ export function usePracticeTimer(active: boolean, haptics = false) {
   useEffect(() => {
     if (!active) {
       sound.cancel();
-      publish(resetTimer(live.current, settingsRef.current ?? DEFAULT_TIMER_SETTINGS));
+      publish(initialTimer(settingsRef.current ?? DEFAULT_TIMER_SETTINGS, 'Preparation'));
       return;
     }
     function tick() {
       const before = live.current;
       // Wall time includes phone sleep on browsers whose performance clock stops during sleep.
       const now = Date.now();
-      const next = tickTimer(before, now);
-      if (haptics && before.status === 'Running' && next.status === 'Finished' && document.visibilityState === 'visible' &&
+      const next = tickTimerSequence(before, settingsRef.current ?? DEFAULT_TIMER_SETTINGS, now);
+      if (haptics && before.status === 'Running' && before.phase === 'Series' && next.phase === 'Rest' && document.visibilityState === 'visible' &&
         before.deadlineMillis !== null && now - before.deadlineMillis < 1000) performTrainingHaptic();
       publish(next);
     }
@@ -57,7 +57,7 @@ export function usePracticeTimer(active: boolean, haptics = false) {
       if (!settingsRef.current) {
         settingsRef.current = loaded;
         setSettings(loaded);
-        publish(initialTimer(loaded));
+        publish(initialTimer(loaded, 'Preparation'));
       }
       return true;
     } catch { return false; }
@@ -75,17 +75,27 @@ export function usePracticeTimer(active: boolean, haptics = false) {
     } catch { return false; }
   }
 
-  function toggle() {
-    if (!active || !settingsRef.current) return;
-    const next = toggleTimer(live.current, Date.now());
-    if (next.deadlineMillis !== null) sound.schedule(next.phase, next.deadlineMillis);
-    else if (next.status === 'Paused') sound.cancel();
+  function command(visible: TimerState, skip: boolean) {
+    const settings = settingsRef.current;
+    if (!active || !settings) return;
+    const now = Date.now();
+    const before = tickTimerSequence(live.current, settings, now);
+    if (before.phase !== visible.phase || before.status !== visible.status) {
+      publish(before);
+      return;
+    }
+    const idle = before.status === 'Idle' || before.status === 'Finished';
+    const advancing = before.status === 'Running' && skip;
+    const next = advancing ? advanceTimer(before, settings, now)
+      : toggleTimer(idle && before.status === 'Finished' ? initialTimer(settings, 'Preparation') : before, now);
+    if (next.status === 'Running') sound.schedule(timerSignals(next, settings, now, idle || advancing));
+    else sound.cancel();
     publish(next);
   }
 
   function reset() {
     sound.cancel();
-    if (settingsRef.current) publish(resetTimer(live.current, settingsRef.current));
+    if (settingsRef.current) publish(initialTimer(settingsRef.current, 'Preparation'));
   }
 
   function select(phase: TimerPhase) {
@@ -93,5 +103,5 @@ export function usePracticeTimer(active: boolean, haptics = false) {
     if (settingsRef.current) publish(selectTimerPhase(live.current, phase, settingsRef.current));
   }
 
-  return { state, settings, prepare, save, toggle, reset, select };
+  return { state, settings, prepare, save, toggle: () => command(state, false), advance: () => command(state, true), reset, select };
 }

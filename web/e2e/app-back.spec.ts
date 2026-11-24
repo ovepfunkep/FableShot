@@ -52,3 +52,36 @@ test('Android Back handler protects edits and gives control to the system at Hom
   await expect(page.getByTestId('home-screen')).toBeVisible();
   expect(await back()).toBe(false);
 });
+
+test('a bottom sheet follows the drag, returns after a short gesture and dismisses after a long one', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-about').click();
+  const version = page.getByTestId('settings-version');
+  const sheet = page.getByTestId('release-history');
+  await version.click();
+  await expect(sheet).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  const handle = await sheet.locator('.sheet-handle').boundingBox();
+  if (!handle) throw new Error('The bottom sheet handle is not visible.');
+  const x = handle.x + handle.width / 2, y = handle.y + handle.height / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 32);
+  await expect(sheet).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 32)');
+  await page.mouse.up();
+  await expect(sheet).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 90);
+  await page.mouse.up();
+  await expect(sheet).toHaveCount(0);
+  await expect(version).toBeVisible();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await version.click();
+  await expect(sheet).toHaveCSS('transition-duration', '0s');
+  await page.mouse.click(15, 15);
+  await expect(sheet).toHaveCount(0);
+});

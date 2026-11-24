@@ -15,7 +15,7 @@
 .progress-timeline-svg { display: block; max-width: none; height: 184px; overflow: hidden; }
 .progress-timeline-svg text { fill: var(--muted); font-size: 10px; }
 .progress-timeline-grid { stroke: var(--edge); stroke-width: 1; }
-.progress-timeline-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.progress-timeline svg .progress-timeline-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .progress-timeline-hit { fill: transparent; cursor: pointer; }
 .progress-timeline-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; pointer-events: none; }
 .progress-timeline-dot.selected { fill: var(--accent); }
@@ -24,7 +24,7 @@
 .progress-timeline-pan.previous { left: 40px; }
 .progress-timeline-pan.next { right: 0; }
 .progress-timeline-pan:disabled { opacity: .3; cursor: default; }
-.progress-timeline-selected { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; font-size: .8rem; }
+.progress-timeline-selected { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; border-radius: 12px; background: var(--raised); font-size: .8rem; }
 .progress-timeline-selected > span { min-width: 0; }
 .progress-timeline-selected time, .progress-timeline-selected span small { display: block; }
 .progress-timeline-selected span small { max-width: calc(44 * var(--app-vw)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); margin-top: 3px; }

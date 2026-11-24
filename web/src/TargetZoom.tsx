@@ -50,12 +50,13 @@ function readPosition(): Point | null {
 const positionFraction = (offset: number, travel: number) => travel > 0
   ? Math.min(1, Math.max(0, offset / travel)) : 0;
 
-export function MovableTargetZoom(controls: ZoomControls) {
+export function MovableTargetZoom({ onOpenLensSettings, ...controls }: ZoomControls & { onOpenLensSettings?: () => void }) {
   const [savedPosition, setSavedPosition] = useState(readPosition);
   const [dragPosition, setDragPosition] = useState<Point | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const drag = useRef<ZoomDrag | null>(null);
+  const suppressClick = useRef(false);
   const position = dragPosition ?? savedPosition;
 
   function positionAt(left: number, top: number): Point {
@@ -75,6 +76,7 @@ export function MovableTargetZoom(controls: ZoomControls) {
 
   function startDrag(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || !event.isPrimary || drag.current) return;
+    suppressClick.current = false;
     const start = { x: event.clientX, y: event.clientY };
     const { left, top } = panel.current!.getBoundingClientRect();
     drag.current = { id: event.pointerId, start, offset: { x: start.x - left, y: start.y - top }, moved: false };
@@ -91,6 +93,7 @@ export function MovableTargetZoom(controls: ZoomControls) {
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>) {
     const point = dragPoint(event);
+    suppressClick.current = point !== null;
     if (point) savePosition(point);
     cancelDrag(event);
   }
@@ -126,7 +129,8 @@ export function MovableTargetZoom(controls: ZoomControls) {
     <div className={position ? 'zoom-move-layer' : undefined}>
       <div ref={panel} className="zoom zoom-movable" style={placement} role="group" aria-label="Приближение мишени">
         <button type="button" className="zoom-handle" aria-label="Переместить панель масштаба"
-          aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" title="Перетащить панель масштаба"
+          aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" title="Тап — настройки лупы. Перетаскивание — переместить панель"
+          onClick={event => { if (event.detail === 0 || !suppressClick.current) onOpenLensSettings?.(); }}
           onKeyDown={moveByKey} onPointerDown={startDrag}
           onPointerMove={event => { const point = dragPoint(event); if (point) setDragPosition(point); }}
           onPointerUp={finishDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>

@@ -149,7 +149,7 @@
 .journal-timeline-viewport { container-type: inline-size; overflow-x: auto; scrollbar-width: none; }
 .journal-timeline-viewport::-webkit-scrollbar { display: none; }
 .journal-timeline-viewport .journal-timeline {
-  --timeline-card-width: min(100px, calc(100cqw / 3 - var(--card-gap)));
+  --timeline-card-width: min(100px, calc((100cqw - 32px) / 3));
   --timeline-step: calc((100cqw - 12px - var(--timeline-card-width)) / 4);
   width: calc(var(--timeline-card-width) + var(--timeline-step) * var(--timeline-intervals));
 }

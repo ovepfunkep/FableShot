@@ -1,5 +1,6 @@
+import type { CSSProperties } from 'react';
 import type { Shot } from './target.ts';
-import { zoneColor } from './target.ts';
+import { scoreColor } from './score-appearance.ts';
 import './series-result.css';
 
 /** The same compact contents in statistics and the active series picker. */
@@ -8,9 +9,9 @@ export function SeriesResult({ number, shots, score, average, totalTestId, showH
 }) {
   return <>
     <span className="report-series-number" data-digits={Math.min(4, String(number).length)} aria-label={`Серия ${number}`}>{number}</span>
-    {showHits && <span className="report-hits">
-      {shots.length ? shots.map((shot, index) => <span key={index} className="report-hit" style={{
-        backgroundColor: shot.points === 0 ? 'var(--raised)' : zoneColor(shot.points),
+    {showHits && <span className="report-hits" style={{ '--hit-count': Math.max(1, Math.min(shots.length, 6)) } as CSSProperties}>
+      {shots.length ? shots.map((shot, index) => <span key={index} className="report-hit" data-score-ten={shot.points === 10 || undefined} style={{
+        backgroundColor: shot.points === 0 ? 'var(--raised)' : scoreColor(shot.points),
         color: shot.points === 0 ? 'var(--muted)' : shot.points === 3 || shot.points === 4 ? '#fff' : '#111811',
       }}>{shot.code}</span>) : <span className="series-result-empty">Нет попаданий</span>}
     </span>}

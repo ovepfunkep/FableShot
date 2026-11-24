@@ -1,7 +1,8 @@
 .training-mean { display: grid; gap: 12px; border: 1px solid var(--edge); border-radius: 22px; padding: 14px; background: var(--surface); }
 .training-mean header { display: flex; align-items: center; gap: 8px; }
 .training-mean header > svg { flex: none; color: var(--accent); }
-.training-mean h3 { margin: 0; font-size: 15px; line-height: 1.2; }
+.training-mean h3 { flex: none; margin: 0; font-size: 15px; line-height: 1.2; }
+.training-mean header select { flex: 1; min-width: 0; }
 .training-mean-help { flex: none; width: 30px; height: 30px; border: 1px solid var(--edge); border-radius: 50%; background: none; color: var(--muted); }
 .training-mean-chart { display: grid; grid-template-columns: 28px 36px minmax(0, 1fr) 36px; align-items: center; height: 176px; }
 .training-mean-chart svg[data-testid] { width: 100%; height: 100%; display: block; cursor: crosshair; }
@@ -14,6 +15,3 @@
 .training-mean-chart ellipse { fill: var(--accent); }
 .training-mean-reading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .training-mean-reading strong { font-size: 19px; color: var(--accent); }
-.training-mean-scale { display: flex; justify-content: flex-end; gap: 4px; }
-.training-mean-scale button { min-height: 36px; border: 1px solid var(--edge); border-radius: 12px; background: none; color: var(--muted); padding: 4px 12px; font-size: 12px; }
-.training-mean-scale button[aria-pressed=true] { background: var(--raised); color: var(--accent); }

@@ -23,12 +23,10 @@ function evidence(diary: Diary, entry: DiaryEntry) {
   return { journal, confirmed };
 }
 
-export function awardRoomAchievements(diary: Diary, entryId: string, now: string): Diary {
-  const ledger = diary.achievementLedger;
+export function roomAchievementObservations(diary: Diary, entryId: string) {
   const entry = diary.entries.find(item => item.id === entryId);
-  if (!ledger || !entry) return diary;
-  const current = evidence(diary, entry);
-  if (!current) return diary;
+  const current = entry && evidence(diary, entry);
+  if (!current) return [];
   const day = (item: DiaryEntry) => item.localDate || new Date(item.startedAt).toLocaleDateString('sv-SE');
   const days = new Set(diary.entries.filter(item => evidence(diary, item)).map(day));
   const observations = [{ id: 'ROOM01', scope: 'global', progress: 1 }, { id: 'ROOM02', scope: 'global', progress: days.size }];
@@ -41,6 +39,12 @@ export function awardRoomAchievements(diary: Diary, entryId: string, now: string
       observations.push({ id: 'ROOM03', scope: category, progress: own.rankScore ?? 0 });
     }
   }
-  const earned = earnAchievements(ledger, observations, now, entry.id);
+  return observations;
+}
+
+export function awardRoomAchievements(diary: Diary, entryId: string, now: string): Diary {
+  const ledger = diary.achievementLedger;
+  if (!ledger) return diary;
+  const earned = earnAchievements(ledger, roomAchievementObservations(diary, entryId), now, entryId);
   return earned.added.length ? { ...diary, achievementLedger: earned.ledger } : diary;
 }

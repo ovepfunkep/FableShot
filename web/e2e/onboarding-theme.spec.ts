@@ -25,7 +25,8 @@ test('first launch previews quick settings, saves them and lets the user revisit
   await quick.getByTestId('onboard-save-preferences').click();
   await expect(page.getByTestId('start-training')).toBeVisible();
   const { records, diary } = await readStoredJournal(page);
-  expect(diary).toBeNull();
+  expect(diary?.entries ?? []).toHaveLength(0);
+  await expect.poll(async () => (await readStoredJournal(page)).diary?.achievementLedger?.grants.map(grant => grant.id)).toEqual(['APP11']);
   expect(JSON.parse(records['app.fableshot.training-preferences.v1']!).preferences).toMatchObject({
     themeStyle: 'pop', averageHundredths: true, showAchievementsDuringInput: false, onboardingSeen: true,
   });

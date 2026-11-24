@@ -37,6 +37,24 @@ test('a new practice keeps its comparison numbers after editing a source and reo
   await expect(page.getByTestId('progress-score-average')).toHaveText('5,0 → 10,0');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await expect(page.getByTestId('home-practice-horizontal')).toContainText('+100%');
+  const gain = page.getByTestId('home-practice-horizontal').locator('[data-progress-tone="positive"]');
+  await expect(gain).toHaveCount(1);
+  const appearances = await gain.evaluate(node => {
+    const root = document.documentElement;
+    const originalStyle = root.dataset.themeStyle, originalAppearance = root.dataset.themeAppearance;
+    const shown: string[] = [];
+    for (const style of ['minimal', 'sport', 'pop']) {
+      root.dataset.themeStyle = style;
+      for (const appearance of ['light', 'dark']) {
+        root.dataset.themeAppearance = appearance;
+        shown.push(getComputedStyle(node).textShadow);
+      }
+    }
+    root.dataset.themeStyle = originalStyle;
+    root.dataset.themeAppearance = originalAppearance;
+    return shown;
+  });
+  expect(appearances.every(shadow => shadow !== 'none')).toBe(true);
   await page.getByTestId('nav-history').click();
   await expect(page.getByTestId('history-screen').getByLabel('Прогресс относительно похожих тренировок +100%')).toBeVisible();
 

@@ -81,6 +81,7 @@ function familiesFor(grants: readonly AchievementGalleryGrant[], progress: reado
     if (selected === 'all' ? !activeScopes.has(scope) : selected !== achievementScopeBow(scope)) continue;
     const key = evidenceKey(rule.id, scope);
     const grant = received.get(key);
+    if (rule.hiddenUntilEarned && !grant) continue;
     if (available && !available.has(rule.id) && !grant) continue;
     const group = evidenceKey(rule.family, scope);
     const status = { rule, scope, rarity: achievementRarityFor(rule, scope), grant, progress: measured.get(key) };
@@ -147,6 +148,9 @@ function LockedState() {
 function FamilyCard({ family, earnedOnly, onOpen }: { family: Family; earnedOnly: boolean; onOpen: () => void }) {
   const id = useId();
   const { main, next, earned, locked, scope } = family;
+  if (main.rarity === 'Mystery' && !main.grant) return <div className="achievement-card achievement-mystery"
+    data-rarity="Mystery" aria-label="Тайное достижение"><span className="achievement-heading"><Glyph name="lock" />
+      <span><strong>???</strong><small>Тайное достижение</small></span></span></div>;
   return <button type="button" className="achievement-card" data-earned={!!main.grant} data-rarity={main.rarity}
     data-testid={`achievement-${main.rule.id}`} data-scope={scope} aria-labelledby={`${id}-name ${id}-scope`} aria-haspopup="dialog" onClick={onOpen}>
     <span className="achievement-card-meta">

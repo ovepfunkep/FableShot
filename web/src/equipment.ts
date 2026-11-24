@@ -11,6 +11,7 @@ export const BOW_CATEGORIES = [
 export const MAX_NUMBERED_ARROWS = 1000;
 
 type EquipmentMetadata = {
+  createdInFableShot?: true;
   model?: string | null;
   notes?: string | null;
   favorite?: boolean;
@@ -140,7 +141,7 @@ export function editEquipment(library: EquipmentLibrary, edit: EquipmentEdit, no
     createdAtMs: previous?.createdAtMs ?? nowMs,
     updatedAtMs: nowMs,
   });
-  const nextItem = revised(current, value);
+  const nextItem = revised(current, kind === 'kits' && !current ? { ...value, createdInFableShot: true } : value);
   if (nextItem.archived && nextItem.favorite) nextItem.favorite = false;
   if (kind === 'kits') {
     const previous = current as EquipmentKit | undefined;

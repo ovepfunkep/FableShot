@@ -1,4 +1,5 @@
 import type { Conditions } from './conditions.ts';
+import { BOW_CATEGORIES } from './equipment.ts';
 import { exerciseRank } from './exercise-rank.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { timelineDate } from './progress-timeline.ts';
@@ -103,7 +104,7 @@ export function personalSeriesRecords(entries: readonly DiaryEntry[]): PersonalS
   return bestSeries(entries.flatMap(fullSeries)).map(({ key: _key, sourceOrder: _order, ...record }) => record);
 }
 
-export function fullRoundRecords(entry: DiaryEntry): PersonalRoundRecord[] {
+export function fullRoundRecords(entry: DiaryEntry, allowUnknownBow = false): PersonalRoundRecord[] {
   if (entry.deletedAt || entry.practice.savedAt === null) return [];
   const { unit, limit } = entry.practice.roundRule;
   if (unit === 'unlimited' || !limit) return [];
@@ -112,7 +113,7 @@ export function fullRoundRecords(entry: DiaryEntry): PersonalRoundRecord[] {
     const conditions = series[0]?.conditions;
     const profile = conditions && getTargetProfile(conditions.targetProfileId);
     if (!conditions || !profile || !acceptsDiameter(profile, conditions.targetDiameterMm) ||
-      !conditions.equipment?.bow.category) return [];
+      (!allowUnknownBow && !conditions.equipment?.bow.category)) return [];
     const shots = series.flatMap(item => item.shots);
     if ((unit === 'arrows' ? shots.length : series.length) !== limit) return [];
     const key = snapshotKey(conditions, shots.length);
@@ -120,14 +121,14 @@ export function fullRoundRecords(entry: DiaryEntry): PersonalRoundRecord[] {
       unit === 'series' && item.shots.length !== (item.plannedCount ?? Math.max(3, item.shots.length)))) return [];
     return [{ sessionId: entry.id, roundId: round.id, roundNumber: index + 1, date: timelineDate(entry),
       points: summarize(shots).points, maximum: shots.length * Math.max(...profile.zones.map(zone => zone.points)),
-      conditions, arrows: shots.length, targetTitle: profile.title, equipmentTitle: conditions.equipment.name,
+      conditions, arrows: shots.length, targetTitle: profile.title, equipmentTitle: conditions.equipment?.name || 'Комплект не указан',
       key: JSON.stringify([key, unit, limit]), format: unit === 'series' ? `${limit} сер. · ${shots.length} стрел` : `${limit} стрел` }];
   });
 }
 
 export function personalRoundRecords(entries: readonly DiaryEntry[]): PersonalRoundRecord[] {
   const winners = new Map<string, PersonalRoundRecord>();
-  for (const record of entries.flatMap(fullRoundRecords)) {
+  for (const record of entries.flatMap(entry => fullRoundRecords(entry))) {
     const best = winners.get(record.key);
     if (!best || (best.points - record.points || compareDates(record.date, best.date) ||
       compareText(record.sessionId, best.sessionId) || record.roundNumber - best.roundNumber) < 0) winners.set(record.key, record);
@@ -150,6 +151,75 @@ export function personalVolumeRecord(entries: readonly DiaryEntry[]): VolumeReco
       compareText(entry.id, best.entry.id)) < 0)) best = { entry, count };
   }
   return best;
+}
+
+export type PersonalRecordScope = 'all' | 'bow' | 'kit';
+type RecordStage = 'series' | 'round' | 'volume';
+type PersonalRecordSource = {
+  sessionId: string; stageId: number; date: string | null; value: number;
+  display?: PersonalSeriesRecord | PersonalRoundRecord;
+};
+export type PersonalRecordGroup = {
+  key: string; scopeKey: string; scopeLabel: string; leader: PersonalRecordSource; history: PersonalRecordSource[];
+};
+
+function recordScope(conditions: Conditions, scope: PersonalRecordScope) {
+  const equipment = conditions.equipment;
+  if (scope === 'all') return { key: 'all', label: 'Общий' };
+  if (scope === 'kit' && equipment?.id) return {
+    key: JSON.stringify([equipment.id, equipment.bowId ?? null, equipment.arrowsId ?? equipment.arrows.id ?? null]), label: equipment.name,
+  };
+  if (scope === 'bow' && equipment?.bow.category) return { key: equipment.bow.category,
+    label: BOW_CATEGORIES.find(item => item.value === equipment.bow.category)?.label ?? equipment.bow.category };
+  return null;
+}
+
+export function personalRecordGroups(entries: readonly DiaryEntry[], stage: RecordStage, scope: PersonalRecordScope): PersonalRecordGroup[] {
+  const groups = new Map<string, { scopeKey: string; scopeLabel: string; records: PersonalRecordSource[] }>();
+  function collect(scopeInfo: NonNullable<ReturnType<typeof recordScope>>, format: unknown, record: PersonalRecordSource) {
+    const key = JSON.stringify([scopeInfo.key, format]);
+    const group = groups.get(key);
+    if (group) group.records.push(record);
+    else groups.set(key, { scopeKey: scopeInfo.key, scopeLabel: scopeInfo.label, records: [record] });
+  }
+  for (const entry of entries) {
+    if (entry.deletedAt || entry.practice.savedAt === null) continue;
+    if (stage === 'volume') {
+      const counts = new Map<string, { scopeInfo: NonNullable<ReturnType<typeof recordScope>>; shots: number }>();
+      for (const round of entry.practice.rounds) for (const series of round.series) {
+        const scopeInfo = recordScope(series.conditions, scope);
+        if (!scopeInfo || !series.shots.length) continue;
+        const previous = counts.get(scopeInfo.key);
+        if (previous) previous.shots += series.shots.length;
+        else counts.set(scopeInfo.key, { scopeInfo, shots: series.shots.length });
+      }
+      for (const { scopeInfo, shots } of counts.values()) collect(scopeInfo, null, {
+        sessionId: entry.id, stageId: 0, date: timelineDate(entry), value: shots,
+      });
+    } else {
+      const candidates = stage === 'series' ? fullSeries(entry) : fullRoundRecords(entry, true);
+      for (const display of candidates) {
+        const scopeInfo = recordScope(display.conditions, scope);
+        if (!scopeInfo) continue;
+        const { distanceMeters, targetDiameterMm, targetProfileId } = display.conditions;
+        collect(scopeInfo, [distanceMeters, targetDiameterMm, targetProfileId, display.arrows, 'format' in display ? display.format : null], {
+          sessionId: entry.id, stageId: 'roundId' in display ? display.roundId : display.seriesId,
+          date: display.date, value: display.points, display,
+        });
+      }
+    }
+  }
+  return [...groups].map(([key, { scopeLabel, scopeKey, records }]) => {
+    records.sort((left, right) => compareDates(left.date, right.date) || compareText(left.sessionId, right.sessionId) || left.stageId - right.stageId);
+    const history: PersonalRecordSource[] = [];
+    let leader = records[0];
+    for (const record of records) {
+      if (record.value > leader.value) leader = record;
+      if (record.date !== null && (!history.length || history.at(-1)!.value < record.value)) history.push(record);
+    }
+    return { key, scopeLabel, scopeKey, leader, history };
+  }).sort((left, right) => (left.leader.display?.conditions.distanceMeters ?? 0) - (right.leader.display?.conditions.distanceMeters ?? 0)
+    || (left.leader.display?.arrows ?? 0) - (right.leader.display?.arrows ?? 0) || compareText(left.scopeLabel, right.scopeLabel));
 }
 
 const localDate = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' });

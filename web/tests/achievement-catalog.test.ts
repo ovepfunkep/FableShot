@@ -12,7 +12,7 @@ function rule(id: string) {
 }
 
 test('catalog preserves active runtime IDs, ordering, count targets and the source rule text', () => {
-  assert.equal(ACHIEVEMENT_CATALOG.length, 77);
+  assert.equal(ACHIEVEMENT_CATALOG.length, 84);
   assert.equal(new Set(ACHIEVEMENT_CATALOG.map(item => item.id)).size, ACHIEVEMENT_CATALOG.length);
   assert.deepEqual(ACHIEVEMENT_CATALOG.slice(0, 9).map(item => item.id),
     ['START01', 'START05', 'START06', 'START07', 'START08', 'START09', 'START10', 'START02', 'START03']);
@@ -25,6 +25,9 @@ test('catalog preserves active runtime IDs, ordering, count targets and the sour
   assert.match(rule('GROUP05').description, /0,50 в каждой серии и средний балл окна от 7/);
   assert.match(rule('GEAR03').description, /12 зачётных стрел подряд на каждой из трёх дистанций/);
   assert.equal(rule('MIND08').family, 'archive');
+  assert.equal(rule('SWING01').hiddenUntilEarned, true);
+  assert.equal(rule('SWING02').family, rule('SWING03').family);
+  assert.ok(achievementTierOrder(rule('SWING03')) > achievementTierOrder(rule('SWING02')));
   for (const id of ['MIND05', 'MIND06', 'MIND07', 'first-practice', 'XP']) {
     assert.equal(getAchievementDefinition(id), undefined);
   }
@@ -43,10 +46,10 @@ test('only supported bow categories are in scope and rank-format rules use three
 test('rarity follows the native format matrix and the first ten is the starter tier', () => {
   const formatRule = rule('HIT01');
   const levels = (scope: string) => ACHIEVEMENT_RARITY_ORDER.map(rarity => achievementRarityFor({ ...formatRule, rarity }, scope));
-  assert.deepEqual(levels('compound'), ['Common', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']);
+  assert.deepEqual(levels('compound'), ['Common', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mystery']);
   assert.deepEqual(levels('recurve'), ACHIEVEMENT_RARITY_ORDER);
   for (const scope of ['barebow', 'traditional', 'longbow']) {
-    assert.deepEqual(levels(scope), ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Mythic']);
+    assert.deepEqual(levels(scope), ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Mythic', 'Mystery']);
   }
   assert.equal(achievementRarityFor(rule('RANK04'), 'compound'), 'Rare');
   assert.equal(achievementRarityFor(formatRule, 'other'), formatRule.rarity);

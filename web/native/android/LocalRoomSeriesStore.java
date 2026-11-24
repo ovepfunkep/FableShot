@@ -209,10 +209,14 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             case "practice-full-10-v1":
             case "wa-indoor-outer-v1":
             case "wa-indoor-inner-v1": codes = "0-9T"; break;
-            case "wa-outdoor-full-v1": codes = "0-9TX"; break;
+            case "wa-outdoor-full-v1":
+            case "wa-indoor-full-x-v1": codes = "0-9TX"; break;
             case "wa-outdoor-six-v1": codes = "05-9TX"; break;
             case "wa-indoor-five-outer-v1":
-            case "wa-indoor-five-inner-v1": codes = "06-9T"; break;
+            case "wa-indoor-five-inner-v1":
+            case "wa-indoor-triple-outer-v1":
+            case "wa-indoor-triple-inner-v1": codes = "06-9T"; break;
+            case "wa-indoor-triple-x-v1": codes = "06-9TX"; break;
             default: throw new IOException("Unknown target profile");
         }
         double distance = number(result, "distanceMeters");
@@ -251,7 +255,11 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             case "wa-outdoor-full-v1": return diameter == 800 || diameter == 1220;
             case "wa-outdoor-six-v1": return diameter == 800 || diameter == 400;
             case "wa-indoor-outer-v1":
+            case "wa-indoor-triple-outer-v1":
+            case "wa-indoor-triple-inner-v1":
             case "wa-indoor-inner-v1": return diameter == 400 || diameter == 600;
+            case "wa-indoor-full-x-v1":
+            case "wa-indoor-triple-x-v1": return diameter == 400;
             default: return diameter == 400 || diameter == 600 || diameter == 1220;
         }
     }

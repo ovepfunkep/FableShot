@@ -14,6 +14,7 @@ async function openTimer(page: Page) {
 }
 
 async function setDurations(page: Page, series = '5', rest = '3') {
+  await page.getByTestId('timer-preparation-seconds').fill(series);
   await page.getByTestId('timer-series-seconds').fill(series);
   await page.getByTestId('timer-rest-seconds').fill(rest);
   await page.getByTestId('timer-save-durations').click();
@@ -62,16 +63,16 @@ test('start schedules distinct sounds and pausing cancels the pending signal', a
   const face = page.locator('.practice-timer-face');
   await expect(root).not.toHaveAttribute('data-sounds', /./);
   await page.getByTestId('timer-toggle').click();
-  await expect(face).toHaveAttribute('data-timer-tone', 'series');
-  await expect(root).toHaveAttribute('data-sounds', '880');
+  await expect(face).toHaveAttribute('data-timer-tone', 'preparation');
+  await expect(root).toHaveAttribute('data-sounds', '880,880,880,880,880,880');
   await page.getByTestId('timer-toggle').click();
   await expect(root).toHaveAttribute('data-cancelled-sound', 'yes');
   await page.getByTestId('timer-reset').click();
   await page.getByTestId('timer-phase-Rest').click();
   await page.getByTestId('timer-toggle').click();
   await expect(face).toHaveAttribute('data-timer-tone', 'rest');
-  await expect(root).toHaveAttribute('data-sounds', '880,540,680');
-  await expect(root).toHaveAttribute('data-sound-durations', '1800,650,950');
+  await expect(root).toHaveAttribute('data-sounds', '880,880,880,880,880,880,880,880,880');
+  await expect(root).toHaveAttribute('data-sound-durations', '300,300,300,300,300,300,300,300,300');
   await expect(root).toHaveAttribute('data-peak-gain', '0.9');
   await page.clock.runFor(1300);
   await expect(face).toHaveAttribute('data-timer-tone', 'finished');
@@ -105,10 +106,10 @@ test('vibration is opt-in and fires once per new shot and timer completion', asy
   await openTimer(page);
   await setDurations(page, '1');
   await page.getByTestId('timer-toggle').click();
-  await page.clock.runFor(1500);
-  await expect(page.getByTestId('timer-status')).toHaveText('Время вышло');
+  await page.clock.runFor(2500);
+  await expect(page.getByTestId('timer-status')).toHaveText('Идёт отсчёт · отдых');
   await expect(root).toHaveAttribute('data-vibrations', '1');
-  await page.clock.runFor(1500);
+  await page.clock.runFor(2500);
   await expect(root).toHaveAttribute('data-vibrations', '1');
 });
 
@@ -124,7 +125,7 @@ test('the timer finishes while closed and durations survive a page restart', asy
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:03');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('practice-timer-window')).toHaveCount(0);
-  await page.clock.fastForward(4000);
+  await page.clock.fastForward(12_000);
   await openTimer(page);
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:00');
   await expect(page.getByTestId('timer-status')).toHaveText('Время вышло');
@@ -156,7 +157,7 @@ test('manual pause preserves remaining time and reset restores the chosen durati
   await page.clock.fastForward(20_000);
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:03');
   await page.getByTestId('timer-toggle').click();
-  await page.clock.fastForward(3000);
+  await page.clock.fastForward(12_000);
   await expect(page.getByTestId('timer-status')).toHaveText('Время вышло');
   await page.getByTestId('timer-toggle').click();
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:05');
@@ -178,8 +179,8 @@ test('changing an ongoing phase requires confirmation and the new phase waits fo
   const confirmation = page.getByRole('dialog', { name: 'Сменить режим?' });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Отмена', exact: true }).click();
-  await expect(page.getByTestId('timer-phase-Series')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('timer-remaining')).toHaveText('01:59');
+  await expect(page.getByTestId('timer-phase-Preparation')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('timer-remaining')).toHaveText('00:09');
   await page.getByTestId('timer-phase-Rest').click();
   await page.getByTestId('timer-confirm-phase').click();
   await expect(page.getByTestId('timer-phase-Rest')).toHaveAttribute('aria-pressed', 'true');
@@ -203,12 +204,12 @@ test('a settings write failure keeps the draft and does not change the countdown
   await openTimer(page);
   await page.getByTestId('timer-series-seconds').fill('0');
   await expect(page.getByTestId('timer-save-durations')).toBeDisabled();
-  await expect(page.getByText('От 1 до 3600 секунд')).toBeVisible();
+  await expect(page.getByText(/стрельба и отдых от 1 до 3600/)).toBeVisible();
   await page.getByTestId('timer-series-seconds').fill('7');
   await page.getByTestId('timer-save-durations').click();
   await expect(page.getByText('Не удалось сохранить длительности. Попробуй ещё раз.')).toBeVisible();
   await expect(page.getByTestId('timer-series-seconds')).toHaveValue('7');
-  await expect(page.getByTestId('timer-remaining')).toHaveText('02:00');
+  await expect(page.getByTestId('timer-remaining')).toHaveText('00:10');
 });
 
 test('only the changed clock digit animates and stable characters keep their DOM nodes', async ({ page }) => {
@@ -241,4 +242,21 @@ test('unreadable timer settings remain intact while the diary accepts hits', asy
   await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
   await expect(page.getByTestId('series-score')).toHaveText('0/10');
   expect(await page.evaluate(() => localStorage.getItem('app.fableshot.timer-settings.v1'))).toBe('{broken');
+});
+
+test('tapping the large timer face starts and advances through all three phases', async ({ page }) => {
+  await freezeClock(page);
+  await page.goto('./');
+  await openTraining(page);
+  await openTimer(page);
+  const face = page.getByTestId('timer-advance');
+  await expect(face).toContainText('Подготовка');
+  await face.click();
+  await expect(face).toHaveAccessibleName('Следующий этап таймера');
+  await face.click();
+  await expect(face).toHaveAttribute('data-timer-tone', 'series');
+  await face.click();
+  await expect(face).toHaveAttribute('data-timer-tone', 'rest');
+  await page.clock.fastForward(61_000);
+  await expect(face).toHaveAccessibleName('Ещё раз');
 });

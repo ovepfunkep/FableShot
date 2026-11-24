@@ -5,7 +5,8 @@ const ringColors = ['#f6f5e9', '#242a2c', '#3295c7', '#e44c43', '#f4ce44'];
 export function zoneColor(points: number): string {
   return points > 0 ? ringColors[Math.floor((points - 1) / 2)] : '#667267';
 }
-export type Shot = Hit & { point: Point | null; missPoint?: Point; spot?: TargetSpot; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point };
+export type Shot = Hit & { point: Point | null; missPoint?: Point; spot?: TargetSpot; physicalArrowNumber?: number; imported?: true; sourcePoint?: Point;
+  originalMark?: Hit & { profileId: string; diameterMm: number; point: Point | null; missPoint?: Point; spot?: TargetSpot } };
 export type TargetSpot = 0 | 1 | 2;
 export type TargetSpec = { profileId: string; diameterMm: number; shaftDiameterMm: number };
 export type TargetProfile = {
@@ -33,11 +34,13 @@ export const TARGET_PROFILES: readonly TargetProfile[] = [
   { id: 'practice-full-10-v1', title: 'Учебная · свой диаметр', diameters: [], zones: rings() },
   { id: 'wa-outdoor-full-v1', title: 'Полная · 1–10 и X', diameters: [800, 1220], zones: [xZone, ...rings()] },
   { id: 'wa-indoor-outer-v1', title: 'Indoor · обычная десятка', diameters: [400, 600], zones: rings() },
+  { id: 'wa-indoor-full-x-v1', title: 'Indoor · 1–10 и X', diameters: [400], zones: [xZone, ...rings()] },
   { id: 'wa-indoor-inner-v1', title: 'Indoor · малая десятка', diameters: [400, 600], zones: rings(1, true) },
   { id: 'wa-outdoor-six-v1', title: 'Зоны 5–10 и X', diameters: [800], archiveDiameters: [400], zones: [xZone, ...rings(5)] },
   { id: 'wa-indoor-five-outer-v1', title: 'Indoor · зоны 6–10', diameters: [400, 600], archiveDiameters: [1220], zones: rings(6) },
   { id: 'wa-indoor-five-inner-v1', title: 'Indoor · зоны 6–10, малая десятка', diameters: [400, 600], zones: rings(6, true) },
   { id: 'wa-indoor-triple-outer-v1', title: 'Светофор · обычная десятка', diameters: [400, 600], zones: rings(6), vertical: true },
+  { id: 'wa-indoor-triple-x-v1', title: 'Светофор · 6–10 и X', diameters: [400], zones: [xZone, ...rings(6)], vertical: true },
   { id: 'wa-indoor-triple-inner-v1', title: 'Светофор · малая десятка', diameters: [400, 600], zones: rings(6, true), vertical: true },
 ];
 

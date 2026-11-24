@@ -9,6 +9,7 @@ import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { compactProgress } from './progress-scoring.ts';
 import { timelineDate } from './progress-timeline.ts';
+import { scoreOutline } from './score-appearance.ts';
 import './journal-shell.css';
 
 const destinations = {
@@ -180,7 +181,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   const visibleCount = Math.min(ordered.length, RECENT_PRACTICE_LIMIT.min);
   const chartStyle = {
     '--card-share': `${200 / (visibleCount + 1)}%`,
-    '--card-gap': `${8 * (visibleCount - 1) / (visibleCount + 1)}px`,
+    '--card-gap': `${10 * (visibleCount - 1) / (visibleCount + 1)}px`,
     '--timeline-intervals': ordered.length - 1,
   } as CSSProperties;
   const position = (index: number) => {
@@ -191,21 +192,24 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
         data-testid="home-practice-horizontal" aria-label="Тренировки от старых к новым">
         {ordered.map((entry, index) => {
           const shots = entry.practice.rounds.flatMap(round => round.series.flatMap(series => series.shots));
+          const outline = scoreOutline(shots, !!preferences.colorTrainingBorders && !preferences.hideScores && showResult);
           const result = summarize(shots);
           const score = `${result.points}/${result.maximum}`;
           const average = formatAverage(result.average, preferences.averageHundredths);
           const progress = statisticVisible(preferences, 'progress_score') ? compactProgress(entry.practice) : null;
           const description = [showResult && score, showAverage && `средний ${average}`,
-            showVolume && `${shots.length} стрел`, progress && `прогресс ${progress}`].filter(Boolean).join(', ');
+            showVolume && `${shots.length} стрел`, progress && `прогресс ${progress.text}`].filter(Boolean).join(', ');
           return <li key={entry.id} className="journal-timeline-entry">
             {monthChanged(index) && <span className="journal-timeline-month" style={{ left: position(index - .5) }}>{monthName(entry.date)}</span>}
             <div className="journal-timeline-point" style={{ left: position(index) }}>
               <time dateTime={entry.localDate}>{entry.date.getDate()}{index === 0 && hasTransition && ` ${monthName(entry.date)}`}</time>
               <button type="button" data-testid="home-practice-session" onClick={() => onOpen(entry.id)}
+                data-score-outline={outline !== undefined || undefined}
+                style={outline ? { '--score-outline': outline } as CSSProperties : undefined}
                 aria-label={`Открыть тренировку, ${fullDate.format(entry.date)}. ${description}`}>
                 {showResult && <strong>{score}</strong>}
                 {(showAverage || progress) && <span className="journal-timeline-secondary">
-                  {showAverage && average}{progress && <em>{progress}</em>}
+                  {showAverage && average}{progress && <em data-progress-tone={progress.tone}>{progress.text}</em>}
                 </span>}
                 {!showResult && !showAverage && showVolume && <strong>{shots.length} стр.</strong>}
               </button>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
-import { calculatePersonalRecordEvents, isPersonalRecordEvent, personalRoundRecords, personalSeriesRecords, personalVolumeRecord } from '../src/personal-record-events.ts';
+import { calculatePersonalRecordEvents, isPersonalRecordEvent, personalRecordGroups, personalRoundRecords, personalSeriesRecords, personalVolumeRecord } from '../src/personal-record-events.ts';
 import type { DiaryEntry } from '../src/persistence.ts';
 
 const at = Date.parse('2026-11-11T12:00:00Z');
@@ -23,6 +23,23 @@ function calculate(candidate: DiaryEntry, history: DiaryEntry[], category: 'male
   let id = 0;
   return calculatePersonalRecordEvents(candidate, history, category, at, () => `record-${++id}`);
 }
+
+test('personal record histories pool kits by bow and bow classes by format, while preserving kit identity', () => {
+  const first = training('first', [[8, 8, 8]], '2026-11-01');
+  const second = training('second', [[9, 9, 9]], '2026-11-02');
+  const third = training('third', [[10, 10, 10]], '2026-11-03');
+  second.practice.rounds[0].series[0].conditions.equipment!.name = 'Переименованный';
+  const other = third.practice.rounds[0].series[0].conditions.equipment!;
+  other.id = 'another-kit';
+  const entries = [third, second, first];
+  assert.deepEqual(personalRecordGroups(entries, 'series', 'kit').map(group => group.history.map(item => item.value)).sort(), [[24, 27], [30]]);
+  assert.deepEqual(personalRecordGroups(entries, 'series', 'bow')[0].history.map(item => item.value), [24, 27, 30]);
+  other.bow.category = 'barebow';
+  assert.deepEqual(personalRecordGroups(entries, 'series', 'bow').map(group => group.leader.value).sort(), [27, 30]);
+  assert.deepEqual(personalRecordGroups(entries, 'series', 'all')[0].history.map(item => item.value), [24, 27, 30]);
+  third.practice.rounds[0].series[0].conditions.distanceMeters = 30;
+  assert.deepEqual(personalRecordGroups(entries, 'series', 'all').map(group => group.leader.value), [27, 30]);
+});
 
 test('a better full series and greater volume keep the earlier best source and freeze the comparison', () => {
   const old = training('old', [[8, 8, 8]], '2026-11-08');

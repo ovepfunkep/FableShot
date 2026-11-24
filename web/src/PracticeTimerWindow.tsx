@@ -1,13 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
-import { displaySeconds, timerClock } from './timer.ts';
+import { DEFAULT_PREPARATION_SECONDS, displaySeconds, timerClock } from './timer.ts';
 import type { TimerPhase, TimerSettings, TimerState } from './timer.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './practice-timer.css';
 
-const phaseTitle = (phase: TimerPhase) => phase === 'Series' ? 'Серия' : 'Отдых';
+const phaseTitle = (phase: TimerPhase) => phase === 'Preparation' ? 'Подготовка' : phase === 'Series' ? 'Стрельба' : 'Отдых';
 const timerTone = (state: TimerState) => state.status === 'Finished' ? 'finished'
-  : state.status === 'Idle' ? undefined : state.phase === 'Series' ? 'series' : 'rest';
+  : state.phase === 'Preparation' ? 'preparation' : state.phase === 'Series' ? 'series' : 'rest';
 
 function TimerIcon() {
   return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -59,10 +59,11 @@ function durationValue(value: string): number | null {
   return Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : null;
 }
 
-export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSelectPhase, onSave, onClose }: {
+export function PracticeTimerWindow({ state, settings, onToggle, onAdvance, onReset, onSelectPhase, onSave, onClose }: {
   state: TimerState;
   settings: TimerSettings;
   onToggle: () => void;
+  onAdvance: () => void;
   onReset: () => void;
   onSelectPhase: (phase: TimerPhase) => void;
   onSave: (settings: TimerSettings) => Promise<boolean>;
@@ -70,6 +71,8 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
 }) {
   const [series, setSeries] = useState(String(settings.seriesSeconds));
   const [rest, setRest] = useState(String(settings.restSeconds));
+  const prepSeconds = settings.preparationSeconds ?? DEFAULT_PREPARATION_SECONDS;
+  const [preparation, setPreparation] = useState(String(prepSeconds));
   const [nextPhase, setNextPhase] = useState<TimerPhase | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -80,7 +83,9 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
   const ongoing = state.status === 'Running' || state.status === 'Paused';
   const validSeries = durationValue(series);
   const validRest = durationValue(rest);
-  const changed = validSeries !== settings.seriesSeconds || validRest !== settings.restSeconds;
+  const preparationValue = durationValue(preparation);
+  const validPreparation = preparationValue !== null && preparationValue <= 120 ? preparationValue : null;
+  const changed = validSeries !== settings.seriesSeconds || validRest !== settings.restSeconds || validPreparation !== prepSeconds;
   const status = state.status === 'Idle' ? 'Готов к запуску'
     : state.status === 'Running' ? `Идёт отсчёт · ${phaseTitle(state.phase).toLocaleLowerCase('ru-RU')}`
       : state.status === 'Paused' ? 'На паузе' : 'Время вышло';
@@ -89,6 +94,7 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
 
   useEffect(() => { setSeries(String(settings.seriesSeconds)); }, [settings.seriesSeconds]);
   useEffect(() => { setRest(String(settings.restSeconds)); }, [settings.restSeconds]);
+  useEffect(() => { setPreparation(String(prepSeconds)); }, [prepSeconds]);
   useLayoutEffect(() => { sheet.current?.showModal(); }, []);
   useLayoutEffect(() => { if (nextPhase) confirmation.current?.showModal(); }, [nextPhase]);
   function startDrag(event: PointerEvent<HTMLElement>) {
@@ -105,11 +111,11 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
   }
 
   async function saveDurations() {
-    if (validSeries === null || validRest === null || ongoing || saving) return;
+    if (validSeries === null || validRest === null || validPreparation === null || ongoing || saving) return;
     setSaving(true);
     setSaveError(false);
     try {
-      if (!await onSave({ seriesSeconds: validSeries, restSeconds: validRest })) setSaveError(true);
+      if (!await onSave({ seriesSeconds: validSeries, restSeconds: validRest, preparationSeconds: validPreparation })) setSaveError(true);
     } catch {
       setSaveError(true);
     } finally { setSaving(false); }
@@ -125,24 +131,33 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
           <h2 id={titleId}>Таймер</h2>
         </header>
         <div className="practice-timer-phases" role="group" aria-label="Режим таймера">
-          {(['Series', 'Rest'] as const).map(phase => <button type="button" key={phase}
+          {(['Preparation', 'Series', 'Rest'] as const).map(phase => <button type="button" key={phase}
             className="timer-phase" data-testid={`timer-phase-${phase}`} aria-pressed={phase === state.phase} disabled={saving}
             onClick={() => { if (phase !== state.phase) { if (ongoing) setNextPhase(phase); else onSelectPhase(phase); } }}>
             {phaseTitle(phase)}
           </button>)}
         </div>
-        <div className="practice-timer-face" data-timer-tone={timerTone(state)}>
+        <button type="button" className="practice-timer-face" data-timer-tone={timerTone(state)}
+          aria-label={state.status === 'Running' ? 'Следующий этап таймера' : action}
+          data-testid="timer-advance" onClick={onAdvance} disabled={saving}>
+          <strong className="practice-timer-face-phase">{phaseTitle(state.phase)}</strong>
           <SlidingClock seconds={displaySeconds(state)} testIds />
-          <p className="practice-timer-status" data-testid="timer-status">{status}</p>
-        </div>
+          <span className="practice-timer-status" data-testid="timer-status">{status}</span>
+        </button>
         <div className="practice-timer-actions">
           <button type="button" className="primary" data-testid="timer-toggle" disabled={saving} onClick={onToggle}>{action}</button>
           <button type="button" className="timer-reset" data-testid="timer-reset" disabled={saving} onClick={onReset}>Сброс</button>
         </div>
-        <p className="practice-timer-note">Один длинный сигнал — конец серии. Два коротких — конец отдыха.</p>
+        <p className="practice-timer-note">2 сигнала — подготовка · 1 — стрельба · 3 — к мишеням</p>
         <hr />
         <h3>Длительности</h3>
         <div className="practice-timer-durations">
+          <label className={`timer-duration-field${validPreparation === null ? ' invalid' : ''}`}>
+            <span>Подготовка, сек</span>
+            <input type="text" inputMode="numeric" maxLength={3} value={preparation} aria-label="Подготовка, сек"
+              data-testid="timer-preparation-seconds" disabled={ongoing || saving} aria-invalid={validPreparation === null}
+              onChange={event => { setPreparation(event.target.value.slice(0, 3)); setSaveError(false); }} />
+          </label>
           <label className={`timer-duration-field${validSeries === null ? ' invalid' : ''}`}>
             <span>Серия, сек</span>
             <input type="text" inputMode="numeric" maxLength={4} value={series} aria-label="Серия, сек"
@@ -156,10 +171,11 @@ export function PracticeTimerWindow({ state, settings, onToggle, onReset, onSele
               onChange={event => { setRest(event.target.value.slice(0, 4)); setSaveError(false); }} />
           </label>
         </div>
-        {(validSeries === null || validRest === null) && <p className="practice-timer-error" role="alert">От 1 до 3600 секунд</p>}
+        {(validSeries === null || validRest === null || validPreparation === null) &&
+          <p className="practice-timer-error" role="alert">Подготовка от 1 до 120 секунд, стрельба и отдых от 1 до 3600.</p>}
         {saveError && <p className="practice-timer-error" role="alert">Не удалось сохранить длительности. Попробуй ещё раз.</p>}
         <button type="button" className="timer-save" data-testid="timer-save-durations"
-          disabled={ongoing || saving || validSeries === null || validRest === null || !changed} onClick={saveDurations}>
+          disabled={ongoing || saving || validSeries === null || validRest === null || validPreparation === null || !changed} onClick={saveDurations}>
           {saving ? 'Сохранение…' : 'Сохранить длительности'}
         </button>
       </div>

@@ -1,7 +1,34 @@
 import { expect, test } from '@playwright/test';
 import { openTraining } from './journal-navigation.ts';
-import { advanceSeries, appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
+import { advanceSeries, appendShot, applyConditions, completePractice, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+
+test('the accessible pie and its selected zone survive reopening the same report', async ({ page }) => {
+  let practice = emptyPractice();
+  for (const points of [10, 9, 9]) practice = appendShot(practice, { code: String(points), points, point: { x: points === 10 ? 0 : .15, y: 0 } });
+  practice = completePractice(practice, '2026-11-12T12:05:00Z');
+  await page.addInitScript(practice => {
+    if (!localStorage.getItem('app.fableshot.practice-diary.v1')) localStorage.setItem('app.fableshot.practice-diary.v1',
+      JSON.stringify({ version: 1, entries: [{ id: 'pie-review', startedAt: '2026-11-12T12:00:00Z', practice }] }));
+  }, practice);
+  await page.goto('./');
+  const open = async () => {
+    await page.getByTestId('nav-history').click();
+    await page.getByTestId('session-pie-review').click();
+  };
+  await open();
+  const distribution = page.getByTestId('report-zone-distribution');
+  await distribution.getByRole('button', { name: 'Круговая' }).click();
+  const pie = distribution.getByTestId('shot-distribution-pie');
+  const zone = pie.getByRole('button', { name: 'Оценка 9, стрел: 2' });
+  await zone.focus();
+  await page.keyboard.press('Enter');
+  await expect(zone).toHaveAttribute('aria-pressed', 'true');
+  await expect(distribution.locator('.shot-zone-keys')).toHaveCount(0);
+  await page.reload();
+  await open();
+  await expect(zone).toHaveAttribute('aria-pressed', 'true');
+});
 
 test('traffic-light map filters individual faces and keeps map and score consistent', async ({ page }) => {
   const practice = emptyPractice();
@@ -33,12 +60,13 @@ test('traffic-light map filters individual faces and keeps map and score consist
 });
 
 test('the report graphs all entered series while CG3 uses confirmed series only', async ({ page }) => {
+  let practice = emptyPractice();
+  for (let i = 0; i < 3; i++) practice = appendShot(practice, { code: '10', points: 10, point: { x: 0, y: 0 } });
+  practice = advanceSeries(practice);
+  practice = appendShot(practice, { code: 'M', points: 0, point: null });
+  await page.addInitScript(data => localStorage.setItem('app.fableshot.practice-pilot.v3', JSON.stringify(data)), advanceSeries(practice));
   await page.goto('./');
   await openTraining(page);
-  for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
-  await page.getByTestId('next-end').click();
-  await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
-  await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await expect(page.getByTestId('report-round-1').locator('.report-series-summary .report-series-cumulative')).toHaveText(['30', '30']);
   const rows = page.getByTestId('report-round-1').locator('.report-series-summary');
@@ -71,19 +99,21 @@ test('series averages use a compact vertical range, including identical results'
   await openTraining(page);
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   const trend = page.getByTestId('training-mean-trend');
-  await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '9,5', '9,0']);
-  await trend.getByRole('button', { name: '0–10', exact: true }).click();
-  await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '5,0', '0,0']);
-  await trend.getByRole('button', { name: 'Авто', exact: true }).click();
-  await expect(trend.getByTestId('training-mean-chart')).toHaveAccessibleName(/от 9,0 до 10,0/);
+  await expect(trend.locator('.training-mean-axis span').first()).toHaveText('10,0');
+  await expect(trend.locator('.training-mean-axis span').last()).toHaveText('9,5');
+  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('tenShare');
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('100,0 %');
+  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('average');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('next-end').click();
+  await expect(page.getByRole('button', { name: /Серия 2 · разряд/ })).toBeVisible();
   await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
+  await expect(page.getByTestId('series-score')).toHaveText('0/10');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await expect(trend.locator('.training-mean-axis span')).toHaveText(['10,0', '5,0', '0,0']);
 });
 
-test('map and zone distribution share conditions while the map can isolate one series', async ({ page }) => {
+test('map and zone distribution share conditions while the map can isolate one series', async ({ page, browserName }) => {
   let practice = emptyPractice();
   for (const x of [.02, .04, .06]) practice = appendShot(practice, { code: 'X', points: 10, point: { x, y: 0 } });
   practice = advanceSeries(practice);
@@ -135,21 +165,23 @@ test('map and zone distribution share conditions while the map can isolate one s
   await expect(target).toHaveAttribute('viewBox', '0 0 260 260');
   await expect(target).toHaveCSS('touch-action', 'pan-y');
 
-  await target.scrollIntoViewIfNeeded();
-  const pinchBox = (await target.boundingBox())!;
-  const middleX = pinchBox.x + pinchBox.width / 2, middleY = pinchBox.y + pinchBox.height / 2;
-  const touchPoints = (offset: number) => [{ x: middleX - offset, y: middleY, id: 1 }, { x: middleX + offset, y: middleY, id: 2 }];
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touchPoints(20) });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touchPoints(40) });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await cdp.detach();
-  await expect(resetZoom).toHaveText('2,0×');
+  if (browserName === 'chromium') {
+    await target.scrollIntoViewIfNeeded();
+    const pinchBox = (await target.boundingBox())!;
+    const middleX = pinchBox.x + pinchBox.width / 2, middleY = pinchBox.y + pinchBox.height / 2;
+    const touchPoints = (offset: number) => [{ x: middleX - offset, y: middleY, id: 1 }, { x: middleX + offset, y: middleY, id: 2 }];
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touchPoints(20) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touchPoints(40) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
+    await expect(resetZoom).toHaveText('2,0×');
+  }
 
   await map.getByTestId('hit-map-mode-density').click();
   await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
-  await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
+  await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-score')).toHaveText('10/10');
   await expect(page.getByTestId('report-result-score')).toHaveText(/49\s*\/\s*60/);
   await expect(page.getByTestId('report-result-average')).toHaveText('8,2');

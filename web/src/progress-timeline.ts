@@ -1,7 +1,10 @@
 import type { Conditions } from './conditions.ts';
-import { calculateCompositeScore } from './composite-scoring.ts';
+import { calculateCompositeScore, conditionsKey } from './composite-scoring.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
-import { hitGeometry } from './hit-map.ts';
+import { hitGeometry, maximumSpread } from './hit-map.ts';
+import { exerciseRank } from './exercise-rank.ts';
+import { rankChartValue } from './chart-metrics.ts';
+import { calculateProgress } from './progress-scoring.ts';
 import { isLocalDate } from './import-source.ts';
 import type { DiaryEntry } from './persistence.ts';
 import type { TrainingPreferences } from './preferences.ts';
@@ -15,16 +18,23 @@ const DAY = 86_400_000;
 export const TIMELINE_METRICS = [
   { key: 'average', feature: 'average', label: 'Средний балл', unit: '/ 10' },
   { key: 'rms', feature: 'grouping', label: 'Кучность RMS', unit: 'мм' },
+  { key: 'spread', feature: 'grouping', label: 'Разброс', unit: 'мм' },
+  { key: 'shift', feature: 'offset', label: 'Смещение', unit: 'мм' },
+  { key: 'rank', feature: 'norms', label: 'Норматив', unit: '' },
   { key: 'tenShare', feature: 'zone_trend', label: 'Доля десяток', unit: '%' },
+  { key: 'goldShare', feature: 'zone_trend', label: 'Доля 10+9', unit: '%' },
   { key: 'xShare', feature: 'zone_trend', label: 'Доля X', unit: '%' },
   { key: 'missShare', feature: 'zone_trend', label: 'Доля промахов', unit: '%' },
   { key: 'cg3', feature: 'general_score', label: 'Общие очки CG3', unit: '%' },
+  { key: 'stability', feature: 'grouping', label: 'Стабильность', unit: '%' },
+  { key: 'progress', feature: 'progress_score', label: 'Прогресс к своей базе', unit: '%' },
 ] as const;
 export type TimelineMetric = typeof TIMELINE_METRICS[number]['key'];
 export type TimelinePoint = {
   id: string; sessionId: string; title: string; date: string; day: number; x: number;
   values: Record<TimelineMetric, number | null>; arrows: number;
   geometry: { rmsMm: number; shiftMm: number; known: number } | null;
+  comparisonKey?: string;
 };
 export type TimelineGroup = { key: string; label: string; comparable: boolean; points: TimelinePoint[] };
 export type ProgressPeriod = 0 | 7 | 30 | 90 | -1;
@@ -99,33 +109,42 @@ function conditionLabel(conditions: Conditions): string {
 }
 function basicMeasurements(shots: readonly Series['shots'][number][]) {
   const share = (count: number) => shots.length ? 100 * count / shots.length : null;
-  let points = 0, tens = 0, misses = 0;
+  let points = 0, tens = 0, gold = 0, misses = 0;
   for (const shot of shots) {
     points += shot.points;
     if (shot.points === 10) tens++;
+    if (shot.points >= 9) gold++;
     if (shot.points === 0) misses++;
   }
-  return { average: shots.length ? points / shots.length : null, tenShare: share(tens), missShare: share(misses) };
+  return { average: shots.length ? points / shots.length : null, tenShare: share(tens), goldShare: share(gold), missShare: share(misses) };
 }
 
+type ChartPreferences = Pick<TrainingPreferences, 'maximumSpread' | 'rankCategory'>;
+
 /** Descriptive results stay available when bow class or matching conditions are unknown. */
-export function buildTrainingHistoryTimeline(entries: readonly DiaryEntry[]): TimelineGroup {
+export function buildTrainingHistoryTimeline(entries: readonly DiaryEntry[], preferences: ChartPreferences = {}): TimelineGroup {
   const group: TimelineGroup = { key: 'training-history', label: 'Все тренировки', comparable: false, points: [] };
   for (const entry of entries) {
     if (entry.practice.savedAt === null || entry.deletedAt) continue;
     const date = timelineDate(entry);
     if (!date) continue;
-    const shots = entry.practice.rounds.flatMap(round => round.series.flatMap(series => series.shots));
+    const series = entry.practice.rounds.flatMap(round => round.series).filter(item => item.shots.length);
+    const shots = series.flatMap(item => item.shots);
     if (!shots.length) continue;
     const day = Date.parse(`${date}T00:00:00Z`) / DAY;
-    group.points.push({ id: entry.id, sessionId: entry.id, title: entry.title || 'Тренировка', date, day, x: day,
-      arrows: shots.length, geometry: null, values: { ...basicMeasurements(shots), cg3: null, rms: null, xShare: null } });
+    const key = conditionsKey(series[0].conditions);
+    const comparable = key !== null && series.every(item => conditionsKey(item.conditions) === key);
+    const measures = comparable ? measurements(entry, series, preferences)
+      : { arrows: shots.length, geometry: null, values: { ...basicMeasurements(shots),
+        cg3: null, rms: null, xShare: null, spread: null, shift: null, rank: null, stability: null, progress: null } };
+    const comparisonKey = comparable && progressConditionKey(series[0].conditions) !== null ? key : undefined;
+    group.points.push({ id: entry.id, sessionId: entry.id, title: entry.title || 'Тренировка', date, day, x: day, comparisonKey, ...measures });
   }
   sortTimelinePoints(group.points);
   return group;
 }
 
-function measurements(series: readonly Series[]): Pick<TimelinePoint, 'values' | 'arrows' | 'geometry'> {
+function measurements(entry: DiaryEntry, series: readonly Series[], preferences: ChartPreferences): Pick<TimelinePoint, 'values' | 'arrows' | 'geometry'> {
   const shots = series.flatMap(item => item.shots), conditions = series[0].conditions;
   const profile = getTargetProfile(conditions.targetProfileId);
   const verifiedTarget = !!profile && acceptsDiameter(profile, conditions.targetDiameterMm);
@@ -136,15 +155,25 @@ function measurements(series: readonly Series[]): Pick<TimelinePoint, 'values' |
   const share = (matches: (shot: Series['shots'][number]) => boolean) =>
     shots.length ? 100 * shots.filter(matches).length / shots.length : null;
   const xKnown = shots.some(shot => shot.code === 'X') || (verifiedTarget && profile.zones.some(zone => zone.code === 'X'));
+  const overall = exerciseRank(entry.practice, preferences.rankCategory ?? null);
+  const baselineId = series[0].progressBaselineId;
+  const baseline = baselineId === undefined || series.some(item => item.progressBaselineId !== baselineId)
+    ? undefined : entry.practice.progressBaselines?.[baselineId];
+  const progress = baseline?.status === 'ready' ? calculateProgress(baseline, series) : null;
   return { arrows: shots.length, geometry, values: {
     ...basicMeasurements(shots), rms: geometry?.rmsMm ?? null,
+    spread: verifiedTarget && preferences.maximumSpread ? maximumSpread(shots, conditions.targetDiameterMm) : measured?.rmsMm ?? null,
+    shift: measured?.shiftMm ?? null,
+    rank: rankChartValue(overall.forecast?.pace?.label ?? null),
+    stability: composite.stability === undefined ? null : composite.stability * 100,
+    progress: progress?.fullRankAvailable ? progress.relativePercent ?? null : null,
     xShare: xKnown ? share(shot => shot.code === 'X') : null,
     cg3: composite.availability === 'available' ? composite.total ?? null : null,
   } };
 }
 
 /** One point per saved training and condition group. Equipment identities never define comparison. */
-export function buildProgressTimeline(entries: readonly DiaryEntry[]): TimelineGroup[] {
+export function buildProgressTimeline(entries: readonly DiaryEntry[], preferences: ChartPreferences = {}): TimelineGroup[] {
   const groups = new Map<string, TimelineGroup>();
   for (const entry of entries) {
     if (entry.practice.savedAt === null || entry.deletedAt) continue;
@@ -165,7 +194,7 @@ export function buildProgressTimeline(entries: readonly DiaryEntry[]): TimelineG
       }
       const day = Date.parse(`${date}T00:00:00Z`) / DAY;
       group.points.push({ id: `${entry.id}:${key}`, sessionId: entry.id, title: entry.title ?? 'Тренировка', date, day, x: day,
-        ...measurements(series) });
+        ...measurements(entry, series, preferences) });
     }
   }
   for (const group of groups.values()) sortTimelinePoints(group.points);
@@ -198,7 +227,7 @@ export function timelineViewport(points: readonly TimelinePoint[], requestedEnd?
 }
 export function timelineCeiling(points: readonly TimelinePoint[], metric: TimelineMetric): number {
   if (metric === 'average') return 10;
-  if (metric === 'tenShare' || metric === 'xShare' || metric === 'missShare') return 100;
+  if (metric.endsWith('Share') || metric === 'stability') return 100;
   if (metric === 'cg3') return 105;
-  return Math.max(10, Math.ceil(points.reduce((maximum, point) => Math.max(maximum, point.values.rms ?? 0), 0) / 10) * 10);
+  return Math.max(10, Math.ceil(points.reduce((maximum, point) => Math.max(maximum, point.values[metric] ?? 0), 0) / 10) * 10);
 }

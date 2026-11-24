@@ -41,6 +41,7 @@ test('counts completed nonempty live sessions and rejects deleted, imported and 
   const empty = entry('empty', [[]]);
   const active = entry('active', [[10]], { active: true });
   assert.deepEqual(evaluateAchievementEvidence([completed, deleted, imported, importedShot, empty, active, completed]), [
+    { id: 'START02', scope: 'recurve', progress: 1 },
     { id: 'START01', scope: 'global', progress: 1 },
     { id: 'START05', scope: 'global', progress: 1 },
     { id: 'START09', scope: 'global', progress: 1 },
@@ -252,9 +253,9 @@ test('distance evidence needs twelve consecutive arrows per distance in a comple
   assert.equal(result([three, { ...distances('deleted', [[50, 12]]), deletedAt: at(11) }]).get('GEAR03'), 3);
 });
 
-test('selectable X targets cannot meet the native eighteen-metre forty-centimetre achievement format', () => {
+test('X target profiles include both Indoor variants while the old X award rules remain inactive', () => {
   const withX = TARGET_PROFILES.filter(profile => profile.zones.some(zone => zone.code === 'X'));
-  assert.deepEqual(withX.map(profile => profile.id), ['wa-outdoor-full-v1', 'wa-outdoor-six-v1']);
-  assert.ok(withX.every(profile => profile.diameters.length > 0 && !profile.diameters.includes(400)));
+  assert.deepEqual(withX.map(profile => profile.id), ['wa-outdoor-full-v1', 'wa-indoor-full-x-v1', 'wa-outdoor-six-v1', 'wa-indoor-triple-x-v1']);
+  assert.deepEqual(withX.filter(profile => profile.diameters.includes(400)).map(profile => profile.id), ['wa-indoor-full-x-v1', 'wa-indoor-triple-x-v1']);
   for (const id of ['HIT03', 'HIT04', 'HIT05']) assert.ok(!ACHIEVEMENT_EVIDENCE_RULE_IDS.some(ruleId => ruleId === id));
 });

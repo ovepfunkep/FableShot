@@ -11,6 +11,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 @CapacitorPlugin(name = "PracticeTimerSound")
 public class PracticeTimerSoundPlugin extends Plugin {
@@ -22,21 +24,41 @@ public class PracticeTimerSoundPlugin extends Plugin {
 
     @PluginMethod
     public void schedule(PluginCall call) {
-        String phase = call.getString("phase");
-        Integer delay = call.getInt("remainingMillis");
-        if ((!"Series".equals(phase) && !"Rest".equals(phase)) ||
-            delay == null || delay < 0 || delay > 3_600_000) {
+        JSONArray schedule = call.getArray("signals");
+        if (schedule == null || schedule.length() > 3) {
             call.reject("Некорректное время сигнала.");
             return;
         }
+        int[] delays = new int[schedule.length()];
+        int[] counts = new int[schedule.length()];
+        int last = 0;
+        for (int i = 0; i < schedule.length(); i++) {
+            JSONObject signal = schedule.optJSONObject(i);
+            int delay = signal == null ? -1 : signal.optInt("delay", -1);
+            int count = signal == null ? 0 : signal.optInt("count", 0);
+            if (delay < 0 || delay > 3_720_000 || count < 1 || count > 3) {
+                call.reject("Некорректное время сигнала.");
+                return;
+            }
+            delays[i] = delay;
+            counts[i] = count;
+            last = Math.max(last, delay);
+        }
+        int lastDelay = last;
         commands.post(() -> {
             if (destroyed) { call.reject("Тренировка закрыта."); return; }
             clear();
+            if (delays.length == 0) { call.resolve(); return; }
             try {
                 PowerManager power = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
                 wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FableShot:PracticeTimer");
-                wakeLock.acquire(delay + 2500L);
-                signals.postDelayed(() -> play("Series".equals(phase)), delay);
+                wakeLock.acquire(lastDelay + 2500L);
+                for (int i = 0; i < delays.length; i++) {
+                    for (int beep = 0; beep < counts[i]; beep++) {
+                        signals.postDelayed(this::play, delays[i] + 450L * beep);
+                    }
+                }
+                signals.postDelayed(this::clear, lastDelay + 1400L);
                 call.resolve();
             } catch (RuntimeException error) {
                 clear();
@@ -50,14 +72,10 @@ public class PracticeTimerSoundPlugin extends Plugin {
         commands.post(() -> { clear(); call.resolve(); });
     }
 
-    private void play(boolean series) {
+    private void play() {
         try {
-            tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
-            tone.startTone(series ? ToneGenerator.TONE_DTMF_9 : ToneGenerator.TONE_DTMF_1, series ? 1800 : 650);
-            if (!series) signals.postDelayed(() -> {
-                if (tone != null) tone.startTone(ToneGenerator.TONE_DTMF_3, 950);
-            }, 850);
-            signals.postDelayed(this::clear, 1900);
+            if (tone == null) tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
+            tone.startTone(ToneGenerator.TONE_DTMF_9, 300);
         } catch (RuntimeException error) {
             Log.w("FableShotTimer", "Timer audio unavailable", error);
             clear();

@@ -15,8 +15,12 @@ export function formatProgress(result: ProgressResult): string {
     : `${signedProgress.format(result.rawIncrease ?? 0)} балла`;
 }
 
+export function progressTone(value: number): 'positive' | 'negative' | 'neutral' {
+  return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+}
+
 /** A compact card has room for one baseline. Mixed scopes are explained in the report. */
-export function compactProgress(practice: Practice): string | null {
+export function compactProgress(practice: Practice): { text: string; tone: ReturnType<typeof progressTone> } | null {
   if (practice.savedAt === null) return null;
   const series = practice.rounds.flatMap(round => round.series.filter(item => item.shots.length > 0));
   const id = series[0]?.progressBaselineId;
@@ -25,7 +29,8 @@ export function compactProgress(practice: Practice): string | null {
   if (baseline?.status !== 'ready') return null;
   const result = calculateProgress(baseline, series);
   if (!result || result.currentAverage === null || result.baselineAverage === null) return null;
-  return `${result.fullRankAvailable ? '' : '≈ '}${formatProgress(result)}`;
+  return { text: `${result.fullRankAvailable ? '' : '≈ '}${formatProgress(result)}`,
+    tone: progressTone(result.relativePercent ?? result.rawIncrease ?? 0) };
 }
 export const MIN_SCORED_ARROWS = 12;
 

@@ -1,31 +1,13 @@
 import { readDiary, readStoredJournal } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 
-test('motion previews switch styles and respect the global animation toggle', async ({ page }) => {
+test('motion settings keep the global toggle and omit the individual shot style', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-motion').click();
-  const demo = page.locator('.shot-motion-demo');
-  await expect(page.getByRole('button', { name: 'Импульс', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Карточки', exact: true }).click();
-  for (const [score, animation] of [[5, 'shot-reveal'], [7, 'shot-flip'], [9, 'shot-landing']] as const) {
-    await page.getByRole('button', { name: `Показать анимацию для оценки ${score}` }).click();
-    await expect(demo.locator('[data-shot-motion="cards"]')).toHaveCSS('animation-name', animation);
-  }
-  await page.getByRole('button', { name: 'Показать анимацию для оценки 10' }).click();
-  await expect(demo.locator('[data-shot-motion="cards"][data-shot-tier="ten"]')).toHaveCSS('animation-name', 'shot-landing');
-  await expect(demo.locator('.shot-sparks i')).toHaveCount(10);
-  await page.getByRole('button', { name: 'Чистая серия', exact: true }).click();
-  const series = page.getByTestId('clean-series-preview');
-  await expect(series.locator('.shot-face')).toHaveText(['10', '10', '10']);
-  await expect(series.locator('.shot-face').first()).toHaveCSS('animation-name', 'clean-series-jump');
-  await page.getByRole('button', { name: 'Импульс', exact: true }).click();
-  await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'shot-pulse');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(demo.locator('[data-shot-motion="pulse"]')).toHaveCSS('animation-name', 'none');
+  await expect(page.getByText('Анимация попаданий', { exact: true })).toHaveCount(0);
   await page.getByTestId('setting-animations').click();
-  await expect(page.getByRole('button', { name: 'Показать анимацию для оценки 10' })).toBeDisabled();
-  await expect(demo.locator('[data-shot-motion]')).toHaveCount(0);
+  await expect(page.getByTestId('setting-animations')).toHaveAttribute('aria-checked','false');
 });
 
 test('lens controls share saved defaults and overrides with training conditions', async ({ page }) => {
@@ -33,7 +15,7 @@ test('lens controls share saved defaults and overrides with training conditions'
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-training').click();
   const slider = page.getByTestId('setting-aim-speed');
-  await expect(slider).toHaveValue('70');
+  await expect(slider).toHaveValue('40');
   await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('375');
   await slider.fill('100');
   await page.getByTestId('setting-lens-zoom').fill('500');
@@ -46,8 +28,8 @@ test('lens controls share saved defaults and overrides with training conditions'
   const back = page.getByRole('button', { name: 'Назад', exact: true });
   await back.click();
   await back.click();
-  await page.getByTestId('home-change-conditions').click();
-  await page.getByTestId('conditions-advanced').click();
+  await page.getByTestId('home-start-training').click();
+  await page.getByRole('button', { name: 'Переместить панель масштаба' }).click();
   await expect(page.getByTestId('setting-lens-zoom')).toHaveValue('500');
   await page.getByTestId('setting-lens-zoom').fill('300');
   await expect(page.getByText('3×', { exact: true })).toBeVisible();
@@ -105,7 +87,7 @@ test('the settings target uses the selected lens magnification and aim speed wit
   await page.mouse.move(fast.x + fast.radius * .16, fast.y);
   await expect(lens.locator('strong')).not.toHaveText('10');
   await page.mouse.up();
-  expect((await readStoredJournal(page)).diary).toBeNull();
+  expect((await readStoredJournal(page)).diary?.entries ?? []).toHaveLength(0);
 });
 
 test('settings use native categories and Back returns to the category list', async ({ page }) => {

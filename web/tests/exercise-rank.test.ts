@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Conditions } from '../src/conditions.ts';
-import { exerciseRank } from '../src/exercise-rank.ts';
+import { exerciseRank, exerciseRankDisplay } from '../src/exercise-rank.ts';
 import type { Practice } from '../src/practice.ts';
 
 const indoor: Conditions = {
@@ -28,6 +28,18 @@ function training(scores: number[][], saved: string | null = savedAt): Practice 
 
 const firstRound = Array<number>(30).fill(7);
 const secondRound = [...Array<number>(27).fill(6), 10, 10, 0];
+
+test('five six-arrow ends show the 60-arrow barebow pace alongside the actual short exercise rank', () => {
+  const practice = training([Array<number>(30).fill(10)]);
+  const ends = practice.rounds[0].series;
+  practice.rounds[0].series = ends.filter((_, index) => index % 2 === 0).map((end, index) => ({
+    ...end, plannedCount: 6, shots: [...end.shots, ...ends[index * 2 + 1].shots],
+  }));
+  const rank = exerciseRank(practice, 'male');
+  assert.equal(rank.evaluation?.result?.label, 'I');
+  assert.equal(rank.forecast?.exercise.arrows, 60);
+  assert.deepEqual(exerciseRankDisplay(rank), { forecast: true, label: 'МСМК', actual: 'Разряд I · 30 стрел' });
+});
 
 test('uses every scored arrow from two compatible rounds and compares exact points', () => {
   const practice = training([firstRound, secondRound]);

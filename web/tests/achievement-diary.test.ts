@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { awardPublication, awardServiceAction, awardTrainingChange, eligibleForAchievements } from '../src/achievement-diary.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
-import { advanceSeries, completePractice, deleteSeries, replaceShot, startRound } from '../src/practice.ts';
+import { advanceSeries, appendShot, completePractice, deleteSeries, replaceShot, startRound } from '../src/practice.ts';
 import type { Practice } from '../src/practice.ts';
 import { achievementValidity } from '../src/achievement-validity.ts';
 import { groupAchievementGrants } from '../src/achievement-ledger.ts';
@@ -190,16 +190,58 @@ test('legacy, imported and deleted entries cannot earn by completing or editing 
 });
 
 test('an active enrolled series can earn performance awards without a completed-session award', () => {
-  const before = training('active', [[10, 10]], { active: true, enrollment: epoch });
+  const first = training('active', [[]], { active: true, enrollment: epoch });
+  const initial = changeStage(diary([first]), practice => appendShot(practice, shot(10))).diary;
+  assert.deepEqual(initial.achievementLedger?.grants.map(grant => grant.id), ['START02']);
   const after = training('active', [[10, 10, 10]], { active: true, enrollment: epoch });
-  const result = awardTrainingChange(diary([before]), diary([after]), after.id, null, now);
+  const result = awardTrainingChange(initial, { ...initial, entries: [after] }, after.id, null, now);
   assert.ok(result.added.some(grant => grant.id === 'HIT01' && grant.scope === 'recurve'));
-  assert.ok(result.added.some(grant => grant.id === 'START02'));
+  assert.ok(result.added.every(grant => grant.id !== 'START02'));
   assert.ok(result.added.every(grant => grant.id !== 'START01'));
   assert.equal(result.diary.entries[0].practice.savedAt, null);
   const unchanged = awardTrainingChange(result.diary, result.diary, after.id, null, later);
   assert.deepEqual(unchanged.added, []);
   assert.equal(unchanged.diary, result.diary);
+});
+
+test('series stories react after closure and preserve the exact result sequence', () => {
+  const entry = training('swing', [[8, 8, 8], [3, 3, 4]], { active: true, enrollment: epoch });
+  entry.achievementEnrollment!.seriesStories = true;
+  const initial = diary([entry]);
+  assert.equal(changeStage(initial, practice => practice).added.length, 0);
+  const drop = changeStage(initial, advanceSeries);
+  assert.deepEqual(drop.added.map(grant => [grant.id, grant.seriesSwing]), [
+    ['SWING01', { seriesIds: [2, 3], points: [24, 10], arrows: 3 }],
+  ]);
+
+  const threeHits = (practice: Practice, points: number) => [0, 1, 2].reduce(next => appendShot(next, shot(points)), practice);
+  const strongAgain = changeStage(drop.diary, practice => threeHits(practice, 8));
+  assert.ok(strongAgain.added.every(grant => !grant.seriesSwing));
+  const rebound = changeStage(strongAgain.diary, advanceSeries);
+  assert.deepEqual(rebound.added.map(grant => [grant.id, grant.seriesSwing?.points]), [['SWING02', [10, 24]]]);
+
+  const third = changeStage(rebound.diary, practice => threeHits(practice, 8));
+  const sustained = changeStage(third.diary, practice => completePractice(practice, now));
+  assert.deepEqual(sustained.added.filter(grant => grant.seriesSwing).map(grant => [grant.id, grant.seriesSwing?.points]), [
+    ['SWING03', [10, 24, 24]],
+  ]);
+  const modified = structuredClone(sustained.diary);
+  modified.entries[0].practice.rounds[0].series[3].shots[0] = shot(6);
+  assert.equal(achievementValidity(sustained.diary).get('SWING03:recurve'), true);
+  assert.equal(achievementValidity(modified).get('SWING03:recurve'), false);
+  assert.equal(achievementValidity(modified).get('SWING02:recurve'), true);
+});
+
+test('series stories reject missing enrollment, mismatched conditions and a short or interrupted series', () => {
+  const cases = [
+    training('old', [[8, 8, 8], [3, 3, 4]], { active: true, enrollment: epoch }),
+    training('mismatch', [[8, 8, 8], [3, 3, 4]], { active: true, enrollment: epoch }),
+    training('short', [[8, 8, 8], [3, 4]], { active: true, enrollment: epoch }),
+    training('interrupted', [[8, 8, 8], [5, 5, 5], [3, 3, 4]], { active: true, enrollment: epoch }),
+  ];
+  for (const entry of cases.slice(1)) entry.achievementEnrollment!.seriesStories = true;
+  cases[1].practice.rounds[0].series[1].conditions.distanceMeters = 30;
+  for (const entry of cases) assert.ok(changeStage(diary([entry]), advanceSeries).added.every(grant => !grant.seriesSwing));
 });
 
 test('completion aggregates only enrolled sessions from the current epoch', () => {

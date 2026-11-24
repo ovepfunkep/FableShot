@@ -2,10 +2,19 @@ import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
 import {
   DEFAULT_TIMER_SETTINGS, displaySeconds, initialTimer, loadTimerSettings, resetTimer,
-  saveTimerSettings, selectTimerPhase, tickTimer, timerClock, toggleTimer,
+  saveTimerSettings, selectTimerPhase, tickTimer, timerClock, toggleTimer, tickTimerSequence, timerSignals,
 } from '../src/timer.ts';
 
 const key = 'app.fableshot.timer-settings.v1';
+
+test('preparation schedules 2/1/3 signals and catches up from the original deadlines', () => {
+  const settings = { preparationSeconds: 10, seriesSeconds: 120, restSeconds: 60 };
+  const prep = toggleTimer(initialTimer(settings, 'Preparation'), 1000);
+  assert.deepEqual(timerSignals(prep, settings, 1000, true), [{ at: 1000, count: 2 }, { at: 11000, count: 1 }, { at: 131000, count: 3 }]);
+  assert.equal(tickTimerSequence(prep, settings, 11001).phase, 'Series');
+  assert.equal(tickTimerSequence(prep, settings, 131001).remainingMillis, 59999);
+  assert.equal(tickTimerSequence(prep, settings, 200000).status, 'Finished');
+});
 
 function storage(t: TestContext, initial: string | null = null, failWrite = false) {
   const entries = new Map<string, string>();

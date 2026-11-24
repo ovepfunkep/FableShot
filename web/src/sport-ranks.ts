@@ -73,10 +73,10 @@ export type RankExercise = {
 
 // Only the target/discipline combinations supported by Android RankMatching are eligible.
 const supportedFormats = [
-  { sourceRow: 11, bow: 'recurve', distance: 18, arrows: 30, diameter: 400, targets: ['wa-indoor-outer-v1'] },
-  { sourceRow: 12, bow: 'recurve', distance: 18, arrows: 60, diameter: 400, targets: ['wa-indoor-outer-v1'] },
-  { sourceRow: 25, bow: 'barebow', distance: 18, arrows: 30, diameter: 400, targets: ['wa-indoor-outer-v1'] },
-  { sourceRow: 26, bow: 'barebow', distance: 18, arrows: 60, diameter: 400, targets: ['wa-indoor-outer-v1'] },
+  { sourceRow: 11, bow: 'recurve', distance: 18, arrows: 30, diameter: 400, targets: ['wa-indoor-outer-v1', 'wa-indoor-full-x-v1'] },
+  { sourceRow: 12, bow: 'recurve', distance: 18, arrows: 60, diameter: 400, targets: ['wa-indoor-outer-v1', 'wa-indoor-full-x-v1'] },
+  { sourceRow: 25, bow: 'barebow', distance: 18, arrows: 30, diameter: 400, targets: ['wa-indoor-outer-v1', 'wa-indoor-full-x-v1'] },
+  { sourceRow: 26, bow: 'barebow', distance: 18, arrows: 60, diameter: 400, targets: ['wa-indoor-outer-v1', 'wa-indoor-full-x-v1'] },
   { sourceRow: 29, bow: 'compound', distance: 18, arrows: 30, diameter: 400, targets: ['wa-indoor-inner-v1'] },
   { sourceRow: 30, bow: 'compound', distance: 18, arrows: 60, diameter: 400, targets: ['wa-indoor-inner-v1'] },
   { sourceRow: 18, bow: 'recurve', distance: 70, arrows: 72, diameter: 1220, targets: ['wa-outdoor-full-v1'] },

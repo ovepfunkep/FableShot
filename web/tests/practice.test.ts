@@ -3,14 +3,44 @@ import { test } from 'node:test';
 import {
   ROUND_LIMIT, advanceSeries, appendShot, completePractice, currentSeries, deleteRound, deleteSeries,
   emptyPractice, findSeries, removeShot, replaceShot, resumePractice, roundShots, startRound, applyConditions, isRoundFull,
+  preparePracticeConditionsCorrection,
 } from '../src/practice.ts';
 import type { Practice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+import { scoreOutline } from '../src/score-appearance.ts';
 
 const nine = { point: { x: .17, y: 0 }, points: 9, code: '9' };
 const ten = { point: { x: 0, y: 0 }, points: 10, code: '10' };
 const miss = { point: null, points: 0, code: 'M' };
 const savedAt = '2026-11-11T10:00:00.000Z';
+
+test('a ten has a separate outline color alongside nines', () => {
+  const paint = scoreOutline([nine, nine, nine, ten], true);
+  assert.match(paint ?? '', /outline-nine\) 0% 75%.*outline-ten\) 75% 100%/);
+  assert.equal(scoreOutline([ten], true), 'conic-gradient(var(--score-outline-ten) 0% 100%)');
+  assert.equal(scoreOutline([ten], false), undefined);
+});
+
+test('correcting saved conditions keeps the series and rescoring uses the new shaft geometry', () => {
+  const old = completePractice(appendShot(appendShot(emptyPractice(), { point: { x: .113, y: 0 }, points: 10, code: '10' }), miss), savedAt);
+  const corrected = preparePracticeConditionsCorrection(old, { distanceMeters: 30, targetDiameterMm: 600 });
+  assert.equal(corrected.practice.savedAt, savedAt);
+  assert.equal(corrected.practice.nextId, old.nextId);
+  const [rescored, preservedMiss] = currentSeries(corrected.practice)!.series.shots;
+  assert.equal(rescored.points, 9);
+  assert.deepEqual(rescored.point, { x: .113, y: 0 });
+  assert.equal(rescored.originalMark?.points, 10);
+  assert.deepEqual(preservedMiss, miss);
+  assert.deepEqual(corrected.preview, { before: 10, after: 9, preservedScores: 1 });
+  const patch = { targetProfileId: 'wa-indoor-triple-outer-v1' };
+  assert.throws(() => preparePracticeConditionsCorrection(old, patch), /сопоставление попаданий/);
+  const seriesId = currentSeries(old)!.series.id;
+  const triple = preparePracticeConditionsCorrection(old, patch, { [`spot-${seriesId}-0`]: '3' });
+  assert.equal(currentSeries(triple.practice)!.series.shots[0].spot, 2);
+  const single = preparePracticeConditionsCorrection(triple.practice, { targetProfileId: DEFAULT_CONDITIONS.targetProfileId }, { 'merge-spots': 'Перенести' });
+  assert.equal(currentSeries(single.practice)!.series.shots[0].spot, undefined);
+  assert.equal(currentSeries(single.practice)!.series.shots[0].originalMark?.profileId, DEFAULT_CONDITIONS.targetProfileId);
+});
 
 test('physical numbers are unique in one series, reusable in the next and checked against the saved set', () => {
   const conditions = { ...DEFAULT_CONDITIONS, equipment: {

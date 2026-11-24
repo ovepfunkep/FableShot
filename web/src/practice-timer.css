@@ -5,11 +5,13 @@
 }
 .practice-timer-badge svg { flex: none; }
 .practice-timer-badge .timer-clock { font-size: 11px; line-height: 14px; }
-[data-timer-tone="series"] { --timer-tone: var(--accent); --timer-surface: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
-[data-timer-tone="rest"] { --timer-tone: light-dark(#125d7e, #8cd4f2); --timer-surface: color-mix(in srgb, var(--timer-tone) 12%, var(--surface)); }
+[data-timer-tone="preparation"] { --timer-tone: light-dark(#875000, #ffca71); --timer-surface: color-mix(in srgb, var(--timer-tone) 17%, var(--surface)); }
+[data-timer-tone="series"] { --timer-tone: light-dark(#186037, #a2f599); --timer-surface: color-mix(in srgb, var(--timer-tone) 16%, var(--surface)); }
+[data-timer-tone="rest"] { --timer-tone: light-dark(#9a2f24, #ffab9d); --timer-surface: color-mix(in srgb, var(--timer-tone) 17%, var(--surface)); }
 [data-timer-tone="finished"] { --timer-tone: light-dark(#9a2f24, #ff9e91); --timer-surface: color-mix(in srgb, var(--timer-tone) 14%, var(--surface)); }
 .practice-timer-badge[data-timer-tone] { color: var(--timer-tone); }
-.practice-timer-face { display: grid; justify-items: center; gap: 6px; padding: 14px 0; border-radius: 18px; background: var(--timer-surface, var(--raised)); color: var(--timer-tone, inherit); }
+.practice-timer-face { display: grid; width: 100%; justify-items: center; align-content: center; gap: 6px; min-height: 160px; padding: 14px 0; border: 1px solid var(--edge); border-radius: 18px; background: var(--timer-surface, var(--raised)); color: var(--timer-tone, inherit); }
+.practice-timer-face-phase { font-size: 20px; }
 .practice-timer-sheet {
   position: fixed; inset: auto 0 0; margin: 0 auto; width: min(100%, 550px); max-width: none;
   max-height: calc(calc(100 * var(--app-vh)) - 12px); padding: 0; border: 0; overflow: auto;
@@ -21,14 +23,14 @@
 .practice-timer-handle { display: block; width: 32px; height: 4px; margin: 0 auto 20px; border-radius: 99px; background: var(--muted); opacity: .6; }
 .practice-timer-content h2, .practice-timer-confirm h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; }
 .practice-timer-content h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; }
-.practice-timer-phases { display: flex; gap: 12px; align-items: center; }
+.practice-timer-phases { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .timer-phase { min-height: 40px; padding: 6px 16px; border: 1px solid var(--edge); border-radius: 12px; background: transparent; font-size: 14px; line-height: 20px; font-weight: 700; }
 .timer-phase[aria-pressed="true"] { background: var(--raised); border-color: transparent; }
 .timer-clock { display: inline-flex; justify-content: center; align-items: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .timer-clock-cell { display: inline-flex; justify-content: center; width: .64em; height: 1.15em; overflow: hidden; line-height: 1.15; }
 .timer-clock-cell > span { display: inline-block; }
 .timer-clock-cell.timer-clock-colon { width: .28em; }
-.practice-timer-face > .timer-clock { width: 100%; font-size: 57px; line-height: 64px; font-weight: 400; }
+.practice-timer-face > .timer-clock { width: 100%; font-size: clamp(57px, 19vw, 100px); line-height: 1.15; font-weight: 650; }
 .practice-timer-status { margin: 0; align-self: center; font-size: 14px; line-height: 20px; }
 .practice-timer-actions { display: flex; gap: 12px; }
 .practice-timer-actions .primary { flex: 1; }

@@ -189,7 +189,7 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
     } catch (cause) { setError(errorMessage(cause)); running.current = false; setBusy(false); }
   }
 
-  return <BottomSheet title="Импорт из MyTargets" onClose={() => { if (!running.current) onClose(); }} tag="mytargets-import" startAtTop>
+  return <BottomSheet title="Импорт из MyTargets" onClose={onClose} onDismissRequest={() => !running.current} tag="mytargets-import" startAtTop>
     <div className="mytargets-import">
       {!context && <div className="mytargets-formats">
         <p><strong>ZIP из MyTargets</strong> сохраняет больше данных о тренировках, мишенях и снаряжении.</p>

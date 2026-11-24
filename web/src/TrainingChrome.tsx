@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
-import { summarize, zoneColor } from './target.ts';
+import { summarize } from './target.ts';
+import { scoreColor } from './score-appearance.ts';
 import type { Shot } from './target.ts';
 import { DEFAULT_SHOT_MOTION_STYLE, formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
@@ -140,12 +141,12 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
             const shot = shots[index];
             const active = index === selected || index === entering;
             const compact = capacity > 3;
-            const background = shot && !preferences.hideScores ? zoneColor(shot.points) : undefined;
+            const background = shot && !preferences.hideScores ? scoreColor(shot.points) : undefined;
             const color = preferences.hideScores ? undefined : shot && (shot.points === 0 || (shot.points >= 3 && shot.points <= 4)) ? '#fff' : shot ? '#111811' : undefined;
             const effect = shot && !feedback?.cleanSeries && index === feedback?.index ? feedback : undefined;
             return <li key={index} data-shot-shifted={shot && removing !== undefined && index >= removing ? true : undefined}>
               <button type="button" className={`arrow-slot${compact ? ' compact' : ''}${active ? ' arrow-entering' : ''}${shot ? ' arrow-entered' : ''}`}
-                data-testid={`shot-${index + 1}`} disabled={!shot} aria-pressed={index === selected}
+                data-testid={`shot-${index + 1}`} data-score-ten={shot?.points === 10 && !preferences.hideScores || undefined} disabled={!shot} aria-pressed={index === selected}
                 aria-label={`Стрела ${index + 1}: ${shot ? preferences.hideScores ? 'отмечена' : shot.code : 'не отмечена'}${shot?.physicalArrowNumber ? `, физическая стрела №${shot.physicalArrowNumber}` : ''}`} onClick={() => onPick(index)}>
                 <ShotFace key={effect?.id ?? 'static'} points={effect?.points} style={preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE}
                   background={background} color={color}>

@@ -34,11 +34,13 @@ test('target profiles keep their IDs, allowed diameters and nominal radii', () =
     ['practice-full-10-v1', [], 450, 1, '10'],
     ['wa-outdoor-full-v1', [800, 1220], 1220, 1, 'X'],
     ['wa-indoor-outer-v1', [400, 600], 400, 1, '10'],
+    ['wa-indoor-full-x-v1', [400], 400, 1, 'X'],
     ['wa-indoor-inner-v1', [400, 600], 600, 1, '10'],
     ['wa-outdoor-six-v1', [800], 800, .6, 'X'],
     ['wa-indoor-five-outer-v1', [400, 600], 400, .5, '10'],
     ['wa-indoor-five-inner-v1', [400, 600], 600, .5, '10'],
     ['wa-indoor-triple-outer-v1', [400, 600], 400, .5, '10'],
+    ['wa-indoor-triple-x-v1', [400], 400, .5, 'X'],
     ['wa-indoor-triple-inner-v1', [400, 600], 600, .5, '10'],
   ] as const;
   assert.deepEqual(TARGET_PROFILES.map(profile => profile.id), cases.map(([id]) => id));

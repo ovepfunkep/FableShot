@@ -7,7 +7,7 @@ const key = 'app.fableshot.training-preferences.v1';
 
 test('aim speed preserves old settings and validates the supported slider range', t => {
   const entries = storage(t);
-  assert.equal(loadPreferences().aimSpeedPercent ?? AIM_SPEED_SETTING.default, 70);
+  assert.equal(loadPreferences().aimSpeedPercent ?? AIM_SPEED_SETTING.default, 40);
   for (const aimSpeedPercent of [20, 70, 100, 150]) {
     savePreferences({ ...DEFAULT_PREFERENCES, aimSpeedPercent });
     assert.equal(loadPreferences().aimSpeedPercent, aimSpeedPercent);

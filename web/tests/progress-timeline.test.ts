@@ -114,11 +114,11 @@ test('same-day training points have distinct positions and deterministic history
 
 test('statistics switches remove their own metrics and the progress switch hides every series', () => {
   const [group] = buildProgressTimeline([entry()]);
-  assert.deepEqual(availableTimelineMetrics(group, DEFAULT_PREFERENCES), ['average', 'rms', 'tenShare', 'xShare', 'missShare', 'cg3']);
-  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'general_score'] }), ['tenShare', 'xShare', 'missShare']);
-  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['zone_trend'] }), ['average', 'rms', 'cg3']);
+  assert.deepEqual(availableTimelineMetrics(group, DEFAULT_PREFERENCES), ['average', 'rms', 'spread', 'shift', 'tenShare', 'goldShare', 'xShare', 'missShare', 'cg3']);
+  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'general_score'] }), ['shift', 'tenShare', 'goldShare', 'xShare', 'missShare']);
+  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['zone_trend'] }), ['average', 'rms', 'spread', 'shift', 'cg3']);
   assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['progress_trend'] }), []);
-  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'zone_trend', 'general_score'] }), []);
+  assert.deepEqual(availableTimelineMetrics(group, { ...DEFAULT_PREFERENCES, disabledStatistics: ['average', 'grouping', 'zone_trend', 'general_score'] }), ['shift']);
 });
 
 test('each metric keeps one scale across panning; score and percentage domains stay explicit', () => {

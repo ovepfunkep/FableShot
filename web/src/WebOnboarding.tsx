@@ -14,7 +14,7 @@ import './web-onboarding.css';
 
 export type OnboardingChapter = 'welcome' | 'target' | 'report' | 'preferences';
 
-type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void };
+type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void; onEnableHundredths?: () => void };
 
 const tutorial = [
   { title: 'Поймай свою точку', hint: 'Удержи палец, уточни попадание в лупе и отпусти. Короткое касание тоже работает.' },
@@ -173,8 +173,8 @@ function TutorialReport({ onStart, onClose, onBack }: Pick<OnboardingActions, 'o
   </main>;
 }
 
-function QuickPreferences({ onDone, onBack, standalone }: {
-  onDone: () => void; onBack: () => void; standalone: boolean;
+function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
+  onDone: () => void; onBack: () => void; standalone: boolean; onEnableHundredths?: () => void;
 }) {
   const { preferences, update, readable, error } = useTrainingPreferences();
   const [themeStyle, setThemeStyle] = useState(preferences.themeStyle ?? DEFAULT_THEME_STYLE);
@@ -185,7 +185,10 @@ function QuickPreferences({ onDone, onBack, standalone }: {
     setSaving(true);
     const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths,
       showAchievementsDuringInput: inputNotices, ...(standalone ? {} : { onboardingSeen: true }) });
-    if (success) onDone();
+    if (success) {
+      if (hundredths && !preferences.averageHundredths) onEnableHundredths?.();
+      onDone();
+    }
     else setSaving(false);
   }
   return <main className="web-onboard web-onboard-preferences" data-testid="onboard-preferences">
@@ -246,7 +249,7 @@ export function WebOnboarding(actions: OnboardingActions & { initialChapter: Onb
     setPreviousChapter(chapter);
     setChapter('preferences');
   }
-  if (chapter === 'preferences') return <QuickPreferences standalone={standalone}
+  if (chapter === 'preferences') return <QuickPreferences standalone={standalone} onEnableHundredths={actions.onEnableHundredths}
     onDone={standalone ? actions.onClose : actions.onStart} onBack={standalone ? actions.onClose : () => setChapter(previousChapter)} />;
   if (chapter === 'report') return <TutorialReport onStart={start} onClose={actions.onClose} onBack={() => setChapter('target')} />;
   if (chapter === 'target') return <TargetTutorial onStart={start} onClose={actions.onClose} onReport={() => setChapter('report')} />;

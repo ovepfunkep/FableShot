@@ -56,7 +56,9 @@ test('new training remembers the last applied setup even if its empty series was
   await page.getByTestId('conditions-options-done').click();
   await page.getByTestId('start-training').click();
   await hit(page);
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
   await openConditions(page);
+  await page.getByTestId('conditions-future').click();
   await page.getByTestId('distance-10').click();
   await page.getByTestId('start-training').click();
   await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
@@ -76,6 +78,7 @@ test('target changes open a new series with new conditions while earlier hits ke
   await hit(page, .08);
   await expect(page.getByTestId('series-score')).toHaveText('10/10');
   await openConditions(page);
+  await page.getByTestId('conditions-future').click();
   await selectTarget(page, 'wa-indoor-inner-v1');
   await page.getByTestId('distance-30').click();
   await page.getByTestId('start-training').click();
@@ -126,6 +129,7 @@ test('round options support series boundaries and saved presets with a pinned st
   await openConditions(page);
   await expect(page.getByTestId('conditions-options')).toContainText('Раунд');
   await expect(page.getByRole('button', { name: /^Раунд/ })).toHaveCount(0);
+  await page.getByTestId('conditions-future').click();
   await page.getByTestId('training-presets').click();
   await expect(page.getByRole('button', { name: /^Открытый рубеж/ })).toBeVisible();
 });
@@ -157,6 +161,7 @@ test('a kit can be created with bow and shaft diameter and is reused after reope
   await expect(page.getByTestId('series-score')).toHaveText('10/10');
   await openConditions(page);
   await expect(page.getByTestId('conditions-equipment')).toContainText('Основной');
+  await page.getByTestId('conditions-future').click();
   await page.getByRole('button', { name: 'Изменить выбранный комплект', exact: true }).click();
   await expect(page.getByTestId('equipment-name')).toHaveValue('Основной');
   await page.getByRole('button', { name: 'Изменить стрелы', exact: true }).click();
@@ -168,6 +173,60 @@ test('a kit can be created with bow and shaft diameter and is reused after reope
   await expect(page.getByTestId('series-score')).toHaveText('9/10');
   await page.getByRole('button', { name: 'Предыдущая серия' }).click();
   await expect(page.getByTestId('series-score')).toHaveText('10/10');
+});
+
+test('conditions can be corrected for all series in active and completed training', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await hit(page);
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await page.getByTestId('next-end').click();
+  await hit(page);
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await openConditions(page);
+  await page.getByTestId('distance-30').click();
+  await page.getByTestId('start-training').click();
+  await expect(page.getByTestId('conditions-correction-preview')).toContainText('2 из 2');
+  await page.getByTestId('conditions-correction-save').click();
+  await expect(page.getByTestId('training-series-open')).toContainText(/Серия\s*2/);
+  await expect(page.getByTestId('round-score')).toHaveText('20/20');
+
+  await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
+  await page.getByTestId('training-confirm').click();
+  await page.getByTestId('report-menu-open').click();
+  await page.getByTestId('report-conditions-open').click();
+  await expect(page.getByTestId('report-conditions').getByLabel('Дистанция: 30 м')).toHaveCount(1);
+  await page.getByTestId('report-correct-conditions').click();
+  await page.getByTestId('distance-10').click();
+  await page.getByTestId('start-training').click();
+  await expect(page.getByTestId('conditions-correction-preview')).toContainText('20 → 20');
+  await page.getByTestId('conditions-correction-save').click();
+  await page.getByTestId('report-menu-open').click();
+  await page.getByTestId('report-conditions-open').click();
+  await expect(page.getByTestId('report-conditions').getByLabel('Дистанция: 10 м')).toHaveCount(1);
+  await expect(page.getByTestId('report-round-1').locator('.report-series-summary')).toHaveCount(2);
+});
+
+test('changing an entered target to a traffic-light target places existing arrows into chosen spots', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByTestId('target').click();
+  await page.getByTestId('target').click();
+  await page.getByTestId('target').click();
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await openConditions(page);
+  await selectTarget(page, 'wa-indoor-triple-outer-v1');
+  await page.getByTestId('start-training').click();
+  const review = page.getByTestId('conditions-correction-review');
+  await review.getByRole('button', { name: 'Пятна 1–2–3 по порядку стрел' }).click();
+  await review.getByRole('button', { name: 'Проверить изменения' }).click();
+  await page.getByTestId('conditions-correction-save').click();
+  await expect(page.getByTestId('target')).toHaveAttribute('data-target-profile', 'wa-indoor-triple-outer-v1');
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
+  await page.reload();
+  await openTraining(page);
+  await expect(page.getByTestId('target')).toHaveAttribute('data-target-profile', 'wa-indoor-triple-outer-v1');
+  await expect(page.getByTestId('series-score')).toHaveText('30/30');
 });
 
 test('an unlimited round keeps accepting hits after the classic boundary', async ({ page }) => {

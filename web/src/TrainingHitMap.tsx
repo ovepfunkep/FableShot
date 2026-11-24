@@ -2,7 +2,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 import type { PointerEvent, ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { Conditions } from './conditions.ts';
-import { HIT_MAP_GRID_SIZE, hitCentroid, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, knownMissPoints } from './hit-map.ts';
+import { HIT_MAP_GRID_SIZE, hitCentroid, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, knownMissPoints, maximumSpread } from './hit-map.ts';
 import { zoneColor } from './target.ts';
 import { getTargetProfile, MISS_RING_WIDTH, summarize } from './target.ts';
 import type { Point, Shot, TargetProfile, TargetSpot } from './target.ts';
@@ -12,8 +12,9 @@ import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { clampTargetZoom, TargetZoom } from './TargetZoom.tsx';
 import { ReportRoundFilter } from './ReportRoundFilter.tsx';
+import { useReportView } from './report-view.ts';
 
-type MapSeries = { id: number; round: number; number: number; shots: readonly Shot[] };
+type MapSeries = { id: number; round: number; roundId?: number; number: number; shots: readonly Shot[] };
 type MapMode = 'density' | 'points';
 
 const densityColors = ['#d0e8d2', '#8dba97', '#417b55', '#123e28'];
@@ -25,7 +26,7 @@ const cellSize = 2 * gridRadius / HIT_MAP_GRID_SIZE;
 const millimeters = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const initialView = { zoom: 1, x: center, y: center };
 
-function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, layerKey }: {
+function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset, layerKey, reportId }: {
   points: readonly Point[];
   misses: readonly Point[];
   profile: TargetProfile;
@@ -34,21 +35,34 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
   density: ReturnType<typeof hitDensity>;
   showOffset: boolean;
   layerKey: string;
+  reportId?: string;
 }) {
   const radius = gridRadius / limit;
   const at = (coordinate: number) => center + coordinate * radius;
   const centroid = hitCentroid(points);
-  const [view, setView] = useState(initialView);
-  const currentView = useRef(initialView);
+  const [saved, saveView] = useReportView<string | null>(reportId, 'mapViewport', null);
+  const [view, setView] = useState(() => {
+    const [zoom, x, y] = typeof saved === 'string' ? saved.split(',').map(Number) : [];
+    if (![zoom, x, y].every(Number.isFinite) || !(zoom >= 1 && zoom <= 8)) return initialView;
+    const half = center / zoom;
+    return { zoom, x: Math.max(half, Math.min(side - half, x)), y: Math.max(half, Math.min(side - half, y)) };
+  });
+  const currentView = useRef(view);
   const pointers = useRef(new Map<number, Point>());
   const span = side / view.zoom;
 
-  function changeView(zoom: number, x: number, y: number) {
+  function rememberView() {
+    const { zoom, x, y } = currentView.current;
+    saveView(`${zoom},${x},${y}`);
+  }
+
+  function changeView(zoom: number, x: number, y: number, remember = false) {
     const half = center / zoom;
     const clamp = (value: number) => Math.max(half, Math.min(side - half, value));
     const next = { zoom, x: clamp(x), y: clamp(y) };
     currentView.current = next;
     setView(next);
+    if (remember) rememberView();
   }
 
   function trackPointer(event: PointerEvent<SVGSVGElement>) {
@@ -81,7 +95,7 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
   }
 
   function forgetPointer(event: PointerEvent<SVGSVGElement>) {
-    pointers.current.delete(event.pointerId);
+    if (pointers.current.delete(event.pointerId) && pointers.current.size === 0) rememberView();
   }
 
   return <div className="hit-map-viewport">
@@ -117,23 +131,29 @@ function HitMapPlot({ points, misses, profile, limit, mode, density, showOffset,
     </svg>
     <div className="hit-map-zoom-row"><span>Масштаб мишени</span>
       <TargetZoom className="zoom hit-map-zoom" zoom={view.zoom}
-        onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y)}
-        onReset={() => changeView(1, center, center)} />
+        onStep={factor => changeView(clampTargetZoom(view.zoom * factor), view.x, view.y, true)}
+        onReset={() => changeView(1, center, center, true)} />
     </div>
   </div>;
 }
 
-export function TrainingHitMap({ series, conditions }: { series: readonly MapSeries[]; conditions: Conditions }) {
-  const { preferences } = useTrainingPreferences();
+export function TrainingHitMap({ series, conditions, rememberView = false, reportId }: { series: readonly MapSeries[]; conditions: Conditions; rememberView?: boolean; reportId?: string }) {
+  const { preferences, update } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const titleId = useId();
-  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [selectedRound, setSelectedRound] = useReportView<number | null>(reportId, 'mapRound', null);
   const rounds = useMemo(() => [...new Set(series.map(entry => entry.round))], [series]);
-  const round = selectedRound !== null && rounds.includes(selectedRound) ? selectedRound : null;
+  const round = selectedRound === null ? null : series.find(item => (item.roundId ?? item.round) === selectedRound)?.round ?? null;
   const roundSeries = useMemo(() => series.filter(entry => round === null || entry.round === round), [series, round]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selectedSpot, setSelectedSpot] = useState<TargetSpot | null>(null);
-  const [mode, setMode] = useState<MapMode>('points');
+  const [selectedId, setSelectedId] = useReportView<number | null>(reportId, 'mapSeries', null);
+  const [storedSpot, setSelectedSpot] = useReportView<TargetSpot | null>(reportId, 'mapSpot', null);
+  const selectedSpot = storedSpot === 0 || storedSpot === 1 || storedSpot === 2 ? storedSpot : null;
+  const [localMode, setLocalMode] = useState<MapMode>('points');
+  const mode = rememberView ? preferences.statisticsView?.hitMapMode === 'density' ? 'density' : 'points' : localMode;
+  function setMode(value: MapMode) {
+    if (rememberView) void update({ ...preferences, statisticsView: { ...preferences.statisticsView, hitMapMode: value } });
+    else setLocalMode(value);
+  }
   const [help, setHelp] = useState(false);
   const allShots = useMemo(() => roundSeries.flatMap(entry => entry.shots), [roundSeries]);
   const allPoints = useMemo(() => knownHitPoints(allShots), [allShots]);
@@ -150,6 +170,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
   const limit = hitMapLimit([...allPoints, ...allMisses], profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH);
   const density = hitDensity(points, limit);
   const geometry = hitGeometry(shots, conditions.targetDiameterMm);
+  const spread = preferences.maximumSpread ? maximumSpread(shots, conditions.targetDiameterMm) : geometry?.rmsMm;
   const score = summarize(shots);
   const millimeterValue = (value?: number | null) => value == null ? '—' : `${millimeters.format(value)} мм`;
   const modeControls = <div className="hit-map-modes" role="group" aria-label="Вид карты">
@@ -174,7 +195,8 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
     </div>}
     <div className="hit-map-series-controls">
       <ReportRoundFilter rounds={rounds} value={round} label="Раунд карты попаданий" onChange={value => {
-        setSelectedRound(value);
+        const item = series.find(end => end.round === value);
+        setSelectedRound(item?.roundId ?? item?.round ?? null);
         setSelectedId(null);
       }} />
       <select className="report-scope-select" aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
@@ -185,7 +207,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
     </div>
     {(visible('result') || visible('grouping') || visible('offset')) && <dl className="report-metric-grid hit-map-readings" aria-live="polite">
       {visible('result') && <div><dt>Очки</dt><dd data-testid="hit-map-score">{score.points}/{score.maximum}</dd></div>}
-      {visible('grouping') && <div><dt>Разброс</dt><dd data-testid="hit-map-rms">{millimeterValue(geometry?.rmsMm)}</dd></div>}
+      {visible('grouping') && <div><dt>{preferences.maximumSpread ? 'Макс. разброс' : 'Разброс RMS'}</dt><dd data-testid="hit-map-rms">{millimeterValue(spread)}</dd></div>}
       {visible('offset') && <div><dt>Смещение</dt><dd data-testid="hit-map-shift">{millimeterValue(geometry?.shiftMm)}</dd></div>}
     </dl>}
     <div className="hit-map-actions">
@@ -196,7 +218,7 @@ export function TrainingHitMap({ series, conditions }: { series: readonly MapSer
         disabled={index >= roundSeries.length - 1} onClick={() => setSelectedId(roundSeries[index + 1].id)}><Icon name="right" /></button>
     </div>
     {points.length + misses.length > 0 ? <HitMapPlot points={points} misses={misses} profile={profile} limit={limit} mode={mode} density={density}
-      showOffset={visible('offset')} layerKey={`${round}:${selected?.id}:${selectedSpot}:${mode}`} /> : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
+      showOffset={visible('offset')} reportId={reportId} layerKey={`${round}:${selected?.id}:${selectedSpot}:${mode}`} /> : <p className={`hit-map-empty${allPoints.length ? ' hit-map-empty--plot' : ''}`}
       data-testid="hit-map-empty">Нет подтверждённых координат.</p>}
     {mode === 'density' && density.peak > 0 && <div className="hit-map-legend">
       <div className="hit-map-density-bands" aria-hidden="true">

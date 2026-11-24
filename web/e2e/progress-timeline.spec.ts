@@ -29,11 +29,11 @@ test('progress scrolls across the full history and compares equipment aliases wi
   const chart = page.getByTestId('progress-trend-chart');
   await expect.poll(() => chart.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
   await expect(page.getByTestId('progress-trend-value')).toContainText('10,0');
-  await page.getByTestId('progress-trend-tenShare').click();
+  await page.getByRole('combobox', { name: 'Показатель графика' }).selectOption('tenShare');
   await expect(page.getByTestId('progress-trend-value')).toContainText('100');
   await chart.evaluate(node => { node.scrollLeft = 0; });
   await expect(page.getByTestId('progress-trend-range')).toContainText('05.01.2026');
-  await page.getByTestId('progress-trend-average').click();
+  await page.getByRole('combobox', { name: 'Показатель графика' }).selectOption('average');
   await chart.evaluate(node => { node.scrollLeft = 0; });
   await expect(page.getByTestId('progress-trend-value')).toContainText('7,0');
   await timeline.screenshot({ path: '../artifacts/web-0.15.0-progress.png' });

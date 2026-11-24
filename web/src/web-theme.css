@@ -1,5 +1,7 @@
 /* FableTheme.kt uses separate colors for highlighted text and filled actions. */
 html[data-theme-appearance] {
+  --score-ten: #ffe15d;
+  --score-ten-glow: #ffc6438c;
   color: var(--ink);
   background: var(--app-bg);
   font-variant-numeric: tabular-nums;
@@ -8,6 +10,36 @@ html[data-theme-appearance] {
   --accent-line: color-mix(in srgb, var(--accent) 58%, transparent);
   --accent-wash: color-mix(in srgb, var(--accent) 8%, transparent);
   --danger-wash: color-mix(in srgb, var(--danger) 12%, var(--surface));
+}
+[data-score-ten="true"] { box-shadow: 0 0 8px var(--score-ten-glow); }
+[data-score-outline] { position: relative; }
+#root [data-score-outline] { border-color: transparent; }
+[data-score-outline]::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: var(--score-outline);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+html[data-theme-appearance="light"] {
+  --score-outline-nine: #b36845;
+  --score-outline-ten: #87680a;
+  --progress-gain: #286415;
+  --progress-halo: #7aff4280;
+}
+html[data-theme-appearance="dark"] {
+  --score-outline-nine: #ce8e5d;
+  --score-outline-ten: #edcd72;
+  --progress-gain: #bcff8b;
+  --progress-halo: #6eff397f;
+}
+#root [data-progress-tone="positive"] { color: var(--progress-gain); text-shadow: 0 0 5px var(--progress-halo), 0 0 10px var(--progress-halo); }
+#root [data-progress-tone] > small { color: inherit; }
+#root [data-progress-tone="negative"] { color: var(--danger); }
+#root [data-progress-tone="neutral"] { color: var(--muted); }
+@media (forced-colors: active) {
+  #root [data-progress-tone] { color: CanvasText; text-shadow: none; }
+  #root [data-score-outline] { border-color: ButtonText; }
+  [data-score-outline]::after { content: none; }
 }
 html[data-theme-appearance="dark"] {
   color-scheme: dark;

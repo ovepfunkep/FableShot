@@ -62,7 +62,8 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized, moment }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized, moment, onCorrectConditions }: {
+  onCorrectConditions?: () => void;
   practice: Practice;
   entries: readonly DiaryEntry[];
   entryId: string | null;
@@ -150,7 +151,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {deleted && <button type="button" className="report-resume" onClick={async () => { if (await onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
-      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} moment={moment} overview={{
+      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} moment={moment} reportId={entryId ?? undefined} overview={{
       records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
         onSession={onOpenRecordSession} />,
@@ -158,7 +159,8 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         const shots = roundShots(round);
         if (!shots.length) return null;
         let cumulative = 0;
-        return <section className="report-round" key={round.id} data-testid={`report-round-${roundIndex + 1}`}>
+        return <section className="report-round" key={round.id} data-testid={`report-round-${roundIndex + 1}`}
+          data-wide-series-number={round.series.some((end, index) => index >= 9 && end.shots.length > 0) || undefined}>
           <div className="report-round-heading">
             <h3 data-testid={`report-round-total-${roundIndex + 1}`}>Раунд {roundIndex + 1}{summary(shots) && ` · ${summary(shots)}`}</h3>
             {visible('norms') && <RankTag rank={roundRank(practice, round.id, preferences.rankCategory ?? null)} testId={`report-rank-${roundIndex + 1}`} onOpen={() => onRank(round.id)} />}
@@ -249,6 +251,10 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
           </span>}
         </div>)}
       </div>
+      {onCorrectConditions && <button type="button" className="primary" data-testid="report-correct-conditions" onClick={() => {
+        setConditionsOpen(false);
+        onCorrectConditions();
+      }}>Исправить условия</button>}
     </BottomSheet>}
     {resumeOpen && canResume && <BottomSheet title="Продолжить тренировку?" onClose={() => setResumeOpen(false)}>
       <button type="button" className="primary" data-testid="session-resume-confirm" onClick={() => {

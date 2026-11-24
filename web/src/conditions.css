@@ -32,9 +32,28 @@
 .conditions-footer .primary { width: 100%; }
 .conditions-error { color: #ffd8d1; font-size: 13px; margin: 4px 0; }
 .condition-sheet { position: fixed; margin: auto auto 0; inset: auto 0 0; width: min(100%, 550px); max-width: none; max-height: calc(90 * var(--app-vh)); padding: 0; border: 0; border-radius: 28px 28px 0 0; background: var(--surface); color: inherit; overflow: auto; }
-.condition-sheet::backdrop { background: #0008; }
+.condition-sheet {
+  transform: translateY(var(--sheet-shift, 0px));
+  transition: transform 200ms cubic-bezier(.2, .65, .3, 1);
+}
+.condition-sheet::backdrop {
+  background: #0008;
+  opacity: var(--sheet-scrim-opacity, 1);
+  transition: opacity 200ms ease-out;
+}
+.condition-sheet[data-sheet-dragging], .condition-sheet[data-sheet-dragging]::backdrop { transition: none; }
+.condition-sheet[data-sheet-closing] { transform: translateY(100%); pointer-events: none; }
+.condition-sheet[data-sheet-closing]::backdrop { opacity: 0; }
+@starting-style {
+  .condition-sheet[open] { transform: translateY(100%); }
+  .condition-sheet[open]::backdrop { opacity: 0; }
+}
+html[data-motion="off"] .condition-sheet, html[data-motion="off"] .condition-sheet::backdrop { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .condition-sheet, .condition-sheet::backdrop { transition: none; }
+}
 .condition-sheet-body { padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); }
-.condition-sheet header { touch-action: pan-x; padding-bottom: 12px; }
+.condition-sheet-body > header { touch-action: pan-x; padding-bottom: 12px; user-select: none; }
 .sheet-handle { display: block; width: 32px; height: 4px; border-radius: 4px; background: #9ba99a; opacity: .65; margin: 2px auto 18px; }
 .condition-sheet h2 { font-size: 22px; margin: 0 0 4px; }
 .condition-sheet h3 { font-size: 16px; margin: 0; }
@@ -71,3 +90,8 @@
 .conditions-tournament { display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 8px; padding-inline: 8px; color: var(--muted); font-size: 13px; }
 .conditions-tournament svg { width: 18px; height: 18px; color: light-dark(#795210, #e8c577); }
 .conditions-tournament select { min-width: 0; min-height: 44px; padding: 6px; border: 1px solid var(--edge); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.correction-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; color: var(--muted); font-size: .875rem; }
+.correction-scope .text-action { padding: 8px 0; }
+.correction-review { display: grid; gap: 8px; margin-block: 10px; }
+.correction-review label { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.correction-review select { min-height: 44px; padding-inline: 8px; border: 1px solid var(--edge); border-radius: 10px; background: var(--raised); color: var(--ink); }

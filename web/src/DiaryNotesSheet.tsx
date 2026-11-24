@@ -98,7 +98,11 @@ export function DiaryNotesSheet({ notes, scope, readOnly = false, onSave, onClos
   const title = confirmation === 'delete' ? 'Удалить заметку?' : confirmation ? 'Не сохранять изменения?'
     : draft ? draft.isNew ? 'Новая заметка' : archived ? 'Заметка в архиве' : 'Заметка' : listTitle;
 
-  return <BottomSheet title={title} tag="diary-notes-sheet" onClose={() => back('discard-close')}>
+  return <BottomSheet title={title} tag="diary-notes-sheet" onClose={onClose} onDismissRequest={() => {
+    if (!confirmation && (!changed || readOnly)) return true;
+    back('discard-close');
+    return false;
+  }}>
     {confirmation ? <div className="diary-notes-grid">
       <div className="diary-notes-actions">
         <button type="button" autoFocus onClick={() => back('discard-close')}>{confirmation === 'delete' ? 'Отмена' : 'Продолжить запись'}</button>

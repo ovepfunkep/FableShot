@@ -87,11 +87,12 @@ export async function createReportPosters(snapshot: ReportSnapshot): Promise<Uin
     conditionLines.forEach((line, i) => text(line, 56, 168 + i * 38, 27));
     box(56, heroTop, 968, heroHeight);
     text('ОБЩИЙ РЕЗУЛЬТАТ', 88, heroTop + 48, 24, palette.muted, true);
-    text(`${snapshot.result.points} / ${snapshot.result.maximum}`, 88, heroTop + 150, snapshot.rank ? 70 : 94, palette.ink, true);
-    if (snapshot.rank) {
-      text('УРОВЕНЬ ПО ОЧКАМ', 758, heroTop + 48, 18, palette.gold, true);
-      text(snapshot.rank, 758, heroTop + 125, 58, palette.gold, true);
-      text(snapshot.rankClass ?? '', 758, heroTop + 163, 23, palette.muted);
+    const rank = snapshot.rankDisplay;
+    text(`${snapshot.result.points} / ${snapshot.result.maximum}`, 88, heroTop + 150, rank.label ? 70 : 94, palette.ink, true);
+    if (rank.label) {
+      text(rank.forecast ? 'ТЕМП' : 'УРОВЕНЬ ПО ОЧКАМ', 758, heroTop + 48, 18, palette.gold, true);
+      text(rank.label, 758, heroTop + 125, 58, palette.gold, true);
+      text(rank.actual ?? snapshot.rankClass ?? '', 758, heroTop + 163, 19, palette.muted);
     }
     text(`Средний ${snapshot.average} · ${snapshot.result.maximum / 10} стрел`, 88, heroTop + 205, 28, palette.muted);
     text(snapshot.composite === null ? 'Общие очки — отдельно по условиям или полным сериям'

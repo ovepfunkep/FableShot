@@ -19,13 +19,15 @@
 .shot-mosaic span, .shot-donut g { cursor: pointer; }
 .shot-mosaic span, .shot-donut :is(path, circle) { transition: opacity 160ms ease; }
 .shot-mosaic span { aspect-ratio: 1.28; border-radius: 4px; box-shadow: inset 0 0 0 1px #a7bab333; }
-.shot-mosaic span[data-muted=true], .shot-donut g[data-muted=true] :is(path, circle) { opacity: .22; }
-.shot-donut g[data-muted=true] text { fill: var(--ink); }
-.shot-donut { position: relative; width: min(100%, 220px); margin-inline: auto; }
+.shot-mosaic span[data-muted=true], .shot-donut g[data-muted=true] .shot-sector { opacity: .68; }
+.shot-donut { position: relative; width: min(100%, 346px); margin-inline: auto; }
 .shot-donut svg { display: block; width: 100%; height: auto; }
 .shot-donut svg text { pointer-events: none; font-size: 12px; font-weight: 800; }
+.shot-donut [aria-pressed="true"] .shot-sector { filter: drop-shadow(0 0 3px var(--accent-line)); }
+.shot-donut [data-testid="report-zone-10"] .shot-sector { filter: drop-shadow(0 0 3px var(--score-ten-glow)); }
+.shot-mosaic [data-zone="10"] { box-shadow: 0 0 4px var(--score-ten-glow); }
 .shot-donut .shot-distribution-reading {
-  position: absolute; inset: 28%; flex-direction: column; justify-content: center; align-items: center;
+  position: absolute; inset: 0 35%; flex-direction: column; justify-content: center; align-items: center;
   pointer-events: none; text-align: center; line-height: 1.15;
 }
 .shot-donut .shot-distribution-reading strong { font-size: 16px; max-width: 100%; }

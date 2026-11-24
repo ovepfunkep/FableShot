@@ -4,7 +4,7 @@ import type { DiaryEntry } from './persistence.ts';
 import { currentSeries } from './practice.ts';
 import type { Practice, Series } from './practice.ts';
 import { formatAverage } from './preferences.ts';
-import { calculateProgress, formatProgress, progressSourceChanges } from './progress-scoring.ts';
+import { calculateProgress, formatProgress, progressSourceChanges, progressTone } from './progress-scoring.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
@@ -51,7 +51,7 @@ export function ProgressScoreCard({ practice, series, entries }: {
       </select>
     </label>}
     <div className="report-metrics-inline">
-      <button type="button" className="progress-score-value" onClick={() => setOpen(true)} data-testid="progress-score-value">
+      <button type="button" className="progress-score-value" data-progress-tone={progressTone(result.relativePercent ?? result.rawIncrease ?? 0)} onClick={() => setOpen(true)} data-testid="progress-score-value">
         {!result.fullRankAvailable && <span aria-label="Предварительно">≈ </span>}{value}
       </button>
       {statisticVisible(preferences, 'average') && <span>Средний балл<strong data-testid="progress-score-average">{baselineMean} → {currentMean}</strong></span>}

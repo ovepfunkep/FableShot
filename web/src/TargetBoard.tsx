@@ -11,7 +11,7 @@ type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
 type ZoomScope = 'training' | 'editor';
 type Aim = { point: Point; spot?: TargetSpot; screen: Point };
-type AimAnchor = { position: Point; point: Point; screen: Point };
+type AimAnchor = { position: Point; point: Point; screen: Point; steadiness?: { origin: Point; shown: Point; since: number; locked: boolean } };
 type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | null;
   aim: { id: number; origin: Point; startsOnFace: boolean; anchor: AimAnchor | null } | null;
   touchTap: { id: number; origin: Point; startedAt: number } | null;
@@ -181,9 +181,9 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, feedback, removed, showZoom = true }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, onOpenLensSettings, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, feedback, removed, showZoom = true }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
-  selectedIndex?: number | null; onBlockedTap?: () => void;
+  selectedIndex?: number | null; onBlockedTap?: () => void; onOpenLensSettings?: () => void;
   spec?: TargetSpec;
   panOnly?: boolean;
   zoomScope?: ZoomScope;
@@ -303,6 +303,24 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     if (rect) setAim({ point, spot, screen: { x: rect.left + position.x, y: rect.top + position.y } });
   }
 
+  function steadyPosition(position: Point, anchor: AimAnchor, touch: boolean): Point {
+    if (!touch) return position;
+    const now = performance.now();
+    const state = anchor.steadiness ??= { origin: position, shown: position, since: now, locked: false };
+    const travel = distance(position, state.origin);
+    if ((state.locked || now - state.since >= 500) && travel <= 5) {
+      state.locked = true;
+      return state.shown;
+    }
+    if (travel > 2) {
+      state.origin = position;
+      state.since = now;
+      state.locked = false;
+    }
+    state.shown = position;
+    return position;
+  }
+
   function start(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || !size.width) return;
     const track = gesture.current;
@@ -349,7 +367,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       const anchor = { position: current, point: normalized(current),
         screen: { x: rect.left + current.x, y: rect.top + current.y } };
       track.aim.anchor = anchor;
-      showAim(current, anchor);
+      showAim(steadyPosition(current, anchor, event.pointerType === 'touch'), anchor);
     }, 115);
   }
 
@@ -387,7 +405,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       let panFrom = previous;
       if (track.aim?.id === event.pointerId) {
         const { anchor, origin, startsOnFace } = track.aim;
-        if (anchor) { showAim(position, anchor); return; }
+        if (anchor) { showAim(steadyPosition(position, anchor, event.pointerType === 'touch'), anchor); return; }
         if (startsOnFace && distance(position, origin) > 0) {
           if (track.timer !== null) window.clearTimeout(track.timer);
           track.timer = null;
@@ -396,7 +414,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
           const immediateAnchor = { position: origin, point: normalized(origin),
             screen: { x: rect.left + origin.x, y: rect.top + origin.y } };
           track.aim.anchor = immediateAnchor;
-          showAim(position, immediateAnchor);
+          showAim(steadyPosition(position, immediateAnchor, event.pointerType === 'touch'), immediateAnchor);
           return;
         }
         if (distance(position, origin) <= TAP_SLOP) return;
@@ -421,7 +439,8 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       && distance(position, tap.origin) <= TAP_SLOP;
     const shouldScore = commit && inputEnabled && !panOnly && !track.multi && aiming?.id === event.pointerId
       && (aiming.startsOnFace || aiming.anchor !== null);
-    const { point, spot } = targetInput(aiming?.anchor ? aimedPoint(position, aiming.anchor) : normalized(position), profile);
+    const anchor = aiming?.anchor;
+    const { point, spot } = targetInput(anchor ? aimedPoint(steadyPosition(position, anchor, event.pointerType === 'touch'), anchor) : normalized(position), profile);
     const shouldSuggest = commit && !inputEnabled && !track.multi && track.blocked?.id === event.pointerId
       && distance(position, track.blocked.origin) <= TAP_SLOP && isOnTargetInput(point, spec);
     track.pointers.delete(event.pointerId);
@@ -484,17 +503,25 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
         style={markerStyle(flash)} />}
       {removed && ghost && <span key={removed.id} className="removed-shot-ghost" aria-hidden="true" style={markerStyle(ghost)} />}
     </div>
-    {showZoom && <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} />}
+    {showZoom && <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} {...(zoomScope ? { onOpenLensSettings } : {})} />}
     {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;
 }
 
-export function LensTestTarget() {
+export function LensTestTarget({ onAchievement }: { onAchievement?: (id: 'APP12' | 'APP14') => void } = {}) {
+  const { preferences } = useTrainingPreferences();
+  const initial = useRef({ speed: preferences.aimSpeedPercent, zoom: preferences.lensZoomPercent });
+  const trail = useRef<number[]>([]);
   const [shots, setShots] = useState<Shot[]>([]);
   return <section className="lens-settings-preview" aria-label="Тестовая мишень" data-testid="lens-settings-preview">
     <h2>Тестовая мишень</h2>
     <p>Удерживай и веди палец, чтобы проверить лупу. Пробные попадания видны только здесь.</p>
-    <TargetBoard shots={shots} inputEnabled showZoom={false} onShot={shot => setShots([shot])} />
+    <TargetBoard shots={shots} inputEnabled showZoom={false} onShot={shot => {
+      setShots([shot]);
+      if (initial.current.speed !== preferences.aimSpeedPercent || initial.current.zoom !== preferences.lensZoomPercent) onAchievement?.('APP12');
+      trail.current = [...trail.current.slice(-2), shot.points];
+      if (trail.current.join(',') === '10,9,10') onAchievement?.('APP14');
+    }} />
   </section>;
 }

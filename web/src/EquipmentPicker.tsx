@@ -74,9 +74,10 @@ function ComponentChoices({ title, values, selected, onSelect, onAdd, onEdit, ki
   </section>;
 }
 
-export function EquipmentPicker({ selected, onSelect, onClose, editSelected = false }: {
+export function EquipmentPicker({ selected, onSelect, onClose, editSelected = false, selectionOnly = false }: {
   selected: EquipmentSnapshot | null; onSelect: (value: EquipmentSnapshot | null) => void; onClose: () => void;
   editSelected?: boolean;
+  selectionOnly?: boolean;
 }) {
   const [state, setState] = useState(initialLibrary);
   const [kit, setKit] = useState<EquipmentKit | null>(() => editSelected && selected && state.library
@@ -236,11 +237,11 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
           {library && available?.kits.map(item => <span className={`equipment-chip-group${item.id === selected?.id ? ' is-selected' : ''}`} key={item.id}>
             <button type="button" className="equipment-chip" aria-pressed={item.id === selected?.id} data-testid={`equipment-select-${item.id}`}
               onClick={() => { onSelect(equipmentSnapshot(library, item.id)); onClose(); }}>{item.name}</button>
-            {item.id === selected?.id && <button type="button" className="equipment-icon" aria-label="Изменить выбранный комплект"
+            {!selectionOnly && item.id === selected?.id && <button type="button" className="equipment-icon" aria-label="Изменить выбранный комплект"
               data-testid={`equipment-edit-choice-${item.id}`} onClick={() => setKit({ ...item })}><Pencil /></button>}
           </span>)}
-          <button type="button" className="equipment-icon" aria-label="Добавить комплект" data-testid="equipment-add-choice" disabled={!library}
-            onClick={() => setKit({ id: newId(), name: '', bowId: null, arrowsId: null })}>+</button>
+          {!selectionOnly && <button type="button" className="equipment-icon" aria-label="Добавить комплект" data-testid="equipment-add-choice" disabled={!library}
+            onClick={() => setKit({ id: newId(), name: '', bowId: null, arrowsId: null })}>+</button>}
         </div>
         {preview && <div className="equipment-preview">
           <div><span>Лук</span><strong>{preview.bow.name || 'Без выбора'}</strong><small>{bowCategoryName(preview.bow.category)}</small></div>

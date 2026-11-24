@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { scoreOutline } from './score-appearance.ts';
 import { roundShots } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
-import { exerciseRank } from './exercise-rank.ts';
-import { RankTag } from './SportRanks.tsx';
+import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
 import { ProgressFiltersSheet, ProgressTimeline } from './ProgressTimeline.tsx';
 import { GeometryTrend } from './GeometryTrend.tsx';
 import { ProgressExport } from './ProgressExport.tsx';
@@ -72,9 +72,13 @@ function HistoryCard({ entry, hundredths, onOpen, tournament }: {
   const kitName = first?.equipment?.name;
   const draft = practice.savedAt === null;
   const rank = statisticVisible(preferences, 'norms') ? exerciseRank(practice, preferences.rankCategory ?? null) : null;
+  const rankDisplay = rank && exerciseRankDisplay(rank);
   const progress = statisticVisible(preferences, 'progress_score') ? compactProgress(practice) : null;
+  const outline = scoreOutline(shots, !!preferences.colorTrainingBorders && !preferences.hideScores && showResult && !draft);
 
-  return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}${tournament ? ' is-tournament' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}>
+  return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}${tournament ? ' is-tournament' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}
+    data-score-outline={outline !== undefined || undefined}
+    style={outline ? { '--score-outline': outline } as CSSProperties : undefined}>
     <span className="journal-tab-card-title"><strong>{entry.title || (entry.paused ? 'Приостановленная тренировка' : draft ? 'Черновик тренировки' : 'Тренировка')}</strong><TabIcon name="next" /></span>
     {entry.groupRoomName && <span className="journal-tab-icon-value" aria-label={`Групповая тренировка · ${entry.groupRoomName}`}>
       <Icon name="group" />{entry.groupRoomName}
@@ -86,9 +90,12 @@ function HistoryCard({ entry, hundredths, onOpen, tournament }: {
       {showAverage && <span className="journal-tab-icon-value" aria-label={`Средний балл ${formatAverage(average, hundredths)}`}>
         <TabIcon name="progress" /><strong>{formatAverage(average, hundredths)}</strong>
       </span>}
-      {progress && <span className="history-progress" aria-label={`Прогресс относительно похожих тренировок ${progress}`}>{progress}</span>}
+      {progress && <span className="history-progress" data-progress-tone={progress.tone} aria-label={`Прогресс относительно похожих тренировок ${progress.text}`}>{progress.text}</span>}
     </span>}
-    {rank?.finalResult && rank.label && <RankTag rank={rank} testId={`history-rank-${entry.id}`} />}
+    {rankDisplay?.label && <span className="rank-tag" data-testid={`history-rank-${entry.id}`}>
+      <strong>{rankDisplay.forecast ? 'Темп ' : ''}{rankDisplay.label}</strong>
+      <span>{rankDisplay.actual ?? rank?.classLabel}</span>
+    </span>}
     <span className="journal-tab-conditions">
       {mixed ? <span className="journal-tab-icon-value"><TabIcon name="target" />Разные условия</span> : first && <>
         <span className="journal-tab-icon-value" aria-label={`Мишень ${number.format(first.targetDiameterMm / 10)} сантиметров`}>
@@ -179,8 +186,8 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
   const showAverage = statisticVisible(preferences, 'average');
   const showVolume = statisticVisible(preferences, 'volume');
   const filtered = useMemo(() => filterProgressEntries(entries, filters), [entries, filters]);
-  const groups = useMemo(() => buildProgressTimeline(filtered).filter(group => group.comparable), [filtered]);
-  const history = useMemo(() => buildTrainingHistoryTimeline(filtered), [filtered]);
+  const groups = useMemo(() => buildProgressTimeline(filtered, preferences).filter(group => group.comparable), [filtered, preferences]);
+  const history = useMemo(() => buildTrainingHistoryTimeline(filtered, preferences), [filtered, preferences]);
   const [comparisonKey, setComparisonKey] = useState<string | null>(null);
   const comparison = groups.find(group => group.key === comparisonKey) ?? groups[0];
   const sessions = filtered.map(entry => {

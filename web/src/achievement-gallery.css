@@ -53,6 +53,11 @@
 [data-rarity="Epic"] { --achievement-tint: #d4b4ff; }
 [data-rarity="Legendary"] { --achievement-tint: var(--gold, #ffd882); }
 [data-rarity="Mythic"] { --achievement-tint: #ffb4e4; }
+[data-rarity="Mystery"] { --achievement-tint: #b9b8cf; }
+.achievement-card.achievement-mystery {
+  min-height: 86px; background: #14131a; color: #efedf9;
+  border: 1px solid #77758d; cursor: default;
+}
 [data-theme-appearance="light"] [data-rarity="Rare"] { --achievement-tint: #275da2; }
 [data-theme-appearance="light"] [data-rarity="Epic"] { --achievement-tint: #75409e; }
 [data-theme-appearance="light"] [data-rarity="Mythic"] { --achievement-tint: #992b70; }

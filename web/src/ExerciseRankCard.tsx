@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { exerciseRank } from './exercise-rank.ts';
+import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
 import type { Practice } from './practice.ts';
 import { formatAverage } from './preferences.ts';
 import { RankDetails, RankMedal } from './SportRanks.tsx';
@@ -20,6 +20,7 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
   const [details, setDetails] = useState(false);
   const rank = useMemo(() => exerciseRank(practice, category), [practice, category]);
   const { evaluation, finalResult } = rank;
+  const display = exerciseRankDisplay(rank);
   const showAverage = statisticVisible(preferences, 'average');
   const showVolume = statisticVisible(preferences, 'volume');
   const showResult = statisticVisible(preferences, 'result');
@@ -32,8 +33,8 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
     {evaluation && category ? <>
       <div className="exercise-rank__summary">
         <p className="exercise-rank__level" data-testid="exercise-rank-level">
-          {evaluation.pace && <RankMedal />}
-          {evaluation.pace ? finalResult ? `${rank.label} по очкам` : `Темп ${rank.label}` : 'Ниже порога'}
+          {rank.forecast?.pace && <RankMedal />}
+          {display.forecast ? `Темп ${display.label}` : `${display.label} по очкам`}
         </p>
         {(showResult || showAverage) && <p className="exercise-rank__score">
           {showResult && <><strong>{evaluation.points}</strong> / {evaluation.entered * 10}</>}
@@ -41,10 +42,11 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
           {showAverage && <>ср. <strong>{formatAverage(evaluation.average, true)}</strong></>}
         </p>}
       </div>
+      {display.actual && <p className="exercise-rank__score">{display.actual}</p>}
       <ExerciseThresholdTable key={evaluation.exercise.id} evaluation={evaluation} finalResult={finalResult}
         saved={practice.savedAt !== null} showAverage={showAverage} showVolume={showVolume} />
     </> : <p data-testid="exercise-rank-unavailable">{rank.reason}</p>}
-    {details && <RankDetails rank={rank} onClose={() => setDetails(false)} onCategory={onCategory}
+    {details && <RankDetails rank={rank} forecast={display.actual ? rank.forecast : null} onClose={() => setDetails(false)} onCategory={onCategory}
       onOpenReference={() => { setDetails(false); onOpenReference(); }} />}
   </section>;
 }

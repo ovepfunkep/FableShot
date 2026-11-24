@@ -1,5 +1,6 @@
 import { ACHIEVEMENT_BOW_LABELS } from './achievement-catalog.ts';
 import type { AchievementBowScope, AchievementScope } from './achievement-catalog.ts';
+import type { AchievementObservation } from './achievement-ledger.ts';
 import { calculateCompositeScore, conditionsKey, displayCompositeScore, SCORE_ONLY_PROFILE, STANDARD_PROFILE } from './composite-scoring.ts';
 import { exerciseRank } from './exercise-rank.ts';
 import { hitGeometry } from './hit-map.ts';
@@ -17,7 +18,7 @@ export const ACHIEVEMENT_EVIDENCE_RULE_IDS = [
   'GROUP01', 'GROUP02', 'GROUP03', 'GROUP04', 'GROUP05', 'GROUP06', 'GROUP08',
   'STEADY01', 'STEADY02', 'STEADY03', 'STEADY04', 'STEADY05', 'STEADY06', 'STEADY08',
   'RANK04', 'RANK05', 'RANK06', 'RANK07', 'RANK08', 'RANK09', 'PROGRESS01', 'PROGRESS02', 'PROGRESS03', 'PROGRESS08', 'STORY01',
-  'GEAR02', 'GEAR03', 'GEAR06',
+  'GEAR02', 'GEAR03', 'GEAR06', 'SWING01', 'SWING02', 'SWING03',
 ] as const;
 
 type EvidenceRuleId = typeof ACHIEVEMENT_EVIDENCE_RULE_IDS[number];
@@ -42,6 +43,46 @@ function bowScope(series: Series): AchievementBowScope | undefined {
 function verifiedTarget(series: Series) {
   const profile = getTargetProfile(series.conditions.targetProfileId);
   return profile && acceptsDiameter(profile, series.conditions.targetDiameterMm) ? profile : undefined;
+}
+
+/** Evaluate the exact window that ends at the just-closed series, not an older edited result. */
+export function evaluateClosedSeriesSwings(entry: DiaryEntry, finalSeriesId: number): AchievementObservation[] {
+  if (!entry.achievementEnrollment?.seriesStories || entry.source || entry.nativeArchiveSession || entry.deletedAt) return [];
+  const series = entry.practice.rounds.flatMap(round => round.series);
+  const index = series.findIndex(item => item.id === finalSeriesId);
+  if (index < 1 || (index === series.length - 1 && entry.practice.savedAt === null) ||
+    series.some(item => item.shots.some(shot => shot.imported))) return [];
+  const current = series[index];
+  const scope = bowScope(current);
+  const arrows = current.shots.length;
+  const target = verifiedTarget(current);
+  if (!scope || !target || Math.max(...target.zones.map(zone => zone.points)) !== 10 || arrows < 3) return [];
+
+  const key = conditionsKey(current.conditions);
+  const comparable = (item: Series) => item.shots.length === arrows && (item.plannedCount ?? arrows) === arrows &&
+    conditionsKey(item.conditions) === key;
+  const previous = series[index - 1];
+  if (!comparable(current) || !comparable(previous)) return [];
+
+  const previousPoints = summarize(previous.shots).points;
+  const currentPoints = summarize(current.shots).points;
+  const isStrong = (points: number) => points >= 7.5 * arrows;
+  const isSwing = (weak: number, strong: number) => weak >= 2.5 * arrows && weak <= 4.5 * arrows &&
+    isStrong(strong) && strong - weak >= 4 * arrows;
+  const observations: AchievementObservation[] = [];
+  const record = (id: EvidenceRuleId, seriesIds: number[], points: number[]) => {
+    observations.push({ id, scope, progress: 1, seriesSwing: { seriesIds, points, arrows } });
+  };
+  if (isSwing(currentPoints, previousPoints)) record('SWING01', [previous.id, current.id], [previousPoints, currentPoints]);
+  if (isSwing(previousPoints, currentPoints)) record('SWING02', [previous.id, current.id], [previousPoints, currentPoints]);
+  const earlier = series[index - 2];
+  if (earlier && comparable(earlier) && isStrong(currentPoints) && currentPoints >= previousPoints - 0.5 * arrows) {
+    const earlierPoints = summarize(earlier.shots).points;
+    if (isSwing(earlierPoints, previousPoints)) {
+      record('SWING03', [earlier.id, previous.id, current.id], [earlierPoints, previousPoints, currentPoints]);
+    }
+  }
+  return observations;
 }
 
 function tally(ends: readonly EvidenceEnd[]) {
@@ -306,7 +347,7 @@ export function evaluateAchievementEvidence(entries: readonly DiaryEntry[],
       const scope = bowScope(first);
       if (!scope || !verifiedTarget(first)) continue;
       const qualify = (id: EvidenceRuleId, condition: boolean) => { if (condition) record(id, scope); };
-      qualify('START02', group.some(end => end.full && end.series.shots.some(shot => shot.points === 10)));
+      qualify('START02', group.some(end => end.series.shots.some(shot => shot.points === 10)));
       qualify('START03', group.some(end => end.full && end.series.shots.length >= 3 && end.series.shots.every(shot => shot.points > 0)));
       if (first.conditions.distanceMeters === 18 && first.conditions.targetDiameterMm === 400 &&
         evaluateFormat(group, complete && groups.size === 1, qualify)) addRepeated(repeatedStability, key, scope, entry.id);

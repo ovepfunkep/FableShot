@@ -36,6 +36,11 @@ test('personal records filter by conditions and open the series and volume sourc
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('30/30');
   await expect(cards.first()).toContainText('02.10.2026');
+  await gallery.getByRole('button', { name: 'Класс', exact: true }).click();
+  await gallery.getByRole('combobox', { name: 'Класс рекорда' }).selectOption('recurve');
+  await gallery.getByRole('button', { name: 'История рекорда', exact: true }).click();
+  await expect(page.getByTestId('personal-records-history')).toContainText('27 → 30');
+  await page.keyboard.press('Escape');
   await cards.first().click();
   await expect(page.getByTestId('journal-report').getByText('Лучшая серия', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();

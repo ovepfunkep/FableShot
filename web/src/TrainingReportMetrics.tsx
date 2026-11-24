@@ -5,7 +5,8 @@ import { BottomSheet } from './ConditionsScreen.tsx';
 import { CompositeScoreCard } from './CompositeScoreCard.tsx';
 import { conditionsKey } from './composite-scoring.ts';
 import type { Conditions } from './conditions.ts';
-import { hitGeometry } from './hit-map.ts';
+import { hitGeometry, maximumSpread } from './hit-map.ts';
+import { useReportView } from './report-view.ts';
 import type { Practice, Series } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { ProgressScoreCard } from './ProgressScoreCard.tsx';
@@ -17,7 +18,7 @@ import { NumberedArrowAnalysis } from './NumberedArrowAnalysis.tsx';
 import { ReportRoundFilter } from './ReportRoundFilter.tsx';
 import { ShotDistribution } from './ShotDistribution.tsx';
 import type { DistributionView } from './ShotDistribution.tsx';
-import { exerciseRank } from './exercise-rank.ts';
+import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
 import type { TrainingMoment } from './training-moments.ts';
 import { RankDetails, RankMedal } from './SportRanks.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
@@ -25,7 +26,7 @@ import { reportBlockOrder, statisticVisible } from './statistics-visibility.ts';
 import type { ReportBlock } from './statistics-visibility.ts';
 import './training-report-metrics.css';
 
-type ScopedSeries = Series & { round: number; number: number };
+type ScopedSeries = Series & { round: number; roundId: number; number: number };
 type Scope = { key: string; conditions: Conditions; series: ScopedSeries[] };
 
 function reportScopes(practice: Practice): Scope[] {
@@ -38,7 +39,7 @@ function reportScopes(practice: Practice): Scope[] {
       scope = { key, conditions: series.conditions, series: [] };
       scopes.set(key, scope);
     }
-    scope.series.push({ ...series, round: r + 1, number: s + 1 });
+    scope.series.push({ ...series, round: r + 1, roundId: round.id, number: s + 1 });
   }));
   return [...scopes.values()];
 }
@@ -70,11 +71,13 @@ function ResultCard({ shots, diameterMm, practice, onRankReference, moment }: {
   const [rankOpen, setRankOpen] = useState(false);
   const { points, maximum, average } = summarize(shots);
   const geometry = diameterMm === null ? null : hitGeometry(shots, diameterMm);
-  const rms = geometry?.rmsMm;
+  const spread = preferences.maximumSpread && diameterMm !== null ? maximumSpread(shots, diameterMm) : geometry?.rmsMm;
+  const spreadLabel = preferences.maximumSpread ? 'Макс. разброс' : 'Разброс RMS';
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
   const showGrouping = diameterMm !== null && visible('grouping');
   const showOffset = diameterMm !== null && !visible('hit_map') && visible('offset');
   const rank = useMemo(() => exerciseRank(practice, preferences.rankCategory ?? null), [practice, preferences.rankCategory]);
+  const rankDisplay = exerciseRankDisplay(rank);
   if (!(['result', 'average', 'volume', 'norms'] as const).some(visible) && !showGrouping && !showOffset) return null;
   const hasMetrics = visible('average') || showGrouping || visible('volume') || showOffset;
   const highlight = moment && (moment.kind === 'rank' ? visible('norms') : moment.kind === 'progress' ? visible('average') : visible('result'));
@@ -87,30 +90,32 @@ function ResultCard({ shots, diameterMm, practice, onRankReference, moment }: {
       </div>
       {visible('norms') && <button type="button" className="report-result-rank" title={rank.reason ?? (rank.finalResult ? 'Разряд по всей тренировке' : 'Прогноз по среднему баллу')}
         aria-label="Разряд по всей тренировке" aria-haspopup="dialog" onClick={() => setRankOpen(true)}
-        data-forecast={!!rank.evaluation && !rank.finalResult}>
-        <span>Разряд</span><strong><RankMedal /><span data-testid="report-result-rank">{rank.label ?? '—'}</span></strong>
+        data-forecast={rankDisplay.forecast}>
+        <span>{rankDisplay.forecast ? 'Темп' : 'Разряд'}</span>
+        <strong><RankMedal /><span data-testid="report-result-rank">{rankDisplay.label ?? '—'}</span></strong>
+        {rankDisplay.actual && <span>{rankDisplay.actual}</span>}
       </button>}
     </div>
     {visible('result') && <progress aria-label="Доля от максимума" value={points} max={maximum} />}
     {hasMetrics && <dl className="report-metric-grid report-result-metrics">
       {visible('average') && <div><dt>Средний</dt><dd data-testid="report-result-average">{formatAverage(average, preferences.averageHundredths)}</dd></div>}
-      {showGrouping && <div><dt>Кучность</dt><dd data-testid="report-result-grouping">{rms == null ? '—' : `${formatAverage(rms, false)} мм`}</dd></div>}
+      {showGrouping && <div><dt>{spreadLabel}</dt><dd data-testid="report-result-grouping">{spread == null ? '—' : `${formatAverage(spread, false)} мм`}</dd></div>}
       {visible('volume') && <div><dt>Стрел</dt><dd data-testid="report-result-volume">{shots.length}</dd></div>}
       {showOffset && <div><dt>Смещение</dt><dd>{geometry ? `${formatAverage(geometry.shiftMm, false)} мм` : '—'}</dd></div>}
     </dl>}
-    {rankOpen && <RankDetails rank={rank} onClose={() => setRankOpen(false)}
+    {rankOpen && <RankDetails rank={rank} forecast={rankDisplay.actual ? rank.forecast : null} onClose={() => setRankOpen(false)}
       onCategory={category => update({ ...preferences, rankCategory: category })}
       onOpenReference={() => { setRankOpen(false); onRankReference(); }} />}
   </section>;
 }
 
-function ZoneDistribution({ series, view, onView }: {
-  series: readonly ScopedSeries[]; view: DistributionView; onView: (view: DistributionView) => void;
+function ZoneDistribution({ series, view, onView, reportId }: {
+  series: readonly ScopedSeries[]; view: DistributionView; onView: (view: DistributionView) => void; reportId?: string;
 }) {
   const [help, setHelp] = useState(false);
-  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [selectedRound, setSelectedRound] = useReportView<number | null>(reportId, 'distributionRound', null);
   const rounds = [...new Set(series.map(entry => entry.round))];
-  const round = selectedRound !== null && rounds.includes(selectedRound) ? selectedRound : null;
+  const round = selectedRound === null ? null : series.find(item => item.roundId === selectedRound)?.round ?? null;
   const shots = series.filter(entry => round === null || entry.round === round).flatMap(entry => entry.shots);
   const { preferences } = useTrainingPreferences();
   const distribution = statisticVisible(preferences, 'distribution');
@@ -125,13 +130,13 @@ function ZoneDistribution({ series, view, onView }: {
       <button type="button" className="training-mean-help" aria-label="О распределении попаданий" onClick={() => setHelp(true)}>?</button>
     </header>
     <div className="shot-distribution-controls">
-      <ReportRoundFilter rounds={rounds} value={round} onChange={setSelectedRound} label="Раунд распределения попаданий" />
+      <ReportRoundFilter rounds={rounds} value={round} onChange={value => setSelectedRound(series.find(item => item.round === value)?.roundId ?? null)} label="Раунд распределения попаданий" />
       {distribution && <div className="shot-distribution-views" role="group" aria-label="Вид распределения">
         <button type="button" aria-pressed={view === 'mosaic'} onClick={() => onView('mosaic')}>Мозаика</button>
         <button type="button" aria-pressed={view === 'pie'} onClick={() => onView('pie')}>Круговая</button>
       </div>}
     </div>
-    {distribution && <ShotDistribution key={round ?? 'all'} counts={counts} total={shots.length} view={view} />}
+    {distribution && <ShotDistribution key={round ?? 'all'} counts={counts} total={shots.length} view={view} reportId={reportId} scope={round === null ? null : selectedRound} />}
     {showShare && <div className="report-zone-shares">
       <div><p className="report-metrics-muted">Доля 10 <strong data-testid="report-ten-share">{formatAverage(tenShare, false)}%</strong></p>
         <progress max={100} value={tenShare ?? 0} aria-label="Доля десяток" /></div>
@@ -145,13 +150,15 @@ function ZoneDistribution({ series, view, onView }: {
   </section>;
 }
 
-export function TrainingReportMetrics({ practice, entries, overview, onRankReference, moment }: {
-  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void; moment?: TrainingMoment;
+export function TrainingReportMetrics({ practice, entries, overview, onRankReference, moment, reportId }: {
+  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void; moment?: TrainingMoment; reportId?: string;
 }) {
-  const { preferences } = useTrainingPreferences();
+  const { preferences, update } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [distributionView, setDistributionView] = useState<DistributionView>('mosaic');
+  const [selectedKey, setSelectedKey] = useReportView<string | null>(reportId, 'conditions', null);
+  const distributionView = preferences.statisticsView?.distributionView === 'pie' ? 'pie' : 'mosaic';
+  const setDistributionView = (view: DistributionView) => { void update({ ...preferences,
+    statisticsView: { ...preferences.statisticsView, distributionView: view } }); };
   const scopes = useMemo(() => reportScopes(practice), [practice]);
   const scope = scopes.find(item => item.key === selectedKey) ?? scopes[0];
   const shots = useMemo(() => practice.rounds.flatMap(round => round.series.flatMap(series => series.shots)), [practice]);
@@ -166,15 +173,17 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
         practice={practice} onRankReference={onRankReference} moment={moment} />,
       general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
-      hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} />,
+      hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} rememberView reportId={reportId} />,
       numbered_arrows: visible('numbered_arrows') && <NumberedArrowAnalysis key={`arrows:${scope.key}`} series={scope.series} />,
-      distribution: (visible('distribution') || visible('zone_trend')) && <ZoneDistribution key={`distribution:${scope.key}`} series={scope.series} view={distributionView} onView={setDistributionView} />,
+      distribution: (visible('distribution') || visible('zone_trend')) && <ZoneDistribution key={`distribution:${scope.key}`} series={scope.series} view={distributionView} onView={setDistributionView} reportId={reportId} />,
     });
   }
   const order = reportBlockOrder(preferences).filter(id => blocks[id]);
   const firstMetric = order.find(id => id !== 'result' && !(id in overview));
   const showScope = scope && mixed && (firstMetric || showScopedGeometry);
   const scopedGeometry = scope && showScopedGeometry ? hitGeometry(scope.series.flatMap(item => item.shots), scope.conditions.targetDiameterMm) : null;
+  const scopedSpread = scope && showScopedGeometry && preferences.maximumSpread
+    ? maximumSpread(scope.series.flatMap(item => item.shots), scope.conditions.targetDiameterMm) : scopedGeometry?.rmsMm;
   const scopeControls = showScope && <div className="report-scoped-controls">
     <label className="report-metrics-scope">
       <span>Условия расчёта</span>
@@ -183,7 +192,7 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
       </select>
     </label>
     {showScopedGeometry && <dl className="report-metric-grid report-scoped-geometry" aria-live="polite">
-      {visible('grouping') && <div><dt>Кучность</dt><dd>{scopedGeometry?.rmsMm == null ? '—' : `${formatAverage(scopedGeometry.rmsMm, false)} мм`}</dd></div>}
+      {visible('grouping') && <div><dt>{preferences.maximumSpread ? 'Макс. разброс' : 'Разброс RMS'}</dt><dd>{scopedSpread == null ? '—' : `${formatAverage(scopedSpread, false)} мм`}</dd></div>}
       {visible('offset') && <div><dt>Смещение</dt><dd>{scopedGeometry ? `${formatAverage(scopedGeometry.shiftMm, false)} мм` : '—'}</dd></div>}
     </dl>}
   </div>;

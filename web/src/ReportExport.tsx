@@ -18,9 +18,10 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
   const { preferences } = useTrainingPreferences();
   // Achievement notifications or opening another sheet must not invalidate files.
   const source = JSON.stringify([entry.id, entry.title, entry.startedAt, entry.practice, entry.trainingTime, entry.personalRecords,
-    preferences.rankCategory, preferences.averageHundredths, preferences.disabledStatistics, preferences.showAchievementNotices]);
+    preferences.rankCategory, preferences.averageHundredths, preferences.disabledStatistics, preferences.showAchievementNotices, preferences.maximumSpread]);
   const session = useMemo(() => createReportShareSession(reportSnapshot(entry, preferences.rankCategory ?? null, preferences.averageHundredths,
-    { grants: preferences.showAchievementNotices === false ? [] : grants, disabledStatistics: preferences.disabledStatistics })), [source]);
+    { grants: preferences.showAchievementNotices === false ? [] : grants, disabledStatistics: preferences.disabledStatistics,
+      maximumSpread: preferences.maximumSpread })), [source]);
   const [format, setFormat] = useState<ReportFormat>('png');
   const [prepared, setPrepared] = useState<{ session: typeof session; format: ReportFormat; value: PreparedReport } | null>(null);
   const [busy, setBusy] = useState(false);

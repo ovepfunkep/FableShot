@@ -35,7 +35,6 @@ html[data-theme-style="minimal"] .training-finish-highlight::before { display: n
   to { opacity: 0; transform: translate(12%, -18%) scale(1.12); }
 }
 
-.condition-sheet[open]:not([data-testid="physical-arrow-picker"]) > .condition-sheet-body,
 .rank-dialog[open] > .rank-dialog__body,
 .practice-timer-sheet[open] > .practice-timer-content,
 .equipment-sheet[open] > :is(.equipment-sheet-header, .equipment-sheet-content),
@@ -93,7 +92,7 @@ html[data-motion="off"] :is(.training-finish-highlight, .motion-status, .trainin
   .technique-sheet, .hit-map-layer, .removed-shot-ghost, [data-shot-shifted] .shot-face) { animation: none; }
 html[data-motion="off"] .training-finish-highlight::before,
 html[data-motion="off"] .motion-status::before { display: none; }
-html[data-motion="off"] :is(.condition-sheet > .condition-sheet-body, .rank-dialog > .rank-dialog__body, .practice-timer-sheet > .practice-timer-content),
+html[data-motion="off"] :is(.rank-dialog > .rank-dialog__body, .practice-timer-sheet > .practice-timer-content),
 html[data-motion="off"] .equipment-sheet > :is(.equipment-sheet-header, .equipment-sheet-content),
 html[data-motion="off"] [data-finish-moment="rank"] .report-result-rank { animation: none; }
 html[data-motion="off"] :is(.journal-home-primary, .journal-navigation-marker, .preference-switch span, .practice-timer-face, .practice-timer-badge, .rank-summary-level,
@@ -102,7 +101,6 @@ html[data-motion="off"] :is(.journal-home-primary, .journal-navigation-marker, .
   .equipment-catalog-star svg, .equipment-chip, .journal-tab-history-card) { transition: none; }
 html[data-motion="off"] .journal-timeline-frame::before, html[data-motion="off"] .journal-timeline-frame::after { transition: none; }
 @media (prefers-reduced-motion: reduce) {
-  .condition-sheet[open]:not([data-testid="physical-arrow-picker"]) > .condition-sheet-body,
   .rank-dialog[open] > .rank-dialog__body,
   .equipment-sheet[open] > :is(.equipment-sheet-header, .equipment-sheet-content),
   .practice-timer-sheet[open] > .practice-timer-content, .technique-sheet[open],

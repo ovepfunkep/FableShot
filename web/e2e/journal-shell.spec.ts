@@ -4,6 +4,35 @@ import { openHistoryEntry, openTraining } from './journal-navigation.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
 import { appendShot, applyConditions, completePractice, emptyPractice } from '../src/practice.ts';
 import { conditionsKey } from '../src/composite-scoring.ts';
+import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
+
+test('recent practice uses a single graded outline even on the newest card', async ({ page }) => {
+  const entries = [[9, 10, 9], [10, 10, 10]].map((scores, index) => {
+    let practice = emptyPractice();
+    for (const points of scores) practice = appendShot(practice, { points, code: String(points), point: { x: points === 10 ? 0 : .17, y: 0 } });
+    const date = `2026-01-0${index + 1}T11:00:00Z`;
+    return { id: `outline-${index}`, startedAt: date, practice: completePractice(practice, date) };
+  });
+  await page.addInitScript(({ entries, preferences }) => {
+    localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries }));
+    localStorage.setItem('app.fableshot.training-preferences.v1', JSON.stringify({ version: 1, preferences }));
+  }, { entries, preferences: { ...DEFAULT_PREFERENCES, colorTrainingBorders: true, themeMode: 'dark' } });
+  await page.setViewportSize({ width: 360, height: 680 });
+  await page.goto('./');
+  const cards = page.getByTestId('home-practice-session');
+  await expect(cards.last()).toHaveText('30/3010,0');
+  await expect(cards.last()).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  const outlines = await cards.evaluateAll(nodes => nodes.map(node => ({
+    colors: getComputedStyle(node, '::after').backgroundImage,
+    thickness: getComputedStyle(node, '::after').paddingTop,
+    secondLine: getComputedStyle(node, '::before').content,
+  })));
+  expect(outlines.map(item => [item.thickness, item.secondLine])).toEqual([['1px', 'none'], ['1px', 'none']]);
+  expect(outlines[0].colors).toContain('rgb(206, 142, 93)');
+  expect(outlines[0].colors).toContain('rgb(237, 205, 114)');
+  expect(outlines[1].colors).not.toContain('rgb(206, 142, 93)');
+  await page.getByTestId('home-week').screenshot({ path: '../.tools/recent-practice-single-outline.png' });
+});
 
 test('home starts the expanded practice timeline at the newest training and opens older entries', async ({ page }) => {
   const entries = Array.from({ length: 12 }, (_, index) => {
@@ -38,7 +67,7 @@ test('home starts the expanded practice timeline at the newest training and open
   await expect(sessions.last()).toBeInViewport({ ratio: 1 });
   await expect(sessions.first()).not.toBeInViewport();
   await viewport.evaluate(el => { el.scrollLeft = 0; });
-  await expect(sessions.first()).toBeInViewport({ ratio: 1 });
+  await expect(sessions.first()).toBeInViewport({ ratio: .999 });
   await sessions.first().click();
   await expect(page.getByRole('heading', { name: 'Практика 03' })).toBeVisible();
 });

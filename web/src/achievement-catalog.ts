@@ -1,6 +1,6 @@
 import { RANK_LABELS, STAGE_RANK_FORMATS, STAGE_RANK_LABELS } from './sport-ranks.ts';
 
-export const ACHIEVEMENT_RARITY_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] as const;
+export const ACHIEVEMENT_RARITY_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Mystery'] as const;
 export type AchievementRarity = typeof ACHIEVEMENT_RARITY_ORDER[number];
 
 export const ACHIEVEMENT_RARITY_LABELS: Readonly<Record<AchievementRarity, string>> = {
@@ -10,6 +10,7 @@ export const ACHIEVEMENT_RARITY_LABELS: Readonly<Record<AchievementRarity, strin
   Epic: 'Эпическое',
   Legendary: 'Легендарное',
   Mythic: 'Мифическое',
+  Mystery: 'Тайное',
 };
 
 export const ACHIEVEMENT_BOW_LABELS = {
@@ -32,6 +33,7 @@ export type AchievementDefinition = Readonly<{
   target: number;
   categorySpecific: boolean;
   performanceFormat: boolean;
+  hiddenUntilEarned?: true;
   priority: number;
 }>;
 
@@ -115,7 +117,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START02", title: "Десятка, мы знакомы?",
     flavor: "Знакомство вышло прямо в точку",
-    description: "Сохраните первую десятку или X в полной зачётной серии на мишени с максимумом 10 очков за стрелу.",
+    description: "Сохраните первое попадание в десятку или X на десятиочковой мишени.",
     family: "hits.ten", rarity: 'Common', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: false,
   },
@@ -435,6 +437,27 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     categorySpecific: true, performanceFormat: true,
   },
   {
+    id: "SWING01", title: "Краткосрочная память",
+    flavor: "Плечи помнят. Кто-то другой забыл",
+    description: "После серии со средним от 7,5 сохраните следующую со средним от 2,5 до 4,5 и падением минимум на 4 балла за стрелу. Обе серии полные, при одинаковых условиях и с одинаковым количеством стрел, от 3.",
+    family: "story.swing-drop", rarity: 'Uncommon', target: 1, priority: 1,
+    categorySpecific: true, performanceFormat: false, hiddenUntilEarned: true,
+  },
+  {
+    id: "SWING02", title: "Наверное, повезло",
+    flavor: "Официальная версия пока такая",
+    description: "После серии со средним от 2,5 до 4,5 сохраните следующую со средним от 7,5 и ростом минимум на 4 балла за стрелу. Обе серии полные, при одинаковых условиях и с одинаковым количеством стрел, от 3.",
+    family: "story.swing-rebound", rarity: 'Uncommon', target: 1, priority: 1,
+    categorySpecific: true, performanceFormat: false,
+  },
+  {
+    id: "SWING03", title: "Нет, не повезло",
+    flavor: "Официальная версия меняется",
+    description: "Сразу после перепада из «Наверное, повезло» сохраните ещё одну полную серию со средним от 7,5. Он может быть ниже предыдущего максимум на 0,5 балла за стрелу. Условия и количество стрел те же.",
+    family: "story.swing-rebound", rarity: 'Rare', target: 1, priority: 2,
+    categorySpecific: true, performanceFormat: false,
+  },
+  {
     id: "GEAR02", title: "Самурай одного лука",
     flavor: "С рукояткой уже можно здороваться без представлений",
     description: "Завершите 10 непустых тренировок с одним и тем же луком. Переименование лука сохраняет прогресс.",
@@ -497,6 +520,18 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     family: "archive", rarity: 'Uncommon', target: 1, priority: 8,
     categorySpecific: false, performanceFormat: false,
   },
+  { id: 'APP11', title: 'Ноль целых, сто процентов серьёзно', flavor: 'Теперь каждая сотая при исполнении.',
+    description: 'Впервые включить показ среднего балла до сотых.', family: 'app.precision',
+    rarity: 'Common', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
+  { id: 'APP12', title: 'Пилот-испытатель', flavor: 'Лупа прошла лётные испытания.',
+    description: 'Настроить скорость или увеличение и сделать пробное попадание в тестовую мишень.',
+    family: 'app.aim-test', rarity: 'Uncommon', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
+  { id: 'APP13', title: 'Семейное фото', flavor: 'Весь комплект в сборе. И даже на рубеже.',
+    description: 'Завершить первую тренировку с комплектом, который ты создал в FableShot.',
+    family: 'app.kit', rarity: 'Uncommon', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
+  { id: 'APP14', title: 'Охотник за пикселями', flavor: 'Три пробных выстрела. Один подозрительно точный эксперимент.',
+    description: 'Попасть 10–9–10 подряд на тестовой мишени.', family: 'app.easter-aim',
+    rarity: 'Mystery', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'ROOM01', title: 'Свои на рубеже', flavor: 'Наконец-то есть кому сказать «это была пристрелка»',
     description: 'Завершите групповую тренировку, в которой комната приняла хотя бы одну вашу полную серию и одну полную серию другого стрелка.',
     family: 'room.participation', rarity: 'Common', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
@@ -551,7 +586,7 @@ const compoundFormatRarity = ['Common', 'Common', 'Uncommon', 'Rare', 'Epic', 'L
 const barebowAndTraditionalFormatRarity = ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Mythic'] as const;
 
 export function achievementRarityFor(rule: AchievementDefinition, scope: string): AchievementRarity {
-  if (!rule.performanceFormat) return rule.rarity;
+  if (!rule.performanceFormat || rule.rarity === 'Mystery') return rule.rarity;
   const index = ACHIEVEMENT_RARITY_ORDER.indexOf(rule.rarity);
   if (scope === 'compound') return compoundFormatRarity[index];
   if (scope === 'barebow' || scope === 'traditional' || scope === 'longbow') return barebowAndTraditionalFormatRarity[index];

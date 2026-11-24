@@ -247,17 +247,17 @@ test('the glass score fits a narrow lens and keeps its position as aim moves', a
   await lens.screenshot({ path: '../artifacts/ivan-lens-glass.png' });
   await page.mouse.move(x + radius * .13 / 3, y);
   await expect(lens.locator('strong')).toHaveText('10');
-  await page.mouse.move(x + radius * .17 / (1.92 * .7), y);
+  await page.mouse.move(x + radius * .17 / (1.92 * .4), y);
   await expect(lens).toContainText('9');
   await expect(glass).toHaveCSS('color', 'rgb(244, 206, 68)');
   expect(await badgeGeometry()).toEqual(initialGeometry);
-  await page.mouse.move(x + radius * .31 / (1.92 * .7), y);
+  await page.mouse.move(x + radius * .31 / (1.92 * .4), y);
   await expect(lens.locator('strong')).toHaveText(/^[78]$/);
   await expect(glass).toHaveCSS('color', 'rgb(255, 141, 125)');
   expect(await glass.evaluate(badge => getComputedStyle(badge).backgroundColor)).not.toBe(glassBackground);
   expect(await badgeGeometry()).toEqual(initialGeometry);
   expect((await lens.boundingBox())?.width).toBe(lensBounds!.width);
-  await page.mouse.move(x + radius * .17 / (1.92 * .7), y);
+  await page.mouse.move(x + radius * .17 / (1.92 * .4), y);
   await expect(lens.locator('strong')).toHaveText('9');
   await page.mouse.up();
   await expect(lens).toHaveCount(0);
@@ -641,6 +641,33 @@ test('aim reacts to the first movement without waiting for the hold timer', asyn
   await target.dispatchEvent('pointercancel', { pointerId: 1, clientX, clientY });
   await page.mouse.up();
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
+});
+
+test('the lens keeps a settled aim through a small touch drift at release', async ({ page, context }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await page.clock.pauseAt(new Date());
+  const bounds = await targetBounds(page);
+  const radius = Math.min(bounds.width, bounds.height) * .44;
+  const x = bounds.x + bounds.width / 2 + radius * .106;
+  const y = bounds.y + bounds.height / 2;
+  const client = await context.newCDPSession(page);
+  const lensScore = page.getByTestId('lens').locator('strong');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.clock.runFor(620);
+  await expect(lensScore).toHaveText('10');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y }] });
+  await expect(lensScore).toHaveText('10');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.clock.runFor(120);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y }] });
+  await expect(lensScore).toHaveText('9');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByTestId('series-score')).toHaveText('19/20');
+  await client.detach();
 });
 
 test('two fast taps in the same spot both score and persist', async ({ page, context }) => {

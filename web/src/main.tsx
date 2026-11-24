@@ -9,7 +9,7 @@ import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
 import { usePracticeTimer } from './usePracticeTimer.ts';
 import { performTrainingHaptic } from './native-training-window.ts';
-import { LensControls, RecentPracticeLimitControl, ShotMotionControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
+import { LensControls, RecentPracticeLimitControl, TrainingPreferenceControls, TrainingPreferencesProvider, useTrainingPreferences, useKeepScreenOn } from './TrainingPreferences.tsx';
 import type { CleanSeriesMotion, ShotMotionEvent } from './ShotMotion.tsx';
 import { SHOT_FEEDBACK_MS } from './ShotMotion.tsx';
 import { supportsAppScale } from './native-app-scale.ts';
@@ -43,11 +43,11 @@ import { calculatePersonalRecordEvents } from './personal-record-events.ts';
 import type { PersonalRecordEvent } from './personal-record-events.ts';
 import { hasFinishedCleanSeries, trainingMoment } from './training-moments.ts';
 import type { TrainingMoment } from './training-moments.ts';
-import { groupAchievementGrants, queueAchievementGrants, recentAchievementNotices } from './achievement-ledger.ts';
-import type { AchievementGroup } from './achievement-ledger.ts';
+import { achievementReceiptKey, groupAchievementGrants, recentAchievementNotices } from './achievement-ledger.ts';
+import type { AchievementGrant, AchievementMoment } from './achievement-ledger.ts';
 import { ACHIEVEMENT_ACTION_RULE_IDS, awardPublication, awardServiceAction, awardTrainingChange, eligibleForAchievements } from './achievement-diary.ts';
 import type { AchievementActionId } from './achievement-diary.ts';
-import { achievementValidity } from './achievement-validity.ts';
+import { achievementValidity, dependsOnTraining, removeAchievementEvidence } from './achievement-validity.ts';
 import { ACHIEVEMENT_EVIDENCE_RULE_IDS, evaluateAchievementEvidence } from './achievement-evidence.ts';
 import { STAGE_RANK_RULES } from './achievement-catalog.ts';
 import { STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-achievements.ts';
@@ -123,7 +123,7 @@ function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [achievementResetOpen, setAchievementResetOpen] = useState(false);
-  const [achievementQueue, setAchievementQueue] = useState<AchievementGroup[]>(() =>
+  const [achievementQueue, setAchievementQueue] = useState<AchievementMoment[]>(() =>
     preferences.showAchievementNotices === false ? [] : recentAchievementNotices(state.diary?.achievementLedger));
   const [recordQueue, setRecordQueue] = useState<PersonalRecordEvent[]>(() => {
     if (preferences.showAchievementNotices === false || preferences.hideScores) return [];
@@ -136,6 +136,7 @@ function App() {
   const [ranksBack, setRanksBack] = useState<'records' | 'profile'>('records');
   const [reportTrail, setReportTrail] = useState<string[]>([]);
   const [conditionsBack, setConditionsBack] = useState<'journal' | 'training' | 'report' | 'group-room'>('training');
+  const [futureConditions, setFutureConditions] = useState(false);
   const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
   const [roomSwitch, setRoomSwitch] = useState<RoomMembership | null>(null);
   const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
@@ -170,6 +171,7 @@ function App() {
   const pulse = useRef<Animation | null>(null);
   const [offline, setOffline] = useState<'pending' | 'ready' | 'error'>('pending');
   const [timerOpen, setTimerOpen] = useState(false);
+  const [lensSettingsOpen, setLensSettingsOpen] = useState(false);
   const [techniqueOpen, setTechniqueOpen] = useState(false);
   const [memoSnapshot, setMemoSnapshot] = useState<TechniqueSelection | null>(null);
 
@@ -183,24 +185,26 @@ function App() {
     return () => pending.abort();
   }, []);
 
-  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string): Promise<boolean> {
-    const operation = diaryWrites.current.then(() => persistDiary(change, trainingId));
+  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false): Promise<boolean> {
+    const operation = diaryWrites.current.then(() => persistDiary(change, trainingId, removingEvidence));
     diaryWrites.current = operation.then(() => {}, () => {});
     return operation;
   }
 
-  async function persistDiary(change: (previous: Diary) => Diary, trainingId?: string): Promise<boolean> {
+  async function persistDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false): Promise<boolean> {
     const previous = diaryRef.current;
     if (!previous) return false;
     try {
       const proposed = change(previous);
       if (proposed === previous) return true;
-      const awarded = trainingId ? awardTrainingChange(previous, proposed, trainingId, preferences.rankCategory ?? null, new Date().toISOString())
+      const now = new Date().toISOString();
+      const awarded = trainingId && !removingEvidence ? awardTrainingChange(previous, proposed, trainingId, preferences.rankCategory ?? null, now)
         : { diary: proposed, added: [] };
-      let next = trainingId ? awardRoomAchievements(awarded.diary, trainingId, new Date().toISOString()) : awarded.diary;
+      let next = trainingId ? removingEvidence ? removeAchievementEvidence(previous, proposed, trainingId, now)
+        : awardRoomAchievements(awarded.diary, trainingId, now) : awarded.diary;
       let newRecords: PersonalRecordEvent[] = [];
       let moment: TrainingMoment | undefined;
-      if (trainingId) {
+      if (trainingId && !removingEvidence) {
         const before = previous.entries.find(entry => entry.id === trainingId);
         const current = next.entries.find(entry => entry.id === trainingId);
         if (before && current && !before.practice.savedAt && current.practice.savedAt && current.personalRecords === undefined) {
@@ -215,19 +219,31 @@ function App() {
       }
       const known = new Set(previous.achievementLedger?.grants.map(grant => `${grant.id}:${grant.scope}`));
       const added = next.achievementLedger?.grants.filter(grant => !known.has(`${grant.id}:${grant.scope}`)) ?? [];
-      if (added.length && preferences.showAchievementNotices === false && next.achievementLedger) next = { ...next,
+      const noticeMoment = added.length ? crypto.randomUUID() : undefined;
+      if (noticeMoment && next.achievementLedger) next = { ...next,
         achievementLedger: { ...next.achievementLedger, grants: next.achievementLedger.grants.map(grant =>
-          known.has(`${grant.id}:${grant.scope}`) ? grant : { ...grant, notifiedAt: new Date().toISOString() }) } };
+          known.has(`${grant.id}:${grant.scope}`) ? grant : { ...grant, noticeMoment,
+            ...(preferences.showAchievementNotices === false ? { notifiedAt: new Date().toISOString() } : {}) }) } };
       await saveDiary(next, previous);
       diaryRef.current = next;
       setState({ diary: next, error: '' });
+      if (removingEvidence) {
+        const retained = new Set((next.achievementLedger?.grants ?? [])
+          .filter(grant => grant.sessionId !== trainingId || !dependsOnTraining(grant.id) ||
+            !next.entries.some(item => item.id === trainingId && item.deletedAt))
+          .map(achievementReceiptKey));
+        setAchievementQueue(queue => queue.flatMap(pending => {
+          const remaining = pending.grants.filter(grant => retained.has(achievementReceiptKey(grant)));
+          return remaining.length ? [{ ...pending, grants: remaining }] : [];
+        }));
+      }
       if (moment && trainingId) {
         setFinishMoment({ sessionId: trainingId, moment });
         setFinishHighlighting(preferences.animations && preferences.celebrationEffects !== false
           && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
       }
-      if (added.length && preferences.showAchievementNotices !== false) {
-        setAchievementQueue(queue => queueAchievementGrants(queue, added));
+      if (noticeMoment && preferences.showAchievementNotices !== false) {
+        setAchievementQueue(queue => [...queue, { id: noticeMoment, grants: next.achievementLedger!.grants.filter(grant => grant.noticeMoment === noticeMoment) }]);
       }
       if (newRecords.length && preferences.showAchievementNotices !== false && !preferences.hideScores) {
         setRecordQueue(queue => [...queue, ...newRecords]);
@@ -320,7 +336,7 @@ function App() {
     } catch (cause) { setState(previous => ({ ...previous, error: cause instanceof Error ? cause.message : 'Не удалось сохранить достижение памятки.' })); }
   }
 
-  function update(change: (previous: Practice) => Practice, rememberSetup = false): Promise<boolean> {
+  function update(change: (previous: Practice) => Practice, rememberSetup = false, removingEvidence = false): Promise<boolean> {
     return writeDiary(previous => {
       const entry = previous.entries.find(item => item.id === sessionId);
       if (!entry) return previous;
@@ -344,7 +360,7 @@ function App() {
         : remove && !notes?.length ? [] : [{ ...item, practice,
           ...(entry.practice.savedAt !== null && practice.savedAt === null && item.personalRecords === undefined ? { personalRecords: [] } : {}),
           ...(notes ? { notes } : {}), ...(trainingTime ? { trainingTime } : {}) }]) };
-    }, sessionId ?? undefined);
+    }, sessionId ?? undefined, removingEvidence);
   }
 
   async function saveEdit(keepSelection = false): Promise<boolean> {
@@ -443,7 +459,7 @@ function App() {
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
       ...(roomSetup ? { groupRoomName: roomSetup.roomName ?? 'Групповая тренировка' } : {}),
       achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
-        stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION, ...(roomSetup ? { roomAwards: true as const } : {}) } };
+        stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION, seriesStories: true, ...(roomSetup ? { roomAwards: true as const } : {}) } };
     if (roomSetup) {
       try { saveRoomMembership(roomSetup); }
       catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
@@ -710,7 +726,7 @@ function App() {
 
   async function removeMarkedShot(index: number) {
     const shot = series.shots[index];
-    if (!shot || !await update(previous => removeShot(previous, series.id, index))) return false;
+    if (!shot || !await update(previous => removeShot(previous, series.id, index), false, true)) return false;
     if (preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setRemovedMarker({ id: ++motionId.current, seriesId: series.id, sessionId, shot, index });
     }
@@ -786,7 +802,7 @@ function App() {
   }
 
   const timerWindow = timerOpen && timer.settings && <PracticeTimerWindow state={timer.state} settings={timer.settings}
-    onToggle={timer.toggle} onReset={timer.reset} onSelectPhase={timer.select} onSave={timer.save} onClose={() => setTimerOpen(false)} />;
+    onToggle={timer.toggle} onAdvance={timer.advance} onReset={timer.reset} onSelectPhase={timer.select} onSave={timer.save} onClose={() => setTimerOpen(false)} />;
   const notesWindow = notesScope && entry && <DiaryNotesSheet notes={entry.notes ?? []} scope={notesScope}
     includeConditionNotes={page === 'report'}
     readOnly={!!entry.deletedAt} onClose={() => setNotesScope(null)} onSave={notes => writeDiary(previous => ({
@@ -813,29 +829,34 @@ function App() {
   const grants = useMemo(() => {
     if (!state.diary) return [];
     const validity = achievementValidity(state.diary);
-    return (state.diary.achievementLedger?.grants ?? []).map(grant => ({ ...grant, valid: validity.get(`${grant.id}:${grant.scope}`) ?? true }));
+    const trashed = new Set(state.diary.entries.filter(item => item.deletedAt).map(item => item.id));
+    return (state.diary.achievementLedger?.grants ?? [])
+      .filter(grant => !grant.sessionId || !trashed.has(grant.sessionId) || !dependsOnTraining(grant.id))
+      .map(grant => ({ ...grant, valid: validity.get(`${grant.id}:${grant.scope}`) ?? true }));
   }, [state.diary]);
-  const currentGrants = new Map(grants.map(grant => [`${grant.id}:${grant.scope}`, grant]));
-  const pendingNotices = achievementQueue.map(group => groupAchievementGrants([group.leading, ...group.additional]
-    .flatMap(grant => {
-      const current = currentGrants.get(`${grant.id}:${grant.scope}`);
-      return current && current.valid !== false ? [current] : [];
-    }))[0]);
-  const activeNoticeIndex = pendingNotices.findIndex(Boolean);
+  const validGrants = new Set(grants.filter(grant => grant.valid !== false).map(achievementReceiptKey));
+  const pendingNotices = achievementQueue.map(moment => ({
+    id: moment.id,
+    groups: groupAchievementGrants(moment.grants.filter(grant => validGrants.has(achievementReceiptKey(grant)))),
+  }));
+  const activeNoticeIndex = pendingNotices.findIndex(moment => moment.groups.some(group =>
+    [group.leading, ...group.additional].some(grant => !grant.notifiedAt)));
   const activeNotice = pendingNotices[activeNoticeIndex];
-  const inputNoticesHidden = (page === 'training' || page === 'editor') && preferences.showAchievementsDuringInput === false;
+  const inputNoticesHidden = page === 'training' && preferences.showAchievementsDuringInput === false;
   const achievementNotice = activeNotice && preferences.showAchievementNotices !== false && !inputNoticesHidden && !(page === 'training' && preferences.hideScores) &&
-    <AchievementNotice key={`${activeNotice.leading.id}:${activeNotice.leading.scope}`} group={activeNotice}
-      onShown={() => writeDiary(previous => {
+    <AchievementNotice key={activeNotice.id} groups={activeNotice.groups} compact={page === 'training'}
+      onShown={(shown: AchievementGrant[]) => writeDiary(previous => {
         if (!previous.achievementLedger) return previous;
-        const ids = new Set([activeNotice.leading, ...activeNotice.additional].map(grant => `${grant.id}:${grant.scope}`));
-        if (!previous.achievementLedger.grants.some(grant => ids.has(`${grant.id}:${grant.scope}`) && !grant.notifiedAt)) return previous;
+        if (previous.achievementLedger.epoch !== state.diary?.achievementLedger?.epoch) return previous;
+        const ids = new Set(shown.map(achievementReceiptKey));
+        if (!previous.achievementLedger.grants.some(grant => ids.has(achievementReceiptKey(grant)) && !grant.notifiedAt)) return previous;
         return { ...previous, achievementLedger: { ...previous.achievementLedger, grants: previous.achievementLedger.grants.map(grant =>
-          ids.has(`${grant.id}:${grant.scope}`) && !grant.notifiedAt ? { ...grant, notifiedAt: new Date().toISOString() } : grant) } };
+          ids.has(achievementReceiptKey(grant)) && !grant.notifiedAt ? { ...grant, notifiedAt: new Date().toISOString() } : grant) } };
       })}
-      onNext={() => setAchievementQueue(queue => queue.slice(activeNoticeIndex + 1))} />;
+      onNext={() => setAchievementQueue(queue => queue.filter(moment => moment.id !== activeNotice.id))} />;
   const nextRecord = recordQueue[0];
-  const notice = page === 'report' && finishHighlighting && finishMoment?.sessionId === sessionId ? null
+  // The series editor's shot selector occupies the same space as the banners.
+  const notice = page === 'editor' || (page === 'report' && finishHighlighting && finishMoment?.sessionId === sessionId) ? null
     : achievementNotice || (nextRecord && preferences.showAchievementNotices !== false && !preferences.hideScores &&
     <PersonalRecordNotice key={nextRecord.id} record={nextRecord}
       onShown={() => writeDiary(previous => ({
@@ -858,6 +879,7 @@ function App() {
     setTutorialChapter(null);
   }
   function leaveConditions() {
+    setFutureConditions(false);
     setSetupMemo(null);
     setRepeatSetup(null);
     setRoomSetup(null);
@@ -899,6 +921,7 @@ function App() {
   });
   if (showingOnboarding) {
     return <>{offlineLabel}<WebOnboarding initialChapter={tutorialChapter ?? 'welcome'} offerPreferences={!preferences.onboardingSeen}
+      onEnableHundredths={() => recordServiceAchievement('APP11')}
       onClose={leaveOnboarding} onStart={async () => {
       await leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
       if (ongoing) selectEntry(ongoing, 'conditions');
@@ -1029,17 +1052,17 @@ function App() {
     onBack={() => { setSettingsSection(null); setPage('journal'); }}
     appearance={<>
       {themeSettings}
+      <div className="settings-panel"><TrainingPreferenceControls keys={['colorTrainingBorders']} /></div>
       <RecentPracticeLimitControl />
       {supportsAppScale() && <div className="settings-panel"><TrainingPreferenceControls keys={['useSystemScale']} /></div>}
     </>}
     motion={<div className="settings-panel">
       <TrainingPreferenceControls keys={['animations', 'celebrationEffects', 'haptics']} />
-      <ShotMotionControl />
       {achievementPreference}
     </div>}
-    training={<div className="settings-panel"><LensControls preview={<LensTestTarget />} /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
+    training={<div className="settings-panel"><LensControls preview={<LensTestTarget onAchievement={recordServiceAchievement} />} /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
     statistics={<>
-      <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths']} /></div>
+      <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths', 'maximumSpread']} onEnableHundredths={() => recordServiceAchievement('APP11')} /></div>
       <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>
       <StatisticsSettings />
     </>}
@@ -1076,8 +1099,26 @@ function App() {
 
   if (page === 'conditions') return <>
     {offlineLabel}
-    <ConditionsScreen initial={setup ? newConditions : active.series.conditions} rule={setup ? setupDefaults.rule : practice.roundRule} editableRule={setup || !hasHits}
-      appearance={themeSettings} achievementPreference={achievementPreference}
+    <ConditionsScreen key={setup ? 'setup' : !hasHits || futureConditions ? 'future' : 'correction'}
+      initial={setup ? newConditions : active.series.conditions} rule={setup ? setupDefaults.rule : practice.roundRule} editableRule={setup || !hasHits && practice.savedAt === null}
+      correction={!setup && hasHits && !futureConditions ? practice : undefined}
+      onFuture={!setup && !futureConditions && conditionsBack === 'training' && hasHits ? () => setFutureConditions(true) : undefined}
+      onCorrection={async (source, proposed) => {
+        const success = await update(previous => {
+          if (source !== previous) throw new Error('Тренировка изменилась. Проверь условия ещё раз.');
+          if (proposed === previous || practice.savedAt !== null || !entry || entry.id === 'pilot' || entry.paused || roomJournal) return proposed;
+          const current = currentSeries(proposed)?.series;
+          if (!current || current.progressBaselineId !== undefined || current.shots.length) return proposed;
+          return attachProgressBaseline(proposed, freezeProgressBaseline(diaryRef.current?.entries ?? [], entry.id,
+            entry.startedAt, current.conditions, new Date().toISOString()));
+        }, false, true);
+        if (success) {
+          setRecordQueue(queue => queue.filter(record => record.sessionId !== sessionId || record.kind === 'volume'));
+          leaveConditions();
+        }
+        return success;
+      }}
+      achievementPreference={achievementPreference}
       initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
@@ -1093,7 +1134,7 @@ function App() {
           return attachProgressBaseline(next, freezeProgressBaseline(diaryRef.current?.entries ?? [], entry.id,
             entry.startedAt, applied, new Date().toISOString()));
         }, true);
-        if (success) { setSelection(null); setPage('training'); }
+        if (success) { setSelection(null); leaveConditions(); }
         return success;
       }} />
     {error}
@@ -1110,6 +1151,9 @@ function App() {
         return refreshRoomHistory(entry.id, membership, true);
       } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
+      onCorrectConditions={entry && !entry.deletedAt ? () => {
+        setFutureConditions(false); setConditionsBack('report'); setPage('conditions');
+      } : undefined}
       moment={finishMoment?.sessionId === sessionId ? finishMoment?.moment : undefined}
       onRoomLeaderboard={entry?.groupRoomHistory ? () => setRoomLeaderboardOpen(true) : undefined}
       roomFinalized={!!entry?.groupRoomHistory?.finalizedAt}
@@ -1120,7 +1164,7 @@ function App() {
         setConditionsBack('report');
         setPage('conditions');
       } : undefined}
-      onDeleteStage={(kind, id) => update(previous => kind === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id))}
+      onDeleteStage={(kind, id) => update(previous => kind === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id), false, true)}
       onOpenRecordSession={id => openRecordReport(id, 'report')}
       onAchievement={id => recordServiceAchievement(id, sessionId ?? undefined)}
       grants={grants.filter(grant => grant.sessionId === sessionId)}
@@ -1128,7 +1172,7 @@ function App() {
       onRename={async title => !!entry && writeDiary(previous => renameDiaryEntry(previous, entry.id, title))}
       onTrash={async deleted => {
         if (!entry) return false;
-        return writeDiary(previous => setDiaryDeleted(previous, entry.id, deleted));
+        return writeDiary(previous => setDiaryDeleted(previous, entry.id, deleted), deleted ? entry.id : undefined, deleted);
       }}
       onRank={id => setRankScope({ kind: 'round', id })} onRankReference={() => setRankReference(true)}
       onTechnique={() => setTechniqueOpen(true)}
@@ -1166,7 +1210,7 @@ function App() {
         <h1>{editing ? `Стрела ${editing.index + 1}` : 'Редактор серии'}</h1>
         <span>Раунд {practice.rounds.indexOf(round) + 1} · серия {round.series.indexOf(series) + 1}</span>
       </div> : <div className="series-editor-heading">
-        <h1>{editing ? `Стрела ${editing.index + 1}` : 'Тренировка'}</h1>
+        {achievementNotice || <h1>{editing ? `Стрела ${editing.index + 1}` : 'Тренировка'}</h1>}
         {roomJournal && <output className="room-sync-status" aria-live="polite" data-testid="room-sync-status">
           {entry?.groupRoomHistory?.finalizedAt ? 'Итоги зафиксированы' : pendingRoomCount ? `В очереди · ${pendingRoomCount}` : 'Групповая'}
         </output>}
@@ -1200,7 +1244,11 @@ function App() {
       entering={!editing && canAppend ? shots.length : null} onPick={chooseShot}
       feedback={activeShotFeedback} direction={seriesTransition?.id === series.id ? seriesTransition.direction : undefined}
       removing={activeRemovedMarker?.index} />
+    {lensSettingsOpen && <BottomSheet title="Лупа" onClose={() => setLensSettingsOpen(false)} tag="training-lens-settings">
+      <LensControls preview={<LensTestTarget onAchievement={recordServiceAchievement} />} />
+    </BottomSheet>}
     <TargetBoard key={`${seriesEditor ? 'editor' : 'training'}-${series.id}-${targetSpec.profileId}-${targetSpec.diameterMm}`} shots={shots} spec={targetSpec} selectedIndex={editing?.index ?? null}
+      onOpenLensSettings={() => setLensSettingsOpen(true)}
       realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
@@ -1231,7 +1279,7 @@ function App() {
         return saved;
       }}
       onDelete={async id => {
-        const saved = await update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id));
+        const saved = await update(previous => picker === 'round' ? deleteRound(previous, id) : deleteSeries(previous, id), false, true);
         if (saved && !diaryRef.current?.entries.some(item => item.id === sessionId)) setPage('journal');
         return saved;
       }} />}
@@ -1239,7 +1287,7 @@ function App() {
     {techniqueWindow}
     {rankWindow}
     {notesWindow}
-    {notice}
+    {!achievementNotice && notice}
     <dialog ref={confirmDialog} className="confirm" aria-labelledby="confirm-title">
       <form method="dialog">
         <h2 id="confirm-title">{confirm === 'discard' ? 'Отменить правки?' : confirm === 'delete' ? 'Удалить попадание?' : 'Завершить тренировку?'}</h2>

@@ -1,8 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import type { TimerPhase } from './timer.ts';
-
 const native = registerPlugin<{
-  schedule(options: { phase: TimerPhase; remainingMillis: number }): Promise<void>;
+  schedule(options: { signals: { delay: number; count: number }[] }): Promise<void>;
   cancel(): Promise<void>;
 }>('PracticeTimerSound');
 
@@ -25,11 +23,12 @@ export function createTimerSound() {
     }
   }
 
-  function schedule(phase: TimerPhase, deadline: number) {
+  function schedule(signals: readonly { at: number; count: number }[]) {
     cancel();
     if (Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('PracticeTimerSound')) {
       nativeScheduled = true;
-      void native.schedule({ phase, remainingMillis: Math.max(0, deadline - Date.now()) })
+      const now = Date.now();
+      void native.schedule({ signals: signals.map(({ at, count }) => ({ delay: Math.max(0, at - now), count })) })
         .catch(error => console.warn('Не удалось запланировать сигнал таймера.', error));
       return;
     }
@@ -41,23 +40,23 @@ export function createTimerSound() {
       // This is called directly by the start/resume gesture.
       const ready = context.state === 'running' ? Promise.resolve() : context.resume();
       void ready.then(() => {
-        const remaining = deadline - Date.now();
-        if (ticket !== sequence || remaining < -1000) return;
-        const start = context.currentTime + Math.max(0, remaining) / 1000;
-        const pattern = phase === 'Series' ? [{ offset: 0, hz: 880, seconds: 1.8 }]
-          : [{ offset: 0, hz: 540, seconds: .65 }, { offset: .85, hz: 680, seconds: .95 }];
-        for (const { offset, hz, seconds } of pattern) {
-          const at = start + offset;
-          const tone = context.createOscillator(), gain = context.createGain();
-          tone.frequency.value = hz;
-          tone.connect(gain); gain.connect(context.destination);
-          gain.gain.setValueAtTime(0, at);
-          gain.gain.linearRampToValueAtTime(.9, at + .02);
-          gain.gain.setValueAtTime(.9, at + seconds - .06);
-          gain.gain.linearRampToValueAtTime(0, at + seconds);
-          tone.onended = () => { tone.disconnect(); gain.disconnect(); };
-          tone.start(at); tone.stop(at + seconds);
-          tones.push(tone);
+        if (ticket !== sequence) return;
+        const now = Date.now();
+        for (const signal of signals.filter(signal => signal.at >= now - 1000)) {
+          const start = context.currentTime + Math.max(0, signal.at - now) / 1000;
+          for (let index = 0; index < signal.count; index++) {
+            const at = start + index * .45, seconds = .3;
+            const tone = context.createOscillator(), gain = context.createGain();
+            tone.frequency.value = 880;
+            tone.connect(gain); gain.connect(context.destination);
+            gain.gain.setValueAtTime(0, at);
+            gain.gain.linearRampToValueAtTime(.9, at + .02);
+            gain.gain.setValueAtTime(.9, at + seconds - .06);
+            gain.gain.linearRampToValueAtTime(0, at + seconds);
+            tone.onended = () => { tone.disconnect(); gain.disconnect(); };
+            tone.start(at); tone.stop(at + seconds);
+            tones.push(tone);
+          }
         }
       }).catch(error => console.warn('Не удалось включить звук таймера.', error));
     } catch (error) { console.warn('Не удалось открыть звук таймера.', error); }

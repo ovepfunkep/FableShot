@@ -2,11 +2,12 @@ import { achievementRarityFor, achievementScopesFor, achievementTierOrder, ACHIE
 import type { RankCategory } from './sport-ranks.ts';
 import type { StageRankBasis } from './stage-rank-achievements.ts';
 
-export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1; roomAwards?: true;
+export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1; roomAwards?: true; seriesStories?: true;
   stageRankCategories?: Record<string, RankCategory | null> };
-export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; valid?: boolean; nativeSnapshot?: true; stageRank?: StageRankBasis };
+export type SeriesSwing = { seriesIds: number[]; points: number[]; arrows: number };
+export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; noticeMoment?: string; valid?: boolean; nativeSnapshot?: true; stageRank?: StageRankBasis; seriesSwing?: SeriesSwing };
 export type AchievementLedger = { epoch: string; grants: AchievementGrant[]; publications?: { documentId: string; fingerprint: string }[] };
-export type AchievementObservation = { id: string; scope: string; progress: number; stageRank?: StageRankBasis };
+export type AchievementObservation = { id: string; scope: string; progress: number; stageRank?: StageRankBasis; seriesSwing?: SeriesSwing };
 
 const identity = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256;
 
@@ -15,6 +16,7 @@ export function isAchievementEnrollment(value: unknown): value is AchievementEnr
   const enrollment = value as Partial<AchievementEnrollment>;
   const categories = enrollment.stageRankCategories;
   return identity(enrollment.epoch) && (enrollment.roomAwards === undefined || enrollment.roomAwards === true) &&
+    (enrollment.seriesStories === undefined || enrollment.seriesStories === true) &&
     (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female') &&
     (enrollment.stageRankVersion === undefined || enrollment.stageRankVersion === 1) &&
     (categories === undefined || (enrollment.stageRankVersion === 1 && !!categories && typeof categories === 'object' &&
@@ -31,6 +33,16 @@ function validStageRank(value: unknown): boolean {
     new Set(basis.seriesIds).size === basis.seriesIds.length && Number.isSafeInteger(basis.points) && basis.points >= 0 &&
     basis.points <= basis.arrows * 10 && basis.threshold <= basis.exerciseArrows * 10 &&
     [basis.revision, basis.target, basis.bow].every(identity);
+}
+
+function validSeriesSwing(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const basis = value as SeriesSwing;
+  return Number.isSafeInteger(basis.arrows) && basis.arrows >= 3 &&
+    Array.isArray(basis.seriesIds) && (basis.seriesIds.length === 2 || basis.seriesIds.length === 3) &&
+    basis.seriesIds.every(id => Number.isSafeInteger(id) && id > 0) && new Set(basis.seriesIds).size === basis.seriesIds.length &&
+    Array.isArray(basis.points) && basis.points.length === basis.seriesIds.length &&
+    basis.points.every(value => Number.isSafeInteger(value) && value >= 0 && value <= 10 * basis.arrows);
 }
 
 export function isAchievementLedger(value: unknown): value is AchievementLedger {
@@ -54,7 +66,9 @@ export function isAchievementLedger(value: unknown): value is AchievementLedger 
       (grant.valid !== undefined && typeof grant.valid !== 'boolean') ||
       (grant.nativeSnapshot !== undefined && grant.nativeSnapshot !== true) ||
       (grant.notifiedAt !== undefined && (typeof grant.notifiedAt !== 'string' || !Number.isFinite(Date.parse(grant.notifiedAt)))) ||
+      (grant.noticeMoment !== undefined && !identity(grant.noticeMoment)) ||
       (grant.sessionId !== undefined && !identity(grant.sessionId)) ||
+      (grant.seriesSwing !== undefined && (!identity(grant.sessionId) || !validSeriesSwing(grant.seriesSwing))) ||
       (grant.stageRank !== undefined && (!identity(grant.sessionId) || !validStageRank(grant.stageRank)))) return false;
     const key = `${grant.id}:${grant.scope}`;
     if (keys.has(key)) return false;
@@ -72,26 +86,28 @@ export function earnAchievements(ledger: AchievementLedger, observations: readon
     if (!rule || keys.has(key) || !Number.isFinite(observation.progress) || observation.progress < rule.target ||
       !achievementScopesFor(rule).some(scope => scope === observation.scope)) continue;
     added.push({ id: observation.id, scope: observation.scope, earnedAt, ...(sessionId ? { sessionId } : {}),
-      ...(observation.stageRank ? { stageRank: observation.stageRank } : {}) });
+      ...(observation.stageRank ? { stageRank: observation.stageRank } : {}),
+      ...(observation.seriesSwing ? { seriesSwing: observation.seriesSwing } : {}) });
     keys.add(key);
   }
   return { ledger: added.length ? { ...ledger, grants: [...ledger.grants, ...added] } : ledger, added };
 }
 
 export type AchievementGroup = { key: string; leading: AchievementGrant; additional: AchievementGrant[] };
+export type AchievementMoment = { id: string; grants: AchievementGrant[] };
+export const achievementReceiptKey = (grant: AchievementGrant) => JSON.stringify([grant.id, grant.scope, grant.noticeMoment, grant.earnedAt]);
 
-export function recentAchievementNotices(ledger: AchievementLedger | undefined, nowMs = Date.now()): AchievementGroup[] {
-  return groupAchievementGrants(ledger?.grants.filter(grant => !grant.nativeSnapshot && !grant.notifiedAt &&
-    nowMs - Date.parse(grant.earnedAt) >= 0 && nowMs - Date.parse(grant.earnedAt) <= 10_000) ?? []);
-}
-
-/** Coalesce families still waiting to be shown without dropping the lower earned tiers. */
-export function queueAchievementGrants(queue: readonly AchievementGroup[], grants: readonly AchievementGrant[]): AchievementGroup[] {
-  const unique = new Map<string, AchievementGrant>();
-  for (const grant of [...queue.flatMap(group => [group.leading, ...group.additional]), ...grants]) {
-    unique.set(`${grant.id}:${grant.scope}`, grant);
+export function recentAchievementNotices(ledger: AchievementLedger | undefined, nowMs = Date.now()): AchievementMoment[] {
+  const moments = new Map<string, AchievementMoment>();
+  for (const grant of ledger?.grants ?? []) {
+    const age = nowMs - Date.parse(grant.earnedAt);
+    if (grant.nativeSnapshot || age < 0 || age > 10_000) continue;
+    const id = grant.noticeMoment ?? JSON.stringify([grant.earnedAt, grant.sessionId]);
+    const moment = moments.get(id) ?? { id, grants: [] };
+    moment.grants.push(grant);
+    moments.set(id, moment);
   }
-  return groupAchievementGrants([...unique.values()]);
+  return [...moments.values()].filter(moment => moment.grants.some(grant => !grant.notifiedAt));
 }
 
 export function groupAchievementGrants(grants: readonly AchievementGrant[]): AchievementGroup[] {

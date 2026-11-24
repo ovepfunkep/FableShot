@@ -7,32 +7,103 @@ import { TargetPreview } from './TargetBoard.tsx';
 import { getTargetProfile, acceptsDiameter, TARGET_PROFILES } from './target.ts';
 import { isConditions, isRoundRule, loadPresets, savePreset, removePreset } from './conditions.ts';
 import type { Conditions, RoundRule, TrainingPreset } from './conditions.ts';
-import { LensControls, ShotMotionControl, TrainingPreferenceControls } from './TrainingPreferences.tsx';
+import { TrainingPreferenceControls } from './TrainingPreferences.tsx';
 import { tournamentTitle } from './tournaments.ts';
 import type { Tournament, TournamentChoice } from './tournaments.ts';
+import { ConditionsCorrectionReview, preparePracticeConditionsCorrection } from './practice.ts';
+import type { Practice } from './practice.ts';
 import './conditions.css';
 
-export function BottomSheet({ title, onClose, children, tag, headerAction, startAtTop }: {
+export function BottomSheet({ title, onClose, children, tag, headerAction, startAtTop, onDismissRequest }: {
   title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode; startAtTop?: boolean;
+  onDismissRequest?: () => boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const drag = useRef<number | null>(null);
+  const drag = useRef<{ pointerId: number; startY: number; height: number } | null>(null);
+  const backdropPress = useRef(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const close = useRef(onClose);
+  useLayoutEffect(() => { close.current = onClose; }, [onClose]);
   useLayoutEffect(() => {
     dialog.current?.showModal();
-    if (startAtTop && dialog.current) dialog.current.scrollTop = 0;
+    return () => window.clearTimeout(closeTimer.current);
+  }, []);
+  useLayoutEffect(() => {
+    const panel = dialog.current;
+    if (!startAtTop || !panel) return;
+    panel.focus({ preventScroll: true });
+    panel.scrollTop = 0;
   }, [startAtTop]);
+
+  function resetDrag(panel: HTMLDialogElement) {
+    drag.current = null;
+    delete panel.dataset.sheetDragging;
+    panel.style.removeProperty('--sheet-shift');
+    panel.style.removeProperty('--sheet-scrim-opacity');
+  }
+
+  function finishDismiss() {
+    const panel = dialog.current;
+    if (!panel?.hasAttribute('data-sheet-closing')) return;
+    window.clearTimeout(closeTimer.current);
+    delete panel.dataset.sheetClosing;
+    close.current();
+  }
+
+  function dismiss() {
+    const panel = dialog.current;
+    if (!panel?.open || panel.hasAttribute('data-sheet-closing')) return;
+    resetDrag(panel);
+    if (onDismissRequest && !onDismissRequest()) return;
+    if (document.documentElement.dataset.motion === 'off' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      close.current();
+      return;
+    }
+    panel.dataset.sheetClosing = '';
+    // A hidden document can interrupt the transition without delivering transitionend.
+    closeTimer.current = window.setTimeout(finishDismiss, 260);
+  }
+
   return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag} tabIndex={startAtTop ? -1 : undefined}
-    onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}
-    onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); dismiss(); }}
+    onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === 'transform') finishDismiss(); }}
+    onPointerDown={event => { backdropPress.current = event.target === event.currentTarget; }}
+    onClickCapture={event => {
+      if (event.currentTarget.hasAttribute('data-sheet-closing')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }}
+    onClick={event => {
+      if (backdropPress.current && event.target === event.currentTarget) dismiss();
+      backdropPress.current = false;
+    }}>
     <div className="condition-sheet-body">
       <header onPointerDown={event => {
-        if (event.target instanceof Element && event.target.closest('button')) return;
-        drag.current = event.clientY;
+        const panel = dialog.current;
+        if (!event.isPrimary || event.button !== 0 || !panel || panel.hasAttribute('data-sheet-closing') ||
+          event.target instanceof Element && event.target.closest('button, a, input')) return;
+        drag.current = { pointerId: event.pointerId, startY: event.clientY, height: panel.offsetHeight };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
+        onPointerMove={event => {
+          const panel = dialog.current, current = drag.current;
+          if (!panel || current?.pointerId !== event.pointerId) return;
+          const distance = Math.min(current.height, Math.max(0, event.clientY - current.startY));
+          if (distance === 0 && !panel.hasAttribute('data-sheet-dragging')) return;
+          panel.dataset.sheetDragging = '';
+          panel.style.setProperty('--sheet-shift', `${distance}px`);
+          panel.style.setProperty('--sheet-scrim-opacity', String(1 - distance / current.height));
+        }}
         onPointerUp={event => {
-          if (drag.current !== null && event.clientY - drag.current > 65) onClose();
-          drag.current = null;
+          const panel = dialog.current, current = drag.current;
+          if (!panel || current?.pointerId !== event.pointerId) return;
+          if (event.clientY - current.startY > 65) dismiss();
+          else resetDrag(panel);
+        }}
+        onLostPointerCapture={event => {
+          const panel = dialog.current;
+          if (panel && drag.current?.pointerId === event.pointerId) resetDrag(panel);
         }}>
         <span className="sheet-handle" aria-hidden="true" />
         {headerAction ? <div className="sheet-title-actions"><h2>{title}</h2>{headerAction}</div> : <h2>{title}</h2>}
@@ -91,14 +162,17 @@ function readPresets() {
   catch (error) { return { presets: [] as TrainingPreset[], error: error instanceof Error ? error.message : 'Не удалось прочитать избранное.' }; }
 }
 
-export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, appearance, achievementPreference }: {
+export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, achievementPreference,
+  correction, onFuture, onCorrection }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
   onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => Promise<boolean>; onBack: () => void;
   tournaments?: readonly Tournament[];
-  appearance?: ReactNode;
   achievementPreference?: ReactNode;
   onTechnique: () => void; techniqueTitle: string;
+  correction?: Practice;
+  onFuture?: () => void;
+  onCorrection?: (source: Practice, next: Practice) => Promise<boolean>;
 }) {
   const [distance, setDistance] = useState(String(initial.distanceMeters));
   const [diameter, setDiameter] = useState(String(initial.targetDiameterMm / 10));
@@ -124,6 +198,14 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const [removingPreset, setRemovingPreset] = useState<TrainingPreset | null>(null);
   const [error, setError] = useState('');
   const [help, setHelp] = useState(false);
+  const [touched, setTouched] = useState<ReadonlySet<keyof Conditions>>(() => new Set());
+  const [preview, setPreview] = useState<{ source: Practice; result: ReturnType<typeof preparePracticeConditionsCorrection> } | null>(null);
+  const [savingCorrection, setSavingCorrection] = useState(false);
+  const [review, setReview] = useState<ConditionsCorrectionReview | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const correctionSeries = correction?.rounds.flatMap(round => round.series) ?? [];
+  const markTouched = (field: keyof Conditions) => { if (correction) setTouched(previous => new Set([...previous, field])); };
+  const mixed = (field: keyof Conditions) => correctionSeries.some(series => JSON.stringify(series.conditions[field]) !== JSON.stringify(initial[field]));
   const profile = getTargetProfile(profileId)!;
   const mm = Number(diameter.replace(',', '.')) * 10;
   const meters = Number(distance.replace(',', '.'));
@@ -135,6 +217,29 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const nextRule: RoundRule = editableRule
     ? { unit: roundUnit, limit: roundUnit === 'unlimited' ? null : Number(roundLimit) } : rule;
   const valid = distanceValid && diameterValid && isConditions(nextConditions) && isRoundRule(nextRule);
+
+  function showCorrectionPreview(choices: Readonly<Record<string, string>> = {}) {
+    if (!correction) return;
+    try {
+      const patch = Object.fromEntries([...touched].map(field => [field, nextConditions[field]])) as Partial<Conditions>;
+      const result = preparePracticeConditionsCorrection(correction, patch, choices);
+      if (correction.savedAt === null && editableRule && (nextRule.unit !== rule.unit || nextRule.limit !== rule.limit)) {
+        result.practice = { ...result.practice, roundRule: nextRule };
+      }
+      if (correction.savedAt === null && numberedArrows !== initialNumbering) {
+        result.practice = { ...result.practice, numberedArrows };
+      }
+      setError('');
+      setReview(null);
+      setPreview({ source: correction, result });
+    } catch (cause) {
+      if (cause instanceof ConditionsCorrectionReview) {
+        setPreview(null);
+        setReview(cause);
+        setAnswers({ ...choices });
+      } else setError(cause instanceof Error ? cause.message : 'Не удалось подготовить изменения.');
+    }
+  }
 
   function selectPreset(preset: TrainingPreset): boolean {
     let selectedEquipment = preset.conditions.equipment;
@@ -181,31 +286,34 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   return <main className="conditions-page" data-testid="journal-setup">
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button>
-      <h1>Условия тренировки</h1>
+      <h1>{correction ? 'Исправить условия' : 'Условия тренировки'}</h1>
     </header>
     <div className="conditions-content">
-      <div className="preset-strip" aria-label="Избранные условия">
+      {correction ? <div className="correction-scope">
+        <span>Вся тренировка · серий {correctionSeries.length}</span>
+        {onFuture && <button type="button" className="text-action" data-testid="conditions-future" onClick={onFuture}>Сменить со следующей серии</button>}
+      </div> : <div className="preset-strip" aria-label="Избранные условия">
         <button type="button" className="preset-open" data-testid="training-presets" onClick={() => { setError(''); setSheet('presets'); }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /></svg>
           Избранные условия
         </button>
         <button type="button" className="icon-button preset-add" aria-label="Сохранить условия в избранное" disabled={!valid || !!presetState.error}
           onClick={() => { setError(''); setSheet('preset'); }}>+</button>
-      </div>
-      {presetState.error && <p className="conditions-error" role="alert">{presetState.error}</p>}
+      </div>}
+      {!correction && presetState.error && <p className="conditions-error" role="alert">{presetState.error}</p>}
       <div className="condition-number-grid">
-        <ConditionNumber title="Дистанция" unit="м" tag="distance" value={distance} choices={[10, 18, 30]}
-          invalid={!distanceValid} onChange={setDistance} />
-        <ConditionNumber title="Диаметр" unit="см" tag="diameter" value={diameter} choices={profile.diameters.length ? profile.diameters.slice(0, 3).map(value => value / 10) : [40, 60, 80]}
-          invalid={!diameterValid} onChange={setDiameter} />
+        <ConditionNumber title={mixed('distanceMeters') && !touched.has('distanceMeters') ? 'Дистанция · разные' : 'Дистанция'} unit="м" tag="distance" value={distance} choices={[10, 18, 30]}
+          invalid={!distanceValid} onChange={value => { setDistance(value); markTouched('distanceMeters'); }} />
+        <ConditionNumber title={mixed('targetDiameterMm') && !touched.has('targetDiameterMm') ? 'Диаметр · разный' : 'Диаметр'} unit="см" tag="diameter" value={diameter} choices={profile.diameters.length ? profile.diameters.slice(0, 3).map(value => value / 10) : [40, 60, 80]}
+          invalid={!diameterValid} onChange={value => { setDiameter(value); markTouched('targetDiameterMm'); }} />
       </div>
-      <ConditionRow title="Мишень" value={profile.title} icon="target" tag="target-profile-choice" onClick={() => setSheet('target')} />
-      <ConditionRow title="Комплект" value={equipment?.name ?? 'Без комплекта'} icon="kit" tag="conditions-equipment"
+      <ConditionRow title="Мишень" value={mixed('targetProfileId') && !touched.has('targetProfileId') ? 'Разные мишени' : profile.title} icon="target" tag="target-profile-choice" onClick={() => setSheet('target')} />
+      <ConditionRow title="Комплект" value={mixed('equipment') && !touched.has('equipment') ? 'Разные комплекты' : equipment?.name ?? 'Без комплекта'} icon="kit" tag="conditions-equipment"
         onClick={() => { setEditEquipment(false); setSheet('equipment'); }}
-        onEdit={equipment ? () => { setEditEquipment(true); setSheet('equipment'); } : undefined} />
+        onEdit={equipment && !correction ? () => { setEditEquipment(true); setSheet('equipment'); } : undefined} />
       <ConditionRow title="Раунд" value={ruleText(nextRule)} icon="round" tag="conditions-options"
         onClick={editableRule ? () => setSheet('round') : undefined} />
-      <details className="conditions-advanced">
+      {(!correction || correction.savedAt === null) && <details className="conditions-advanced">
         <summary data-testid="conditions-advanced"><Icon name="settings" /><span>Дополнительно</span><Icon name="right" /></summary>
         <div className="conditions-advanced-content">
           <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
@@ -224,32 +332,58 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
               <button type="button" role="switch" aria-label="Нумерация стрел" aria-checked={numberedArrows ?? true}
                 data-testid="numbered-arrows-toggle" className="preference-switch" onClick={() => setNumberedArrows(!(numberedArrows ?? true))}><span /></button>
             </div>}
-            <LensControls />
-            <TrainingPreferenceControls keys={['hideScores', 'averageHundredths', 'showAchievementsDuringInput', 'animations', 'celebrationEffects', 'haptics', 'keepAwake', 'trainingOnLockScreen', 'useSystemScale']} />
-            <ShotMotionControl />
+            <TrainingPreferenceControls keys={['hideScores', 'averageHundredths', 'showAchievementsDuringInput', 'animations', 'celebrationEffects', 'haptics', 'keepAwake', 'trainingOnLockScreen']} />
             {achievementPreference}
           </div>
-          {appearance && <details className="conditions-advanced">
-            <summary><Icon name="settings" /><span>Оформление</span><Icon name="right" /></summary>
-            <div className="conditions-advanced-content">{appearance}</div>
-          </details>}
         </div>
-      </details>
+      </details>}
       {error && <p className="conditions-error" role="alert">{error}</p>}
     </div>
     <footer className="conditions-footer">
       <button type="button" className="primary" data-testid="start-training" disabled={!valid} onClick={async () => {
+        if (correction) { showCorrectionPreview(); return; }
         if (tournamentKey && !tournamentChoice) { setError('Этот турнирный старт больше недоступен. Выбери другой.'); return; }
         if (!await onApply(nextConditions, nextRule, numberedArrows, tournamentChoice)) setError('Не удалось применить условия. Повтори действие.');
-      }}>{editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
+      }}>{correction ? 'Проверить изменения' : editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
     </footer>
-    {sheet === 'equipment' && <EquipmentPicker selected={equipment} onSelect={setEquipment} onClose={() => setSheet(null)} editSelected={editEquipment} />}
+    {review && <BottomSheet title="Сопоставить попадания" tag="conditions-correction-review" onClose={() => setReview(null)}>
+      {review.choices.some(choice => choice.inOrder !== undefined) && <button type="button" className="text-action" onClick={() => setAnswers(previous => ({ ...previous,
+        ...Object.fromEntries(review.choices.filter(choice => choice.inOrder !== undefined).map(choice => [choice.key, String(choice.inOrder! + 1)])) }))}>Пятна 1–2–3 по порядку стрел</button>}
+      <div className="correction-review">
+        {review.choices.map(choice => <label key={choice.key}>{choice.label}
+          <select value={answers[choice.key] ?? ''} onChange={event => setAnswers({ ...answers, [choice.key]: event.target.value })}>
+            <option value="">Выбрать</option>{choice.codes.map(code => <option key={code} value={code}>{code}</option>)}
+          </select>
+        </label>)}
+      </div>
+      <button type="button" className="primary" disabled={review.choices.some(choice => !answers[choice.key])}
+        onClick={() => showCorrectionPreview(answers)}>Проверить изменения</button>
+    </BottomSheet>}
+    {preview && <BottomSheet title="Применить ко всей тренировке?" tag="conditions-correction-preview" onClose={() => { if (!savingCorrection) setPreview(null); }}>
+      <p>Серий с изменениями {preview.result.changedSeriesIds.length} из {correctionSeries.length}</p>
+      <p>Очки {preview.result.preview.before} → {preview.result.preview.after}</p>
+      {preview.result.preview.preservedScores > 0 && <p>Сохранены исходные оценки стрел · {preview.result.preview.preservedScores}</p>}
+      {error && <p className="conditions-error" role="alert">{error}</p>}
+      <button type="button" className="primary" data-testid="conditions-correction-save" disabled={savingCorrection} onClick={async () => {
+        setSavingCorrection(true);
+        try {
+          if (correction !== preview.source) { showCorrectionPreview(); return; }
+          if (!await onCorrection?.(preview.source, preview.result.practice)) setError('Не удалось сохранить условия. Проверь изменения и повтори.');
+        } finally { setSavingCorrection(false); }
+      }}>Сохранить условия</button>
+    </BottomSheet>}
+    {sheet === 'equipment' && <EquipmentPicker selected={equipment} onSelect={value => { setEquipment(value); markTouched('equipment'); }}
+      onClose={() => setSheet(null)} editSelected={editEquipment} selectionOnly={!!correction} />}
     {sheet === 'target' && <BottomSheet title="Мишень" onClose={() => setSheet(null)} tag="target-profile-sheet">
       <div className="target-profile-list">
         {TARGET_PROFILES.map(candidate => <button type="button" key={candidate.id} className="target-profile-option"
           data-testid={`target-profile-${candidate.id}`} aria-pressed={candidate.id === profileId} onClick={() => {
             setProfileId(candidate.id);
-            if (!acceptsDiameter(candidate, mm)) setDiameter(String((candidate.diameters[0] ?? mm) / 10));
+            markTouched('targetProfileId');
+            if (!acceptsDiameter(candidate, mm)) {
+              setDiameter(String((candidate.diameters[0] ?? mm) / 10));
+              markTouched('targetDiameterMm');
+            }
             setSheet(null);
           }}>
           <TargetPreview profileId={candidate.id} />

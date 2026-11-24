@@ -47,7 +47,7 @@ export function ProgressExport({ entries, period, onClose }: { entries: readonly
       setError(cause instanceof Error ? cause.message : 'Не удалось подготовить отчёт.');
     } finally { setBusy(false); }
   }
-  return <BottomSheet title="Отчёт по выборке" tag="progress-export" onClose={() => { if (!busy) onClose(); }}>
+  return <BottomSheet title="Отчёт по выборке" tag="progress-export" onClose={onClose} onDismissRequest={() => !busy}>
     <p>Выбрано тренировок: {entries.length}. В отчёт войдут все условия этих тренировок.</p>
     <div className="report-export-actions" role="group" aria-label="Формат отчёта">
       {formats.map(item => <button type="button" key={item.id} aria-pressed={format === item.id}

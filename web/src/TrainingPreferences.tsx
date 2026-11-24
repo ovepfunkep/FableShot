@@ -1,13 +1,11 @@
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, DEFAULT_SHOT_MOTION_STYLE, LENS_ZOOM_SETTING, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
+import { AIM_SPEED_SETTING, DEFAULT_PREFERENCES, LENS_ZOOM_SETTING, loadPreferences, RECENT_PRACTICE_LIMIT, savePreferences } from './preferences.ts';
 import type { TrainingPreferences } from './preferences.ts';
 import { useWebTheme } from './web-theme.ts';
 import { Capacitor } from '@capacitor/core';
 import { setTrainingWindowActive } from './native-training-window.ts';
 import { supportsAppScale, useNativeAppScale } from './native-app-scale.ts';
-import { CleanSeriesPreview, ShotFace, SHOT_MOTION_STYLES } from './ShotMotion.tsx';
-import { zoneColor } from './target.ts';
 import './training-preferences.css';
 
 type PreferencesState = { preferences: TrainingPreferences; error: string; readable: boolean; update: (value: TrainingPreferences) => Promise<boolean> };
@@ -84,6 +82,10 @@ export function RecentPracticeLimitControl() {
 }
 
 const switches = [
+  { key: 'colorTrainingBorders', title: 'Цветные обводки тренировок', tag: 'setting-color-training-borders',
+    hint: 'Цвета обводки отражают доли попаданий по зонам.' },
+  { key: 'maximumSpread', title: 'Максимальный разброс', tag: 'setting-maximum-spread',
+    hint: 'Показывает расстояние между двумя самыми далёкими попаданиями. При выключении отображается разброс RMS — среднеквадратичное расстояние от попаданий до центра группы.' },
   { key: 'showAchievementsDuringInput', title: 'Достижения во время ввода', tag: 'setting-achievements-during-input',
     hint: 'Показывает всплывающие достижения при отметке попаданий и редактировании серии. При отключении уведомления появятся после выхода из ввода. Достижения сохраняются в профиле и статистике.' },
   { key: 'realArrowDiameter', title: 'Реальный диаметр стрел', tag: 'setting-real-arrow-diameter', subtitle: 'Если указан диаметр стрелы в снаряжении',
@@ -119,36 +121,9 @@ export function LensControls({ preview }: { preview?: ReactNode }) {
   </div>;
 }
 
-export function ShotMotionControl() {
-  const { preferences, update, error, readable } = useTrainingPreferences();
-  const [demo, setDemo] = useState<{ points: number | null; id: number }>({ points: 10, id: 0 });
-  const style = preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE;
-  const canPreview = readable && preferences.animations;
-  return <div className="shot-motion-settings">
-    <strong>Анимация попаданий</strong>
-    <div className="shot-motion-selector" role="group" aria-label="Стиль анимации попаданий">
-      {SHOT_MOTION_STYLES.map(option => <button key={option.id} type="button" disabled={!canPreview}
-        aria-pressed={style === option.id} onClick={async () => {
-          if (await update({ ...preferences, shotMotionStyle: option.id })) setDemo(previous => ({ points: 10, id: previous.id + 1 }));
-        }}>{option.label}</button>)}
-    </div>
-    <div className="shot-motion-preview" aria-hidden="true">
-      {canPreview && demo.points === null ? <CleanSeriesPreview key={demo.id} /> : <div className="shot-motion-demo">
-        <ShotFace key={`${style}:${demo.id}`} points={canPreview && demo.id > 0 ? demo.points ?? undefined : undefined} style={style}
-          background={zoneColor(demo.points ?? 10)} color="#111811">{demo.points ?? 10}</ShotFace>
-      </div>}
-    </div>
-    <div className="shot-motion-demo-options" role="group" aria-label="Проверить анимацию">
-      {[5, 7, 9, 10].map(points => <button type="button" key={points} disabled={!canPreview}
-        aria-label={`Показать анимацию для оценки ${points}`} onClick={() => setDemo(previous => ({ points, id: previous.id + 1 }))}>{points}</button>)}
-      <button type="button" disabled={!canPreview}
-        onClick={() => setDemo(previous => ({ points: null, id: previous.id + 1 }))}>Чистая серия</button>
-    </div>
-    {error && <p className="preferences-error" role="alert">{error}</p>}
-  </div>;
-}
-
-export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof switches)[number]['key'][] } = {}) {
+export function TrainingPreferenceControls({ keys, onEnableHundredths }: {
+  keys?: readonly (typeof switches)[number]['key'][]; onEnableHundredths?: () => void;
+} = {}) {
   const { preferences, update, error } = useTrainingPreferences();
   const [help, setHelp] = useState<(typeof switches)[number] | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -157,15 +132,17 @@ export function TrainingPreferenceControls({ keys }: { keys?: readonly (typeof s
     {switches.filter(item => (!keys || keys.includes(item.key)) &&
       (item.key !== 'trainingOnLockScreen' || Capacitor.getPlatform() === 'android') &&
       (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale())) &&
-      (item.key !== 'realArrowDiameter' || keys?.includes(item.key))).map(item => {
-      const checked = preferences[item.key] ?? (item.key !== 'useSystemScale' && item.key !== 'realArrowDiameter');
+      (!['realArrowDiameter', 'maximumSpread', 'colorTrainingBorders'].includes(item.key) || keys?.includes(item.key))).map(item => {
+      const checked = preferences[item.key] ?? !['useSystemScale', 'realArrowDiameter', 'maximumSpread', 'colorTrainingBorders'].includes(item.key);
       return <div key={item.key} className="preference-row preference-row--with-help">
         <span className="preference-title">{item.title}
           {'subtitle' in item && <small className="preference-subtitle">{item.subtitle}</small>}
         </span>
         <button type="button" className="preference-help" aria-label={`О настройке «${item.title}»`} onClick={() => setHelp(item)}>?</button>
         <button type="button" role="switch" className="preference-switch" aria-label={item.title} aria-checked={checked}
-          data-testid={item.tag} disabled={!!error} onClick={() => update({ ...preferences, [item.key]: !checked })}><span /></button>
+          data-testid={item.tag} disabled={!!error} onClick={async () => {
+            if (await update({ ...preferences, [item.key]: !checked }) && item.key === 'averageHundredths' && !checked) onEnableHundredths?.();
+          }}><span /></button>
       </div>;
     })}
     {error && <p className="preferences-error" role="alert">{error}</p>}

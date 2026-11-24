@@ -1,10 +1,12 @@
-import type { Shot } from './target.ts';
+import type { Shot, TargetSpot } from './target.ts';
+import { getTargetProfile, isOnFace, isInMissRing, markTargetPoint } from './target.ts';
 import { DEFAULT_CONDITIONS, DEFAULT_ROUND_RULE, MAX_SERIES_ARROWS, isConditions, isRoundRule } from './conditions.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
 import type { TechniqueSelection } from './technique.ts';
 import type { TechniqueReflections } from './technique-reflection.ts';
 import { validNumberedCount } from './equipment.ts';
 import type { ProgressBaseline } from './progress-scoring.ts';
+import { progressConditionKey } from './progress-scoring.ts';
 
 export type Series = { id: number; shots: Shot[]; conditions: Conditions; plannedCount?: number; progressBaselineId?: number };
 export type Round = { id: number; series: Series[] };
@@ -143,7 +145,8 @@ export function replaceShot(practice: Practice, seriesId: number, index: number,
   if (!target?.series.shots[index] || target.series.shots[index] === shot) return practice;
   validateArrowNumber(target.series, index, shot.physicalArrowNumber);
   const shots = [...target.series.shots];
-  shots[index] = shot;
+  const originalMark = shots[index].originalMark;
+  shots[index] = originalMark && !shot.originalMark ? { ...shot, originalMark } : shot;
   return updateSeries(practice, target, shots);
 }
 
@@ -188,6 +191,100 @@ export function applyConditions(practice: Practice, conditions: Conditions, rule
       }) } : round) };
   }
   return isRoundFull(next) ? openRound(next, conditions, null) : openSeries(next, conditions, null);
+}
+
+type CorrectionChoice = { key: string; label: string; codes: readonly string[]; inOrder?: TargetSpot };
+export class ConditionsCorrectionReview extends Error {
+  readonly choices: readonly CorrectionChoice[];
+  constructor(choices: readonly CorrectionChoice[]) {
+    super('Проверь сопоставление попаданий с новой мишенью.');
+    this.choices = choices;
+  }
+}
+
+export function preparePracticeConditionsCorrection(practice: Practice, patch: Partial<Conditions>, answers: Readonly<Record<string, string>> = {}) {
+  const changedSeriesIds: number[] = [];
+  const choices: CorrectionChoice[] = [];
+  let before = 0, after = 0, preservedScores = 0;
+  const rounds = practice.rounds.map((round, roundIndex) => ({ ...round, series: round.series.map((series, seriesIndex) => {
+    const label = `Раунд ${roundIndex + 1} · серия ${seriesIndex + 1}`;
+    const previous = series.conditions;
+    const conditions = { ...previous, ...patch };
+    if (!isConditions(conditions)) throw new Error(`${label}. Диаметр должен подходить выбранной мишени.`);
+    for (const shot of series.shots) before += shot.points;
+    if (JSON.stringify(conditions) === JSON.stringify(previous)) {
+      for (const shot of series.shots) after += shot.points;
+      return series;
+    }
+    const profile = getTargetProfile(conditions.targetProfileId)!;
+    const spec = { profileId: profile.id, diameterMm: conditions.targetDiameterMm,
+      shaftDiameterMm: conditions.equipment?.arrows.diameterMm ?? 6 };
+    const geometryChanged = spec.profileId !== previous.targetProfileId || spec.diameterMm !== previous.targetDiameterMm ||
+      spec.shaftDiameterMm !== (previous.equipment?.arrows.diameterMm ?? 6);
+    const oldProfile = getTargetProfile(previous.targetProfileId)!;
+    const shots = geometryChanged ? series.shots.map((shot, index) => {
+      const point = shot.point ?? shot.missPoint;
+      const arrow = `${label} · стрела ${index + 1}`;
+      const origin = shot.originalMark ?? { profileId: oldProfile.id, diameterMm: previous.targetDiameterMm,
+        point: shot.point, missPoint: shot.missPoint, spot: shot.spot, code: shot.code, points: shot.points };
+      const topologyChanged = !!profile.vertical !== !!oldProfile.vertical;
+      const relocate = !!point && topologyChanged;
+      let spot = shot.spot;
+      if (relocate && profile.vertical) {
+        const key = `spot-${series.id}-${index}`;
+        const value = answers[key];
+        if (value !== '1' && value !== '2' && value !== '3') {
+          choices.push({ key, label: `${arrow} · пятно`, codes: ['1', '2', '3'],
+            ...(series.shots.length === 3 && { inOrder: index as TargetSpot }) });
+          return shot;
+        }
+        spot = (Number(value) - 1) as TargetSpot;
+      } else if (relocate) {
+        if (answers['merge-spots'] !== 'Перенести') {
+          if (!choices.some(choice => choice.key === 'merge-spots')) choices.push({ key: 'merge-spots',
+            label: 'Перенос попаданий с центров трёх пятен на общую мишень', codes: ['Перенести'] });
+          return shot;
+        }
+        spot = undefined;
+      }
+      if (shot.imported || !point) {
+        if ((shot.points && !profile.zones.some(zone => zone.code === shot.code)) ||
+          (shot.point && !isOnFace(shot.point, spec)) || (shot.missPoint && !isInMissRing(shot.missPoint, spec))) {
+          const key = `score-${series.id}-${index}`;
+          const codes = ['M', ...profile.zones.map(zone => zone.code)];
+          const code = answers[key];
+          if (!codes.includes(code)) {
+            choices.push({ key, label: `${arrow} · оценка была ${shot.code}`, codes });
+            return shot;
+          }
+          const { missPoint: _miss, ...original } = shot;
+          return { ...original, point: null, code, points: profile.zones.find(zone => zone.code === code)?.points ?? 0,
+            spot: undefined, originalMark: origin };
+        }
+        preservedScores++;
+        return topologyChanged ? { ...shot, spot: profile.vertical ? spot : undefined, originalMark: origin } : shot;
+      }
+      const marked = markTargetPoint(point, spec);
+      if (!marked) {
+        const key = `score-${series.id}-${index}`;
+        if (answers[key] !== 'M') {
+          choices.push({ key, label: `${arrow} · вне новой мишени`, codes: ['M'] });
+          return shot;
+        }
+      }
+      const { point: _point, missPoint: _miss, ...original } = shot;
+      return { ...original, ...(marked ?? { point: null, code: 'M', points: 0 }),
+        spot: marked ? spot : undefined, originalMark: origin };
+    }) : series.shots;
+    for (const shot of shots) after += shot.points;
+    changedSeriesIds.push(series.id);
+    const baseline = practice.progressBaselines?.[series.progressBaselineId ?? ''];
+    const { progressBaselineId, ...rest } = series;
+    return { ...rest, conditions, shots, ...(baseline?.conditionKey === progressConditionKey(conditions) && { progressBaselineId }) };
+  }) }));
+  if (choices.length) throw new ConditionsCorrectionReview(choices);
+  return { practice: changedSeriesIds.length ? { ...practice, rounds } : practice,
+    changedSeriesIds, preview: { before, after, preservedScores } };
 }
 
 export function completePractice(practice: Practice, savedAt: string): Practice {

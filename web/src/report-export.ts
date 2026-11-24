@@ -1,6 +1,6 @@
 import { conditionsKey, practiceCompositeGroups, calculateCompositeScore, displayCompositeScore } from './composite-scoring.ts';
-import { exerciseRank } from './exercise-rank.ts';
-import { hitGeometry } from './hit-map.ts';
+import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
+import { hitGeometry, maximumSpread } from './hit-map.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { formatAverage } from './preferences.ts';
 import type { RankCategory } from './sport-ranks.ts';
@@ -83,7 +83,7 @@ function appendCsvRows(entry: DiaryEntry, rows: string[]) {
 }
 
 export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null, hundredths: boolean,
-  details: { grants?: readonly AchievementGrant[]; disabledStatistics?: readonly StatisticFeature[] } = {}) {
+  details: { grants?: readonly AchievementGrant[]; disabledStatistics?: readonly StatisticFeature[]; maximumSpread?: boolean } = {}) {
   const practice = entry.practice;
   const rounds = practice.rounds.flatMap((round, r) => {
     const series = round.series.flatMap((series, s) => series.shots.length ? [{ ...series, number: s + 1 }] : []);
@@ -107,7 +107,9 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
         practice.savedAt === null ? currentSeries(practice)?.series.id : undefined);
       return result ? [result] : [];
     });
-    return { conditions: condition, result: summarize(shots), geometry: hitGeometry(shots, condition.targetDiameterMm),
+    const geometry = hitGeometry(shots, condition.targetDiameterMm);
+    return { conditions: condition, result: summarize(shots), geometry,
+      spread: details.maximumSpread ? maximumSpread(shots, condition.targetDiameterMm) : geometry?.rmsMm ?? null,
       composite: group ? calculateCompositeScore(group.ends, group.ends.length, group.maximumPerArrow, group.geometryVerified) : null,
       progress, shots, series: series.map(series => summarize(series.shots)),
       distribution: Array.from({ length: 11 }, (_, zone) => shots.filter(shot => shot.points === zone).length) };
@@ -116,13 +118,15 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
     ? calculateCompositeScore(groups[0].ends, groups[0].ends.length, groups[0].maximumPerArrow, groups[0].geometryVerified) : null;
   const result = summarize(shots);
   const geometry = conditions.length === 1 ? hitGeometry(shots, conditions[0].targetDiameterMm) : null;
+  const spread = details.maximumSpread && conditions.length === 1 ? maximumSpread(shots, conditions[0].targetDiameterMm)
+    : geometry?.rmsMm ?? null;
   const final = rank.finalResult ? rank.evaluation : null;
   const lower = final?.result;
   const upper = final?.next;
   const duration = entry.trainingTime ? elapsedTrainingTime(entry.trainingTime, Date.now()) : null;
   const focus = practice.techniqueUses?.at(-1)?.selection;
   return { entryId: entry.id, startedAt: entry.startedAt, completed: practice.savedAt !== null, rounds, result, analysis,
-    title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank,
+    title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank, rankDisplay: exerciseRankDisplay(rank),
     duration: duration === null ? null : `${formatTrainingTime(duration)}${entry.trainingTime?.partial ? ' · учтённое время' : ''}`,
     focus: [focus?.focus1, focus?.focus2].filter((value): value is string => !!value),
     records: entry.personalRecords ?? [], achievements: groupAchievementGrants(details.grants ?? []),
@@ -137,7 +141,8 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
       lowerScore: lower?.score ?? 0, upperScore: upper?.score ?? final.exercise.arrows * 10, points: final.points,
     } : null,
     composite: composite?.total === undefined ? null : displayCompositeScore(composite.total),
-    grouping: geometry?.rmsMm == null ? null : `${formatAverage(geometry.rmsMm, hundredths)} мм`,
+    grouping: spread == null ? null : `${formatAverage(spread, hundredths)} мм`,
+    spreadLabel: details.maximumSpread ? 'МАКС. РАЗБРОС' : 'РАЗБРОС RMS',
   };
 }
 

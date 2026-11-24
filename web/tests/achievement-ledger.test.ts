@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { earnAchievements, groupAchievementGrants, isAchievementEnrollment, isAchievementLedger, queueAchievementGrants, recentAchievementNotices } from '../src/achievement-ledger.ts';
+import { earnAchievements, groupAchievementGrants, isAchievementEnrollment, isAchievementLedger, recentAchievementNotices } from '../src/achievement-ledger.ts';
 import type { AchievementLedger } from '../src/achievement-ledger.ts';
 
 const earnedAt = '2026-11-11T10:00:00.000Z';
@@ -9,24 +9,25 @@ const ledger = (): AchievementLedger => ({ epoch: 'epoch-one', grants: [] });
 test('reloading replays only recent unannounced grants, never old or already displayed awards', () => {
   const nowMs = Date.parse(earnedAt);
   const grants = [
-    { id: 'START01', scope: 'global', earnedAt },
-    { id: 'START02', scope: 'recurve', earnedAt, notifiedAt: earnedAt },
+    { id: 'START01', scope: 'global', earnedAt, noticeMoment: 'current' },
+    { id: 'START02', scope: 'recurve', earnedAt, notifiedAt: earnedAt, noticeMoment: 'already-seen' },
     { id: 'START03', scope: 'recurve', earnedAt: new Date(nowMs - 10_001).toISOString() },
     { id: 'HIT01', scope: 'recurve', earnedAt: new Date(nowMs + 1).toISOString() },
   ];
-  assert.deepEqual(recentAchievementNotices({ ...ledger(), grants }, nowMs).map(group => group.leading.id), ['START01']);
+  assert.deepEqual(recentAchievementNotices({ ...ledger(), grants }, nowMs).map(moment => moment.grants.map(grant => grant.id)), [['START01']]);
   assert.equal(isAchievementLedger({ ...ledger(), grants: [{ ...grants[0], notifiedAt: 'bad' }] }), false);
+  assert.equal(isAchievementLedger({ ...ledger(), grants: [{ ...grants[0], noticeMoment: '' }] }), false);
 });
 
-test('waiting notices merge new tiers in the same family while retaining every earned tier once', () => {
-  const first = { id: 'START02', scope: 'recurve', earnedAt };
-  const better = { id: 'HIT01', scope: 'recurve', earnedAt };
-  const other = { id: 'START01', scope: 'global', earnedAt };
-  const queue = queueAchievementGrants(groupAchievementGrants([first, other]), [first, better]);
-  assert.equal(queue.length, 2);
-  const group = queue.find(item => item.leading.id === 'HIT01')!;
-  assert.deepEqual(group.additional, [first]);
-  assert.equal(queue.flatMap(item => [item.leading, ...item.additional]).length, 3);
+test('reloading preserves the boundaries of separate actions and retains earlier shown pages of the same moment', () => {
+  const first = { id: 'START02', scope: 'recurve', earnedAt, noticeMoment: 'first-arrow' };
+  const better = { id: 'HIT01', scope: 'recurve', earnedAt, noticeMoment: 'close-series', notifiedAt: earnedAt };
+  const other = { id: 'START03', scope: 'recurve', earnedAt, noticeMoment: 'close-series' };
+  const queue = recentAchievementNotices({ ...ledger(), grants: [first, better, other] }, Date.parse(earnedAt));
+  assert.deepEqual(queue, [
+    { id: 'first-arrow', grants: [first] },
+    { id: 'close-series', grants: [better, other] },
+  ]);
 });
 
 test('earning requires a supported rule, the correct scope and a finite reached threshold', () => {

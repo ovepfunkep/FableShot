@@ -195,7 +195,7 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
       <SettingsAction icon="delete" tone="danger" aria-haspopup="dialog" disabled={busy} data-testid="account-reset" onClick={() => setConfirm('reset')}>Обнулить профиль</SettingsAction>
     </div>
     {confirm && <BottomSheet title={confirm === 'reset' ? 'Обнулить профиль?' : 'Заменить текущий дневник?'}
-      onClose={() => { if (!running.current) setConfirm(null); }} tag="archive-confirm">
+      onClose={() => setConfirm(null)} onDismissRequest={() => !running.current} tag="archive-confirm">
       <p>{confirm === 'reset' ? 'Тренировки, снаряжение, памятки и настройки будут сброшены. Сначала сохранится архив; локальная копия также останется для восстановления.'
         : 'Текущие данные заменятся выбранной копией. Перед заменой сохранится локальная резервная копия текущего дневника.'}</p>
       {error && <p role="alert">{error}</p>}

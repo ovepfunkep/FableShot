@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HIT_MAP_GRID_SIZE, hitDensity, hitGeometry, hitMapLimit, knownHitPoints } from '../src/hit-map.ts';
+import { HIT_MAP_GRID_SIZE, hitDensity, hitGeometry, hitMapLimit, knownHitPoints, maximumSpread } from '../src/hit-map.ts';
 import type { Shot } from '../src/target.ts';
+
+test('maximum spread uses the furthest scored pair and handles a large repeated group', () => {
+  const hits = [{ x: 0, y: 0 }, { x: .3, y: 0 }, { x: 0, y: .4 }]
+    .map(point => ({ code: '8', points: 8, point }));
+  assert.equal(maximumSpread(hits.slice(0, 1), 400), null);
+  assert.equal(maximumSpread([hits[0], hits[0]], 400), 0);
+  assert.equal(maximumSpread([...hits, { code: 'M', points: 0, point: { x: 1, y: 1 } }], 400), 100);
+  assert.equal(maximumSpread(Array.from({ length: 100 }, () => hits).flat(), 400), 100);
+});
 
 test('geometry uses the shot centres, the physical radius and RMS around the centroid', () => {
   const shots: Shot[] = [

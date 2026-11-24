@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { bowCategoryName } from './equipment.ts';
 import { formatAverage } from './preferences.ts';
 import { RANK_CATEGORIES, RANK_DOCUMENT, RANK_LABELS, RANK_REFERENCE, RANK_SOURCE } from './sport-ranks.ts';
-import type { RankBow, RankCategory, RankGroup, StageRank } from './sport-ranks.ts';
+import type { RankBow, RankCategory, RankEvaluation, RankGroup, StageRank } from './sport-ranks.ts';
 import { getTargetProfile } from './target.ts';
 import { ExerciseThresholdTable } from './ExerciseThresholdTable.tsx';
 import './sport-ranks.css';
@@ -64,8 +64,8 @@ function RankSource() {
   </div>;
 }
 
-export function RankDetails({ rank, onClose, onOpenReference, onCategory }: {
-  rank: StageRank; onClose: () => void; onOpenReference: () => void; onCategory?: (category: RankCategory) => void;
+export function RankDetails({ rank, forecast, onClose, onOpenReference, onCategory }: {
+  rank: StageRank; forecast?: RankEvaluation | null; onClose: () => void; onOpenReference: () => void; onCategory?: (category: RankCategory) => void;
 }) {
   const [changingCategory, setChangingCategory] = useState(false);
   const { evaluation, conditions } = rank;
@@ -77,6 +77,7 @@ export function RankDetails({ rank, onClose, onOpenReference, onCategory }: {
             <h3 data-testid="rank-headline"><RankMedal />{rank.label ?? '—'}</h3></div>
           <div className="rank-summary-average"><span>Средний балл</span><strong>{formatAverage(evaluation.entered ? evaluation.points / evaluation.entered : null, true)}</strong></div>
         </div>
+        {forecast?.pace && <p>Темп {forecast.pace.label} · сетка на {forecast.exercise.arrows} стрел</p>}
         <dl className="rank-context">
           <div><dt>Лук</dt><dd>{bowCategoryName(evaluation.exercise.bow)}</dd></div>
           <div><dt>Дистанция</dt><dd>{evaluation.exercise.distance} м</dd></div>
