@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pendingWebReleases } from './web-releases.ts';
+import { releasePush, releasePushSupported } from './release-push.ts';
 
 const repository = 'ovepfunkep/FableShot';
 const downloadRoot = `https://github.com/${repository}/releases/download/`;
@@ -58,6 +59,7 @@ export function useAndroidUpdates(homeActive: boolean) {
   const [status, setStatus] = useState('');
   const [checking, setChecking] = useState(false);
   const [dismissed, setDismissed] = useState(0);
+  const [pushCode, setPushCode] = useState(0);
   const pending = useRef<Promise<AndroidUpdate | null> | null>(null);
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export function useAndroidUpdates(homeActive: boolean) {
     try {
       const next = await request;
       if (manual) setStatus(next ? '' : 'Обновлений для Android пока нет.');
+      return next;
     } catch {
       if (manual) setStatus('Не удалось проверить обновления. Попробуй позже.');
     } finally {
@@ -94,11 +97,27 @@ export function useAndroidUpdates(homeActive: boolean) {
 
   useEffect(() => {
     if (installed === null || !homeActive) return;
-    const automatic = () => { if (document.visibilityState === 'visible') void check(false); };
-    automatic();
+    const installedCode = installed;
+    let active = true;
+    async function automatic() {
+      if (document.visibilityState !== 'visible') return;
+      const verification = check(false);
+      if (!releasePushSupported()) { await verification; return; }
+      try {
+        const { code } = await releasePush.pendingRelease();
+        if (code <= 0 || !active) return;
+        if (code <= installedCode) { await releasePush.acknowledge({ code }); return; }
+        const verified = await verification;
+        if (active && verified && verified.code >= code) { setDismissed(0); setPushCode(code); }
+      } catch { /* The ordinary GitHub check still works when the native bridge is unavailable. */ }
+    }
+    void automatic();
+    window.addEventListener('fableshot-release-push', automatic);
     window.addEventListener('online', automatic);
     document.addEventListener('visibilitychange', automatic);
     return () => {
+      active = false;
+      window.removeEventListener('fableshot-release-push', automatic);
       window.removeEventListener('online', automatic);
       document.removeEventListener('visibilitychange', automatic);
     };
@@ -110,6 +129,13 @@ export function useAndroidUpdates(homeActive: boolean) {
     catch { return false; }
   }
 
+  function closePushDetails() {
+    const code = pushCode;
+    setPushCode(0);
+    if (code) void releasePush.acknowledge({ code }).catch(() => {});
+  }
+
   return { available: installed !== null, installed, update, status, checking, check: () => void check(true), download,
-    announce: !!update && update.code !== dismissed, dismiss: () => setDismissed(update?.code ?? 0) };
+    showPushDetails: pushCode > 0 && !!update && update.code >= pushCode, closePushDetails,
+    announce: !!update && update.code !== dismissed, dismiss: () => { closePushDetails(); setDismissed(update?.code ?? 0); } };
 }

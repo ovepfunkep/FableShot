@@ -2,7 +2,8 @@ param(
     [string] $JdkHome = $env:JAVA_HOME,
     [switch] $Offline,
     [switch] $Release,
-    [string] $Keystore
+    [string] $Keystore,
+    [string] $FirebaseConfig
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,7 @@ $repoRoot = Split-Path -Parent $webRoot
 $toolchain = Get-Content -Raw -LiteralPath (Join-Path $repoRoot '.tools/android-toolchain.json') | ConvertFrom-Json
 $toolchainRoot = [IO.Path]::GetFullPath($toolchain.ToolchainRoot)
 $mirrorName = if ($Release) { 'release-apk-web' } else { 'pilot-apk-web' }
+if ($FirebaseConfig) { $mirrorName += '-push' }
 $mirror = [IO.Path]::GetFullPath((Join-Path $toolchainRoot $mirrorName))
 if (!$mirror.StartsWith($toolchainRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
     $mirror -match '[^\x00-\x7F]' -or $mirror -eq $webRoot) {
@@ -61,6 +63,13 @@ if ($Release) {
     $capConfig.appId = 'app.fableshot.android.react'
     $capConfig.appName = 'FableShot'
 }
+if ($FirebaseConfig) {
+    $FirebaseConfig = (Resolve-Path -LiteralPath $FirebaseConfig).Path
+    $firebase = Get-Content -Raw -LiteralPath $FirebaseConfig | ConvertFrom-Json
+    if (!($firebase.client | Where-Object { $_.client_info.android_client_info.package_name -eq $capConfig.appId })) {
+        throw 'Firebase configuration does not contain the Android application ID for this build.'
+    }
+}
 
 New-Item -ItemType Directory -Path $mirror -Force | Out-Null
 foreach ($dir in @('node_modules', 'dist')) {
@@ -103,10 +112,15 @@ try {
 $nativeSource = Join-Path $webRoot 'native/android'
 $nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.Replace('.', '/'))
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
-foreach ($file in @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java', 'LocalRoomSeriesStore.java')) {
+$nativeFiles = @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java', 'LocalRoomSeriesStore.java')
+if ($FirebaseConfig) { $nativeFiles += 'ReleasePushPlugin.java' }
+foreach ($file in $nativeFiles) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
     $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")
+    if ($FirebaseConfig -and $file -eq 'MainActivity.java') {
+        $java = $java.Replace('registerPlugin(AndroidUpdatesPlugin.class);', "registerPlugin(AndroidUpdatesPlugin.class);`n        registerPlugin(ReleasePushPlugin.class);")
+    }
     [IO.File]::WriteAllText((Join-Path $nativeDestination $file), $java, $utf8)
 }
 
@@ -126,6 +140,15 @@ $appGradlePath = Join-Path $shell 'app/build.gradle'
 $appGradle = [IO.File]::ReadAllText($appGradlePath)
 $appGradle = $appGradle -replace '(?m)^[ \t]*versionName "[^"]+"', ('        versionName "' + $package.version + '"')
 $appGradle = $appGradle -replace '(?m)^[ \t]*versionCode \d+', ('        versionCode ' + $versionCode)
+if ($FirebaseConfig) {
+    Copy-Item -LiteralPath $FirebaseConfig -Destination (Join-Path $shell 'app/google-services.json') -Force
+    if (!$appGradle.Contains('com.google.firebase:firebase-messaging')) {
+        $appGradle += "`ndependencies { implementation 'com.google.firebase:firebase-messaging:25.1.3' }`n"
+    }
+    if (!$appGradle.Contains('com.google.android.gms:play-services-base')) {
+        $appGradle += "`ndependencies { implementation 'com.google.android.gms:play-services-base:18.9.0' }`n"
+    }
+}
 [IO.File]::WriteAllText($appGradlePath, $appGradle, $utf8)
 
 $iconDirectory = Join-Path $shell 'app/src/main/res/drawable-nodpi'
@@ -144,6 +167,20 @@ foreach ($permission in @('CAMERA', 'ACCESS_NETWORK_STATE')) {
 }
 if (!$manifest.Contains('android.hardware.camera')) {
     $manifest = $manifest.Replace('</manifest>', "    <uses-feature android:name=`"android.hardware.camera`" android:required=`"false`" />`n</manifest>")
+}
+if ($FirebaseConfig -and !$manifest.Contains('.ReleasePushPlugin$MessageService')) {
+    $manifest = $manifest.Replace('</application>', @'
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <service android:name=".ReleasePushPlugin$MessageService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+    </application>
+'@)
+    $manifest = $manifest.Replace('</manifest>', "    <uses-permission android:name=`"android.permission.POST_NOTIFICATIONS`" />`n</manifest>")
+    $drawable = Join-Path $shell 'app/src/main/res/drawable'
+    New-Item -ItemType Directory -Force -Path $drawable | Out-Null
+    Copy-Item -LiteralPath (Join-Path $nativeSource 'fableshot_update_notification.xml') -Destination $drawable -Force
 }
 [IO.File]::WriteAllText($manifestPath, $manifest, $utf8)
 

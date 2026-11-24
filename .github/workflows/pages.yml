@@ -102,3 +102,35 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/releases/latest" |
             jq -e --arg tag "$TAG" --arg apk "FableShot-android-$CODE.apk" '
               .tag_name == $tag and any(.assets[]; .name == $apk and .state == "uploaded")'
+  announce-android:
+    needs: [verify, publish-android]
+    if: ${{ vars.FABLESHOT_FCM_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Get short-lived FCM credentials
+        id: fcm-auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.FABLESHOT_FCM_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FABLESHOT_FCM_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+          create_credentials_file: false
+      - name: Announce the published release to Android subscribers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+          RELEASE_CODE: ${{ needs.verify.outputs.code }}
+          FCM_PROJECT_ID: ${{ vars.FABLESHOT_FCM_PROJECT_ID }}
+          FCM_ACCESS_TOKEN: ${{ steps.fcm-auth.outputs.access_token }}
+        run: node web/scripts/send-release-push.mjs

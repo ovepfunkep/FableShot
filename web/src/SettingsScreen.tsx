@@ -8,6 +8,7 @@ const sections = [
   { id: 'training', title: 'Тренировка', icon: 'target' },
   { id: 'statistics', title: 'Статистика', icon: 'stats' },
   { id: 'data', title: 'Данные и перенос', icon: 'download' },
+  { id: 'notifications', title: 'Уведомления', icon: 'bell' },
   { id: 'help', title: 'Помощь', icon: 'help' },
   { id: 'about', title: 'О приложении', icon: 'about' },
 ] as const;
@@ -24,6 +25,7 @@ const paths = {
   send: 'm3 10 18-6-5 16-4-6-4 3 1-6m3 3 5-6',
   heart: 'M12 21 4 13a5 5 0 1 1 8-6 5 5 0 1 1 8 6Z',
   external: 'M13 4h7v7m0-7-9 9m6 0v7H4V7h7',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 5-2 6-2 8h16c0-2-2-3-2-8m-8 12a2 2 0 0 0 4 0',
 } as const;
 type CustomIcon = keyof typeof paths;
 type SettingsIcon = CustomIcon | ComponentProps<typeof Icon>['name'];
@@ -50,7 +52,7 @@ export function SettingsAction({ icon, children, tone, ...props }: {
   return <button type="button" className="settings-entry" data-tone={tone} {...props}>{content}</button>;
 }
 
-export function SettingsScreen({ section, onSection, onBack, appearance, motion, training, statistics, data, help, about, children }: {
+export function SettingsScreen({ section, onSection, onBack, appearance, motion, training, statistics, data, notifications, help, about, children }: {
   section: SettingsSection | null;
   onSection: (section: SettingsSection | null) => void;
   onBack: () => void;
@@ -59,12 +61,13 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
   training: ReactNode;
   statistics: ReactNode;
   data: ReactNode;
+  notifications?: ReactNode;
   help: ReactNode;
   about: ReactNode;
   children?: ReactNode;
 }) {
   const selected = sections.find(item => item.id === section);
-  const content = { appearance, motion, training, statistics, data, help, about };
+  const content = { appearance, motion, training, statistics, data, notifications, help, about };
   return <main className="conditions-page settings-page" data-testid="settings-screen" data-section={section ?? 'root'}>
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={() => section ? onSection(null) : onBack()}><Icon name="back" /></button>
@@ -73,7 +76,7 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
     </header>
     <div className="conditions-content settings-content" key={section ?? 'root'}>
       {section ? content[section] : <nav className="settings-entries" aria-label="Разделы настроек">
-        {sections.map(item => <SettingsAction key={item.id} icon={item.icon} data-testid={`settings-${item.id}`}
+        {sections.filter(item => item.id !== 'notifications' || notifications).map(item => <SettingsAction key={item.id} icon={item.icon} data-testid={`settings-${item.id}`}
           onClick={() => onSection(item.id)}>{item.title}</SettingsAction>)}
       </nav>}
     </div>

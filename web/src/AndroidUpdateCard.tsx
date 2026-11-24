@@ -48,8 +48,8 @@ export function AndroidUpdateCard({ updates, manual = false }: { updates: Return
           onClick={updates.dismiss}><Icon name="close" /></button>}
       </div>
       {downloadError && <small role="status">Не удалось открыть загрузку APK.</small>}
-      {detailsOpen && updates.installed !== null && <AndroidUpdateDetails key={updates.update.code}
-        installed={updates.installed} update={updates.update} onClose={() => setDetailsOpen(false)} />}
+      {(detailsOpen || !manual && updates.showPushDetails) && updates.installed !== null && <AndroidUpdateDetails key={updates.update.code}
+        installed={updates.installed} update={updates.update} onClose={() => { setDetailsOpen(false); if (!manual) updates.closePushDetails(); }} />}
     </>}
     {manual && <button type="button" className="technique-condition-link motion-status" data-busy={updates.checking ? 'true' : undefined}
       disabled={updates.checking} onClick={updates.check}>Проверить обновления</button>}

@@ -29,6 +29,8 @@ import { EquipmentCatalog } from './EquipmentCatalog.tsx';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { WebReleaseNotes } from './WebReleaseNotes.tsx';
 import { AboutScreen } from './AboutScreen.tsx';
+import { ReleasePushSettings } from './ReleasePushSettings.tsx';
+import { releasePushSupported } from './release-push.ts';
 import { WebOnboarding } from './WebOnboarding.tsx';
 import type { OnboardingChapter } from './WebOnboarding.tsx';
 import { WebThemeSettings } from './WebThemeSettings.tsx';
@@ -1080,6 +1082,7 @@ function App() {
       <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialChapter('target')}>Как отмечать попадания</SettingsAction>
       <SettingsAction icon="stats" data-testid="help-report-tutorial" onClick={() => setTutorialChapter('report')}>Как читать статистику</SettingsAction>
     </div>}
+    notifications={releasePushSupported() ? <ReleasePushSettings /> : undefined}
     about={<AboutScreen onReleaseNotes={() => setReleaseHistoryOpen(true)} updates={androidUpdates} />}>
     {offlineLabel}
     {rankWindow}
