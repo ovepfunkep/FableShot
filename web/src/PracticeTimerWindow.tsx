@@ -122,13 +122,14 @@ export function PracticeTimerWindow({ state, settings, onToggle, onAdvance, onRe
   }
 
   return <>
-    <dialog ref={sheet} className="practice-timer-sheet" aria-labelledby={titleId}
+    <dialog ref={sheet} className="practice-timer-sheet" data-expanded={state.status !== 'Idle' || undefined} aria-labelledby={titleId}
       onCancel={event => { event.preventDefault(); onClose(); }}
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="practice-timer-content" data-testid="practice-timer-window">
         <header onPointerDown={startDrag} onPointerUp={endDrag} onPointerCancel={() => { drag.current = null; }}>
           <span className="practice-timer-handle" aria-hidden="true" />
           <h2 id={titleId}>Таймер</h2>
+          <button type="button" className="timer-close" onPointerDown={event => event.stopPropagation()} onClick={onClose} aria-label="Свернуть таймер">Свернуть</button>
         </header>
         <div className="practice-timer-phases" role="group" aria-label="Режим таймера">
           {(['Preparation', 'Series', 'Rest'] as const).map(phase => <button type="button" key={phase}
@@ -149,8 +150,8 @@ export function PracticeTimerWindow({ state, settings, onToggle, onAdvance, onRe
           <button type="button" className="timer-reset" data-testid="timer-reset" disabled={saving} onClick={onReset}>Сброс</button>
         </div>
         <p className="practice-timer-note">2 сигнала — подготовка · 1 — стрельба · 3 — к мишеням</p>
-        <hr />
-        <h3>Длительности</h3>
+        {!ongoing && state.status !== 'Finished' && <details className="timer-duration-settings">
+          <summary data-testid="timer-durations-toggle">Длительности</summary>
         <div className="practice-timer-durations">
           <label className={`timer-duration-field${validPreparation === null ? ' invalid' : ''}`}>
             <span>Подготовка, сек</span>
@@ -178,6 +179,7 @@ export function PracticeTimerWindow({ state, settings, onToggle, onAdvance, onRe
           disabled={ongoing || saving || validSeries === null || validRest === null || validPreparation === null || !changed} onClick={saveDurations}>
           {saving ? 'Сохранение…' : 'Сохранить длительности'}
         </button>
+        </details>}
       </div>
     </dialog>
     {nextPhase && <dialog ref={confirmation} className="practice-timer-confirm" aria-labelledby={`${titleId}-confirm`}

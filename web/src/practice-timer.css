@@ -19,10 +19,18 @@
 }
 .practice-timer-sheet::backdrop, .practice-timer-confirm::backdrop { background: rgb(0 0 0 / 42%); }
 .practice-timer-content { display: flex; flex-direction: column; gap: 16px; padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); }
-.practice-timer-content header { touch-action: none; user-select: none; }
+.practice-timer-content header { position: relative; touch-action: none; user-select: none; }
+.timer-close { position: absolute; right: 0; bottom: 0; min-height: 36px; padding-inline: 10px; border: 0; border-radius: 12px; color: var(--muted); background: transparent; }
+.practice-timer-sheet[data-expanded] { width: min(100%, 1100px); height: calc(92 * var(--app-vh)); }
+.practice-timer-sheet[data-expanded] .practice-timer-content { box-sizing: border-box; min-height: 100%; gap: clamp(6px, 1.6vh, 16px); }
+.practice-timer-sheet[data-expanded] .practice-timer-face { flex: 1 0 auto; color: #171212; background: var(--timer-bright); border: 0; }
+.practice-timer-sheet[data-expanded] .practice-timer-face-phase { font-size: clamp(23px, 5vw, 54px); font-weight: 900; }
+.practice-timer-sheet[data-expanded] .practice-timer-face > .timer-clock { font-size: clamp(50px, min(30vw, 30vh), 260px); font-weight: 950; }
+.practice-timer-face[data-timer-tone="preparation"] { --timer-bright: #fff000; }
+.practice-timer-face[data-timer-tone="series"] { --timer-bright: #63ff00; }
+.practice-timer-face[data-timer-tone="rest"], .practice-timer-face[data-timer-tone="finished"] { --timer-bright: #ff4a58; }
 .practice-timer-handle { display: block; width: 32px; height: 4px; margin: 0 auto 20px; border-radius: 99px; background: var(--muted); opacity: .6; }
 .practice-timer-content h2, .practice-timer-confirm h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; }
-.practice-timer-content h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; }
 .practice-timer-phases { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .timer-phase { min-height: 40px; padding: 6px 16px; border: 1px solid var(--edge); border-radius: 12px; background: transparent; font-size: 14px; line-height: 20px; font-weight: 700; }
 .timer-phase[aria-pressed="true"] { background: var(--raised); border-color: transparent; }
@@ -36,7 +44,8 @@
 .practice-timer-actions .primary { flex: 1; }
 .timer-reset { min-height: 56px; padding: 12px 24px; border: 1px solid var(--edge); border-radius: 999px; background: transparent; font-size: 14px; line-height: 20px; font-weight: 700; }
 .practice-timer-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
-.practice-timer-content hr { margin: 0; width: 100%; border: 0; border-top: 1px solid var(--edge); }
+.timer-duration-settings summary { padding: 10px 14px; border: 1px solid var(--edge); border-radius: 12px; cursor: pointer; font-weight: 700; }
+.timer-duration-settings[open] .practice-timer-durations { margin-top: 18px; }
 .practice-timer-durations { display: flex; gap: 12px; }
 .timer-duration-field { display: flex; position: relative; align-items: center; flex: 1; min-width: 0; min-height: 56px; padding: 14px 12px 5px; border: 1px solid var(--edge); border-radius: 4px; }
 .timer-duration-field > span { position: absolute; left: 8px; top: -8px; padding: 0 4px; color: var(--muted); font-size: 12px; line-height: 16px; background: var(--surface); }

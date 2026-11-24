@@ -14,6 +14,7 @@ async function openTimer(page: Page) {
 }
 
 async function setDurations(page: Page, series = '5', rest = '3') {
+  await page.getByTestId('timer-durations-toggle').click();
   await page.getByTestId('timer-preparation-seconds').fill(series);
   await page.getByTestId('timer-series-seconds').fill(series);
   await page.getByTestId('timer-rest-seconds').fill(rest);
@@ -39,6 +40,7 @@ test('start schedules distinct sounds and pausing cancels the pending signal', a
             this.startedAt = at;
             const root = document.documentElement;
             root.dataset.sounds = [root.dataset.sounds, this.frequency.value].filter(Boolean).join(',');
+            root.dataset.soundStarts = [root.dataset.soundStarts, String(Math.round(at * 1000))].filter(Boolean).join(',');
           },
           startedAt: 0,
           stop(at?: number) {
@@ -58,21 +60,26 @@ test('start schedules distinct sounds and pausing cancels the pending signal', a
   await page.goto('./');
   await openTraining(page);
   await openTimer(page);
+  await expect(page.getByTestId('timer-series-seconds')).toBeHidden();
   await setDurations(page, '2', '1');
   const root = page.locator('html');
   const face = page.locator('.practice-timer-face');
   await expect(root).not.toHaveAttribute('data-sounds', /./);
   await page.getByTestId('timer-toggle').click();
   await expect(face).toHaveAttribute('data-timer-tone', 'preparation');
-  await expect(root).toHaveAttribute('data-sounds', '880,880,880,880,880,880');
+  await expect(root).toHaveAttribute('data-sounds', '330,330,330,330,330,330');
+  await expect(root).toHaveAttribute('data-sound-starts', '0,1500,3000,4500,6000,7500');
+  await expect(face).toHaveCSS('background-color', 'rgb(255, 240, 0)');
+  const height = await page.locator('.practice-timer-sheet').evaluate(dialog => dialog.getBoundingClientRect().height / window.innerHeight);
+  expect(height).toBeGreaterThan(.8);
   await page.getByTestId('timer-toggle').click();
   await expect(root).toHaveAttribute('data-cancelled-sound', 'yes');
   await page.getByTestId('timer-reset').click();
   await page.getByTestId('timer-phase-Rest').click();
   await page.getByTestId('timer-toggle').click();
   await expect(face).toHaveAttribute('data-timer-tone', 'rest');
-  await expect(root).toHaveAttribute('data-sounds', '880,880,880,880,880,880,880,880,880');
-  await expect(root).toHaveAttribute('data-sound-durations', '300,300,300,300,300,300,300,300,300');
+  await expect(root).toHaveAttribute('data-sounds', '330,330,330,330,330,330,330,330,330');
+  await expect(root).toHaveAttribute('data-sound-durations', '1000,1000,1000,1000,1000,1000,1000,1000,1000');
   await expect(root).toHaveAttribute('data-peak-gain', '0.9');
   await page.clock.runFor(1300);
   await expect(face).toHaveAttribute('data-timer-tone', 'finished');
@@ -136,6 +143,7 @@ test('the timer finishes while closed and durations survive a page restart', asy
   await page.reload();
   await openTraining(page);
   await openTimer(page);
+  await page.getByTestId('timer-durations-toggle').click();
   await expect(page.getByTestId('timer-series-seconds')).toHaveValue('5');
   await expect(page.getByTestId('timer-rest-seconds')).toHaveValue('3');
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:05');
@@ -149,7 +157,7 @@ test('manual pause preserves remaining time and reset restores the chosen durati
   await openTimer(page);
   await setDurations(page);
   await page.getByTestId('timer-toggle').click();
-  await expect(page.getByTestId('timer-series-seconds')).toBeDisabled();
+  await expect(page.getByTestId('timer-durations-toggle')).toBeHidden();
   await page.clock.fastForward(2100);
   await page.getByTestId('timer-toggle').click();
   await expect(page.getByTestId('timer-status')).toHaveText('На паузе');
@@ -165,6 +173,7 @@ test('manual pause preserves remaining time and reset restores the chosen durati
   await page.getByTestId('timer-reset').click();
   await expect(page.getByTestId('timer-remaining')).toHaveText('00:05');
   await expect(page.getByTestId('timer-status')).toHaveText('Готов к запуску');
+  await page.getByTestId('timer-durations-toggle').click();
   await expect(page.getByTestId('timer-series-seconds')).toBeEnabled();
 });
 
@@ -202,6 +211,7 @@ test('a settings write failure keeps the draft and does not change the countdown
   await page.goto('./');
   await openTraining(page);
   await openTimer(page);
+  await page.getByTestId('timer-durations-toggle').click();
   await page.getByTestId('timer-series-seconds').fill('0');
   await expect(page.getByTestId('timer-save-durations')).toBeDisabled();
   await expect(page.getByText(/стрельба и отдых от 1 до 3600/)).toBeVisible();

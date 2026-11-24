@@ -4,6 +4,9 @@ const native = registerPlugin<{
   cancel(): Promise<void>;
 }>('PracticeTimerSound');
 
+const HONK_MS = 1000;
+const HONK_STEP_MS = 1500;
+
 export function createTimerSound() {
   let audio: AudioContext | undefined;
   let tones: OscillatorNode[] = [];
@@ -25,10 +28,17 @@ export function createTimerSound() {
 
   function schedule(signals: readonly { at: number; count: number }[]) {
     cancel();
+    let nextStart = 0;
+    // Very short phases can become due before the previous sound has finished.
+    const phrases = signals.map(({ at, count }) => {
+      const start = Math.max(at, nextStart);
+      nextStart = start + count * HONK_STEP_MS;
+      return { at: start, count };
+    });
     if (Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('PracticeTimerSound')) {
       nativeScheduled = true;
       const now = Date.now();
-      void native.schedule({ signals: signals.map(({ at, count }) => ({ delay: Math.max(0, at - now), count })) })
+      void native.schedule({ signals: phrases.map(({ at, count }) => ({ delay: Math.max(0, at - now), count })) })
         .catch(error => console.warn('Не удалось запланировать сигнал таймера.', error));
       return;
     }
@@ -42,12 +52,13 @@ export function createTimerSound() {
       void ready.then(() => {
         if (ticket !== sequence) return;
         const now = Date.now();
-        for (const signal of signals.filter(signal => signal.at >= now - 1000)) {
+        for (const signal of phrases.filter(signal => signal.at >= now - 1000)) {
           const start = context.currentTime + Math.max(0, signal.at - now) / 1000;
           for (let index = 0; index < signal.count; index++) {
-            const at = start + index * .45, seconds = .3;
+            const at = start + index * HONK_STEP_MS / 1000, seconds = HONK_MS / 1000;
             const tone = context.createOscillator(), gain = context.createGain();
-            tone.frequency.value = 880;
+            tone.type = 'sawtooth';
+            tone.frequency.value = 330;
             tone.connect(gain); gain.connect(context.destination);
             gain.gain.setValueAtTime(0, at);
             gain.gain.linearRampToValueAtTime(.9, at + .02);

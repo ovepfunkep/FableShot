@@ -643,30 +643,23 @@ test('aim reacts to the first movement without waiting for the hold timer', asyn
   await expect(page.getByTestId('series-score')).toHaveText('0/0');
 });
 
-test('the lens keeps a settled aim through a small touch drift at release', async ({ page, context }) => {
+test('the lens follows small touch movements even after a long hold', async ({ page, context }) => {
   await page.goto('./');
   await openTraining(page);
   await page.clock.pauseAt(new Date());
   const bounds = await targetBounds(page);
   const radius = Math.min(bounds.width, bounds.height) * .44;
-  const x = bounds.x + bounds.width / 2 + radius * .106;
+  const x = bounds.x + bounds.width / 2 + radius * .111;
   const y = bounds.y + bounds.height / 2;
   const client = await context.newCDPSession(page);
   const lensScore = page.getByTestId('lens').locator('strong');
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-  await page.clock.runFor(620);
+  await page.clock.runFor(1120);
   await expect(lensScore).toHaveText('10');
-  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y }] });
-  await expect(lensScore).toHaveText('10');
-  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.getByTestId('series-score')).toHaveText('10/10');
-
-  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-  await page.clock.runFor(120);
-  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 4, y }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 2, y }] });
   await expect(lensScore).toHaveText('9');
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.getByTestId('series-score')).toHaveText('19/20');
+  await expect(page.getByTestId('series-score')).toHaveText('9/10');
   await client.detach();
 });
 

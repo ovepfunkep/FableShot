@@ -11,7 +11,7 @@ type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
 type ZoomScope = 'training' | 'editor';
 type Aim = { point: Point; spot?: TargetSpot; screen: Point };
-type AimAnchor = { position: Point; point: Point; screen: Point; steadiness?: { origin: Point; shown: Point; since: number; locked: boolean } };
+type AimAnchor = { position: Point; point: Point; screen: Point };
 type Gesture = { pointers: Map<number, Point>; multi: boolean; timer: number | null;
   aim: { id: number; origin: Point; startsOnFace: boolean; anchor: AimAnchor | null } | null;
   touchTap: { id: number; origin: Point; startedAt: number } | null;
@@ -303,24 +303,6 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     if (rect) setAim({ point, spot, screen: { x: rect.left + position.x, y: rect.top + position.y } });
   }
 
-  function steadyPosition(position: Point, anchor: AimAnchor, touch: boolean): Point {
-    if (!touch) return position;
-    const now = performance.now();
-    const state = anchor.steadiness ??= { origin: position, shown: position, since: now, locked: false };
-    const travel = distance(position, state.origin);
-    if ((state.locked || now - state.since >= 500) && travel <= 5) {
-      state.locked = true;
-      return state.shown;
-    }
-    if (travel > 2) {
-      state.origin = position;
-      state.since = now;
-      state.locked = false;
-    }
-    state.shown = position;
-    return position;
-  }
-
   function start(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || !size.width) return;
     const track = gesture.current;
@@ -367,7 +349,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       const anchor = { position: current, point: normalized(current),
         screen: { x: rect.left + current.x, y: rect.top + current.y } };
       track.aim.anchor = anchor;
-      showAim(steadyPosition(current, anchor, event.pointerType === 'touch'), anchor);
+      showAim(current, anchor);
     }, 115);
   }
 
@@ -405,7 +387,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       let panFrom = previous;
       if (track.aim?.id === event.pointerId) {
         const { anchor, origin, startsOnFace } = track.aim;
-        if (anchor) { showAim(steadyPosition(position, anchor, event.pointerType === 'touch'), anchor); return; }
+        if (anchor) { showAim(position, anchor); return; }
         if (startsOnFace && distance(position, origin) > 0) {
           if (track.timer !== null) window.clearTimeout(track.timer);
           track.timer = null;
@@ -414,7 +396,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
           const immediateAnchor = { position: origin, point: normalized(origin),
             screen: { x: rect.left + origin.x, y: rect.top + origin.y } };
           track.aim.anchor = immediateAnchor;
-          showAim(steadyPosition(position, immediateAnchor, event.pointerType === 'touch'), immediateAnchor);
+          showAim(position, immediateAnchor);
           return;
         }
         if (distance(position, origin) <= TAP_SLOP) return;
@@ -440,7 +422,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     const shouldScore = commit && inputEnabled && !panOnly && !track.multi && aiming?.id === event.pointerId
       && (aiming.startsOnFace || aiming.anchor !== null);
     const anchor = aiming?.anchor;
-    const { point, spot } = targetInput(anchor ? aimedPoint(steadyPosition(position, anchor, event.pointerType === 'touch'), anchor) : normalized(position), profile);
+    const { point, spot } = targetInput(anchor ? aimedPoint(position, anchor) : normalized(position), profile);
     const shouldSuggest = commit && !inputEnabled && !track.multi && track.blocked?.id === event.pointerId
       && distance(position, track.blocked.origin) <= TAP_SLOP && isOnTargetInput(point, spec);
     track.pointers.delete(event.pointerId);
