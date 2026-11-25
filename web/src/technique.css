@@ -20,12 +20,22 @@
 .technique-text-button { min-height: 44px; padding: 8px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-weight: 700; font-size: 14px; line-height: 20px; }
 .technique-text-button[aria-pressed="true"] { background: var(--raised); }
 .technique-outline-button { min-height: 48px; padding: 10px 16px; align-self: flex-start; border: 1px solid var(--edge); border-radius: 999px; background: transparent; color: var(--accent); font-size: 14px; font-weight: 700; }
-.technique-outline-step { display: flex; align-items: center; text-align: left; gap: 10px; width: 100%; margin: 4px 0; padding: 12px; border: 0; border-radius: 12px; background: var(--raised); }
+.technique-outline-step { display: flex; align-items: flex-start; text-align: left; gap: 10px; width: 100%; margin: 4px 0; padding: 12px; border: 0; border-radius: 12px; background: var(--raised); }
 .technique-outline-step > span:nth-child(2) { flex: 1; min-width: 0; }
 .technique-outline-step strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
 .technique-outline-step small { display: block; color: var(--accent); font-size: 11px; line-height: 16px; }
 .technique-outline-step svg { flex: none; width: 18px; }
 .technique-outline-number { color: var(--muted); font-variant-numeric: tabular-nums; }
+.technique-outline-subpoint { display: block; margin-top: 4px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.technique-subpoints { display: grid; gap: 6px; }
+.technique-subpoint { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) 44px 44px; align-items: start; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); }
+.technique-subpoint:focus-within, .technique-subpoint[data-drop] { border-color: var(--accent); }
+.technique-subpoint > label { align-self: start; padding: 11px 0 0 8px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.technique-subpoint textarea { width: 100%; min-width: 0; min-height: 44px; max-height: 9rem; field-sizing: content; padding: 9px 4px; border: 0; resize: none; background: transparent; color: inherit; outline: none; font: inherit; user-select: text; }
+.technique-subpoint .icon-button { width: 44px; height: 44px; }
+.technique-grip { cursor: grab; touch-action: none; }
+.technique-grip:active { cursor: grabbing; }
+.technique-subpoint-menu { display: flex; justify-content: flex-end; grid-column: 1 / -1; padding-inline: 8px; border-top: 1px solid var(--edge); }
 .technique-footer { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 12px; background: #101610; }
 .technique-footer .primary { width: 100%; }
 .technique-muted { margin: 0; color: var(--muted); font-size: 12px; line-height: 18px; }

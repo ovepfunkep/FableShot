@@ -10,6 +10,10 @@ import { HIT_MAP_GRID_SIZE, hitDensity, hitMapLimit, knownHitPoints, knownMissPo
 import { numberedArrowMapExtent } from './numbered-arrow-analysis.ts';
 import { achievementRarityFor, ACHIEVEMENT_RARITY_LABELS, getAchievementDefinition } from './achievement-catalog.ts';
 import type { StatisticFeature } from './statistics-visibility.ts';
+import { reportSectionShown } from './report-composition.ts';
+import type { ExportSection, ReportComposition } from './report-composition.ts';
+import { chartScale, rankAverageScale } from './chart-metrics.ts';
+import { rankDisplayLabel } from './sport-ranks.ts';
 
 const hex = (value: string) => rgb(parseInt(value.slice(1, 3), 16) / 255, parseInt(value.slice(3, 5), 16) / 255, parseInt(value.slice(5, 7), 16) / 255);
 const ink = hex('#17251c'), muted = hex('#667368'), accent = hex('#517631'), dark = hex('#15251a');
@@ -18,7 +22,7 @@ const zones = ['#455347', '#f6f5eb', '#f6f5eb', '#242b2e', '#242b2e', '#359ac3',
 const arrowColors = ['#005a9c', '#c34700', '#007c6d', '#8c3d99', '#9a6600', '#b02d50', '#445569', '#476c00'];
 
 /** A standalone A4 report: vector statistics and complete series, never the PNG poster. */
-export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular: Uint8Array; bold: Uint8Array }): Promise<Uint8Array> {
+export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular: Uint8Array; bold: Uint8Array }, composition?: ReportComposition): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle('FableShot — тренировка'); pdf.setAuthor('FableShot'); pdf.setSubject('Подробная статистика тренировки');
   pdf.registerFontkit(fontkit);
@@ -28,6 +32,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
   const left = 42, width = 511, bottom = 52;
   let page!: PDFPage, y = 0, section = '';
   const shown = (feature: StatisticFeature) => !snapshot.disabledStatistics.includes(feature);
+  const includes = (section: ExportSection) => reportSectionShown(snapshot, composition, section);
+  const showShots = composition?.showShots ?? shown('result');
   const decimal = (value: number | null | undefined, precise = snapshot.hundredths) => value == null ? '—' : formatAverage(value, precise);
   function text(value: string, x: number, top: number, size = 10, heavy = false, color = ink) {
     const printable = Array.from(value, char => supported.has(char.codePointAt(0)!) ? char : '□').join('');
@@ -81,12 +87,14 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       ensure(225); text(`${title}${values.length > 24 ? ` · ${start + 1}–${start + samples.length}` : ''}`, left, y, 12, true); y -= 24;
       box(left, y, width, 172);
       const x0 = left + 29, x1 = left + width - 18, top = y - 20, base = y - 139;
-      for (const value of [0, 5, 10]) {
-        const at = base + value * (top - base) / 10;
+      const { lower, upper, ticks } = chartScale(samples.map(sample => sample.value), 'average');
+      const position = (value: number) => base + (value - lower) * (top - base) / (upper - lower);
+      for (const value of ticks) {
+        const at = position(value);
         page.drawLine({ start: { x: x0, y: at }, end: { x: x1, y: at }, color: edge, thickness: .6 });
-        text(String(value), left + 9, at + 4, 7, false, muted);
+        text(decimal(value, false), left + 7, at + 4, 7, false, muted);
       }
-      const points = samples.map((sample, index) => ({ x: samples.length === 1 ? (x0 + x1) / 2 : x0 + index * (x1 - x0) / (samples.length - 1), y: base + sample.value * (top - base) / 10 }));
+      const points = samples.map((sample, index) => ({ x: samples.length === 1 ? (x0 + x1) / 2 : x0 + index * (x1 - x0) / (samples.length - 1), y: position(sample.value) }));
       points.forEach((point, index) => {
         if (index) page.drawLine({ start: points[index - 1], end: point, color: accent, thickness: 1.6 });
         page.drawCircle({ ...point, size: 2.4, color: accent });
@@ -113,17 +121,17 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
   }
 
   newPage('ПОДРОБНЫЙ ОТЧЁТ');
-  paragraph(new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(snapshot.startedAt)), 10);
   heading(snapshot.title);
-  if (shown('training_time') && snapshot.duration) paragraph(snapshot.duration, 11, accent);
+  if (snapshot.startLabel) paragraph(snapshot.startLabel, 10);
   snapshot.conditions.forEach((condition, i) => paragraph(`${snapshot.conditions.length > 1 ? `${i + 1}. ` : ''}${condition}`, 10));
-  metrics([
-    ...(shown('result') ? [{ label: 'РЕЗУЛЬТАТ', value: `${snapshot.result.points} / ${snapshot.result.maximum}` }] : []),
+  if (includes('result')) metrics([
+    { label: 'РЕЗУЛЬТАТ', value: `${snapshot.result.points} / ${snapshot.result.maximum}` },
     ...(shown('average') ? [{ label: 'СРЕДНИЙ БАЛЛ', value: snapshot.average }] : []),
     ...(shown('volume') ? [{ label: 'СТРЕЛ', value: String(snapshot.result.maximum / 10) }] : []),
+    ...(shown('training_time') && snapshot.duration ? [{ label: 'ДЛИТЕЛЬНОСТЬ', value: snapshot.duration }] : []),
   ]);
-  if (snapshot.focus.length) { heading('Фокус тренировки'); snapshot.focus.forEach(focus => paragraph(focus)); }
-  if (shown('norms')) {
+  if (includes('focus') && snapshot.focus.length) { heading('Фокус тренировки'); snapshot.focus.forEach(focus => paragraph(focus)); }
+  if (includes('norms')) {
     heading('Нормативы', 200);
     const rank = snapshot.rankDetails, evaluation = rank.evaluation;
     if (!evaluation) paragraph(rank.reason ?? 'Нет данных для сравнения.');
@@ -133,29 +141,30 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       if (snapshot.rankDisplay.actual) text(snapshot.rankDisplay.actual, left + 15, y - 32, 9, false, muted);
       text(`${rank.classLabel} · ${evaluation.entered} из ${evaluation.exercise.arrows} стрел · средний ${decimal(evaluation.average)}`, left + 15, y - 42, 9, false, muted);
       const lineY = y - 82, start = left + 20, length = width - 40;
+      const scale = rankAverageScale([evaluation.average ?? 0], evaluation.exercise);
+      const position = (value: number) => start + (value - scale.lower) / (scale.upper - scale.lower) * length;
       page.drawLine({ start: { x: start, y: lineY }, end: { x: start + length, y: lineY }, color: edge, thickness: 4 });
-      evaluation.exercise.thresholds.forEach(threshold => {
-        const x = start + threshold.score / evaluation.exercise.arrows / 10 * length;
+      scale.thresholds.forEach(threshold => {
+        const x = position(threshold.average);
         page.drawLine({ start: { x, y: lineY - 7 }, end: { x, y: lineY + 7 }, color: muted, thickness: 1 });
+        text(threshold.label, x - 5, lineY + 18, 7, false, muted);
       });
-      page.drawCircle({ x: start + Math.max(0, Math.min(10, evaluation.average ?? 0)) / 10 * length, y: lineY, size: 5, color: accent });
-      text('0', start, lineY - 10, 7, false, muted); text('10', start + length - 8, lineY - 10, 7, false, muted);
+      page.drawCircle({ x: position(evaluation.average ?? 0), y: lineY, size: 5, color: accent });
+      text(decimal(scale.lower, false), start, lineY - 10, 7, false, muted); text(decimal(scale.upper, false), start + length - 15, lineY - 10, 7, false, muted);
       const next = evaluation.next;
       text(next ? `Следующий: ${next.label} · от ${decimal(next.score / evaluation.exercise.arrows, true)} за стрелу` : 'Высший доступный уровень по этой сетке', left + 15, y - 111, 9, true, accent);
       y -= 151;
       paragraph(rank.finalResult ? 'Сравнение по очкам упражнения; официальное присвоение разряда требует выполнения условий ЕВСК.'
         : 'Это прогноз по текущему среднему. Полное упражнение ещё не подтверждено.', 8);
-      const thresholds = evaluation.exercise.thresholds.map(item => `${item.label}: ${decimal(item.score / evaluation.exercise.arrows, true)} / ${item.score}`);
-      paragraph(thresholds.join('    ·    '), 8);
     }
   }
-  if (shown('mean_trend')) trend(snapshot.rounds.flatMap(round => round.series.map(series => ({ label: `${round.number}.${series.number}`, value: summarize(series.shots).average ?? 0 }))), 'Средний балл по сериям');
+  if (includes('mean_trend')) trend(snapshot.rounds.flatMap(round => round.series.map(series => ({ label: `${round.number}.${series.number}`, value: summarize(series.shots).average ?? 0 }))), 'Средний балл по сериям');
 
-  if (shown('records') && snapshot.records.length) {
+  if (includes('records') && snapshot.records.length) {
     heading('Личные рекорды');
     snapshot.records.forEach(record => { ensure(45); text(record.label, left, y, 11, true); y -= 19; paragraph(`${record.previousValue} → ${record.value}`, 11, accent); });
   }
-  if (snapshot.achievements.length) {
+  if (includes('achievements') && snapshot.achievements.length) {
     heading('Достижения тренировки');
     for (const group of snapshot.achievements) {
       const rule = getAchievementDefinition(group.leading.id);
@@ -166,7 +175,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     }
   }
 
-  if (shown('series')) {
+  if (includes('series')) {
     ensure(160);
     for (const round of snapshot.rounds) {
       const firstCard = 37 + Math.ceil(Math.min(round.series[0].shots.length, 90) / 18) * 27;
@@ -174,17 +183,17 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       const summary = [shown('result') && `${round.result.points}/${round.result.maximum}`,
         shown('average') && `средний ${decimal(round.result.average)}`,
         shown('volume') && `${round.result.maximum / 10} стрел`,
-        shown('norms') && round.rank.label && `${round.rank.finalResult ? 'По очкам' : 'Темп'} · ${round.rank.label}`].filter(Boolean).join(' · ');
+        includes('norms') && round.rank.label && `${round.rank.finalResult ? 'По очкам' : 'Темп'} · ${rankDisplayLabel(round.rank.label)}`].filter(Boolean).join(' · ');
       if (summary) paragraph(summary, 11, accent);
-      for (const series of round.series) for (let start = 0; start < series.shots.length; start += 90) {
+      for (const series of round.series) for (let start = 0; start < series.shots.length; start += showShots ? 90 : series.shots.length) {
         const shots = series.shots.slice(start, start + 90), result = summarize(series.shots);
-        const height = shown('result') ? 37 + Math.ceil(shots.length / 18) * 27 : 31;
+        const height = showShots ? 37 + Math.ceil(shots.length / 18) * 27 : 31;
         ensure(height + 12); box(left, y, width, height);
         text(`Р${round.number} · Серия ${series.number}${start ? ' · продолжение' : ''}`, left + 12, y - 9, 9, true);
         const totals = [shown('result') && `${result.points}/${result.maximum}`, shown('average') && `средний ${decimal(result.average)}`,
           shown('volume') && `${series.shots.length} стрел`].filter(Boolean).join(' · ');
         text(totals, left + width - 12 - font.widthOfTextAtSize(totals, 8), y - 10, 8, false, muted);
-        if (shown('result')) shots.forEach((shot, i) => {
+        if (showShots) shots.forEach((shot, i) => {
           const x = left + 12 + (i % 18) * 27, top = y - 30 - Math.floor(i / 18) * 27;
           page.drawRectangle({ x, y: top - 22, width: 22, height: 22, color: hex(zones[shot.points]) });
           text(shot.code, x + (22 - bold.widthOfTextAtSize(shot.code, 9)) / 2, top - 5, 9, true, shot.points === 0 || shot.points === 3 || shot.points === 4 ? rgb(1, 1, 1) : ink);
@@ -195,10 +204,14 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
   }
 
   for (const [index, scope] of snapshot.analysis.entries()) {
+    const general = includes('general_score') && scope.composite?.total !== undefined;
+    const progress = includes('progress_score') && scope.progress.length > 0;
+    const map = includes('hit_map') && scope.shots.some(shot => shot.point || shot.missPoint);
+    const distribution = includes('distribution');
+    if (!general && !progress && !map && !distribution) continue;
     newPage(`АНАЛИТИКА · УСЛОВИЯ ${index + 1}`);
     paragraph(snapshot.conditions[index], 10);
-    heading('Результат и точность');
-    metrics([
+    if (includes('result')) metrics([
       ...(shown('result') ? [{ label: 'ОЧКИ', value: `${scope.result.points}/${scope.result.maximum}` }] : []),
       ...(shown('average') ? [{ label: 'СРЕДНИЙ', value: decimal(scope.result.average) }] : []),
       ...(shown('grouping') ? [{ label: snapshot.spreadLabel, value: scope.spread === null ? '—' : `${decimal(scope.spread)} мм` }] : []),
@@ -207,7 +220,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       ...(shown('volume') ? [{ label: 'СТРЕЛ', value: String(scope.shots.length) }] : []),
     ]);
     const composite = scope.composite;
-    if (shown('general_score') && composite?.total !== undefined) {
+    if (general && composite?.total !== undefined) {
       heading('Общие очки');
       metrics([{ label: 'CG3', value: `${decimal(composite.total, true)} / 105` }]);
       const components = [
@@ -223,7 +236,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
         y -= 37;
       } y -= 10;
     }
-    if (shown('progress_score') && scope.progress.length) {
+    if (progress) {
       heading('Прогресс в этих условиях');
       scope.progress.forEach(progress => {
         const value = progress.relativePercent == null ? `${decimal(progress.rawIncrease, true)} балла`
@@ -231,7 +244,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
         paragraph(`${value}${progress.fullRankAvailable ? '' : ' · предварительно'} · средний ${decimal(progress.baselineAverage)} → ${decimal(progress.currentAverage)}`, 12, accent);
       });
     }
-    if (shown('hit_map')) {
+    if (map) {
       ensure(295); heading('Карта попаданий');
       const points = knownHitPoints(scope.shots, true), misses = knownMissPoints(scope.shots, true);
       const profile = getTargetProfile(scope.conditions.targetProfileId);
@@ -257,19 +270,19 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       for (let step = 0; step < 4; step++) page.drawRectangle({ x: left + 341 + step * 23, y: y - 234, width: 21, height: 8, color: hex(['#c3d987', '#9fbe64', '#689548', '#315c34'][step]), opacity: .7 });
       y -= 259;
     }
-    if (shown('distribution')) {
+    if (distribution) {
       ensure(190); heading('Распределение попаданий');
       const peak = Math.max(...scope.distribution, 1), base = y - 116;
       scope.distribution.forEach((count, zone) => {
         const x = left + 10 + zone * 45, height = count / peak * 93;
-        page.drawRectangle({ x, y: base, width: 30, height: Math.max(height, .7), color: accent, opacity: count ? 1 : .2 });
+        page.drawRectangle({ x, y: base, width: 30, height: Math.max(height, .7), color: hex(zones[zone]), borderColor: edge, borderWidth: .4, opacity: count ? 1 : .35 });
         text(String(count), x + 10, base + height + 14, 8, true, accent);
         text(zone === 0 ? 'M' : String(zone), x + 10, base - 7, 8, false, muted);
       }); y -= 152;
     }
   }
 
-  if (shown('numbered_arrows')) for (const group of snapshot.numberedArrows) {
+  if (includes('numbered_arrows')) for (const group of snapshot.numberedArrows) {
     newPage('ПО НОМЕРАМ СТРЕЛ'); paragraph(group.label, 10); heading('Сравнение попаданий');
     ensure(300);
     const center = { x: 297, y: y - 118 }, radius = 110, extent = numberedArrowMapExtent(group, shown('grouping'));

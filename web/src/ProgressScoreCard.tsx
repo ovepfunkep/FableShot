@@ -50,11 +50,14 @@ export function ProgressScoreCard({ practice, series, entries }: {
         {samples.map(([id, [first]]) => <option key={id} value={id}>С раунда {first.round} · серии {first.number}</option>)}
       </select>
     </label>}
-    <div className="report-metrics-inline">
+    <div className="progress-score-summary">
       <button type="button" className="progress-score-value" data-progress-tone={progressTone(result.relativePercent ?? result.rawIncrease ?? 0)} onClick={() => setOpen(true)} data-testid="progress-score-value">
         {!result.fullRankAvailable && <span aria-label="Предварительно">≈ </span>}{value}
       </button>
-      {statisticVisible(preferences, 'average') && <span>Средний балл<strong data-testid="progress-score-average">{baselineMean} → {currentMean}</strong></span>}
+      {statisticVisible(preferences, 'average') && <div className="progress-score-comparison">
+        <small>Средний балл</small>
+        <strong data-testid="progress-score-average" aria-label={`Было ${baselineMean}, стало ${currentMean}`}>{baselineMean} → {currentMean}</strong>
+      </div>}
     </div>
     {changes.length > 0 && <p className="report-metrics-muted" data-testid="progress-source-changed">Часть исходных тренировок изменилась или недоступна. Сравнение использует сохранённые результаты.</p>}
     {open && <BottomSheet title="База сравнения" tag="progress-score-help" onClose={() => setOpen(false)}>

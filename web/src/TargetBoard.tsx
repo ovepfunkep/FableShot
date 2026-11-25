@@ -6,6 +6,7 @@ import { clampTargetZoom, MAX_TARGET_ZOOM, MovableTargetZoom, TargetZoom } from 
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { AIM_SPEED_SETTING, DEFAULT_SHOT_MOTION_STYLE, LENS_ZOOM_SETTING } from './preferences.ts';
 import type { ShotMotionEvent } from './ShotMotion.tsx';
+import { Icon } from './TrainingChrome.tsx';
 
 type Size = { width: number; height: number };
 type View = { zoom: number; x: number; y: number };
@@ -181,7 +182,7 @@ function Lens({ aim, baseRadius, spec, shots, selectedIndex, realArrowDiameter }
   </div>;
 }
 
-export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, onOpenLensSettings, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, feedback, removed, showZoom = true }: {
+export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBlockedTap, onOpenLensSettings, panOnly = false, spec = DEFAULT_TARGET, zoomScope, realArrowDiameter, feedback, removed, showZoom = true, spotNavigation, onOpenGuide, highlightGuide = false }: {
   shots: readonly Shot[]; inputEnabled: boolean; onShot: (shot: Shot) => void;
   selectedIndex?: number | null; onBlockedTap?: () => void; onOpenLensSettings?: () => void;
   spec?: TargetSpec;
@@ -191,6 +192,9 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   feedback?: ShotMotionEvent;
   removed?: { id: number; shot: Shot };
   showZoom?: boolean;
+  spotNavigation?: { spot: TargetSpot | null; onSpot: (spot: TargetSpot | null) => void; disabled?: boolean };
+  onOpenGuide?: () => void;
+  highlightGuide?: boolean;
 }) {
   const { preferences } = useTrainingPreferences();
   const aimSpeed = AIM_SPEED * (preferences.aimSpeedPercent ?? AIM_SPEED_SETTING.default) / 100;
@@ -199,6 +203,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
   const [view, setView] = useState(() => initialTargetView(zoomScope));
   const viewRef = useRef(view);
+  const focusedView = useRef(false);
   const movedManually = useRef(false);
   const [aim, setAim] = useState<Aim | null>(null);
   const gesture = useRef<Gesture>({ pointers: new Map(), aim: null, multi: false, timer: null,
@@ -208,6 +213,20 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   useLayoutEffect(() => { actions.current = { inputEnabled, panOnly, onShot, onBlockedTap }; });
   const profile = getTargetProfile(spec.profileId)!;
   const baseRadius = profile.vertical ? Math.max(1, Math.min(size.width / 1.32, size.height / 3.8)) : radiusOf(size);
+  const focusedSpot = profile.vertical ? spotNavigation?.spot ?? null : null;
+  const extent = outerRadius(spec) + MISS_RING_WIDTH;
+
+  useLayoutEffect(() => {
+    if (!size.width || !size.height) return;
+    if (focusedSpot === null && !focusedView.current) return;
+    const zoom = clampTargetZoom(Math.min(size.width - 92, size.height - 24) / (2 * extent * baseRadius));
+    const next = focusedSpot === null ? initialTargetView(zoomScope)
+      : { zoom, x: 0, y: -spotOffsets(profile)[focusedSpot] * baseRadius * zoom };
+    focusedView.current = focusedSpot !== null;
+    movedManually.current = false;
+    viewRef.current = next;
+    setView(next);
+  }, [focusedSpot, size, extent, baseRadius, profile, zoomScope]);
 
   useLayoutEffect(() => {
     const element = surface.current!;
@@ -246,7 +265,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }, [size, view, shots, selectedIndex, spec, realArrowDiameter, baseRadius]);
 
   function changeView(zoom: number, x: number, y: number) {
-    const limit = baseRadius * (panOnly || movedManually.current ? zoom : zoom - 1);
+    const limit = baseRadius * (panOnly || movedManually.current || focusedView.current ? zoom : zoom - 1);
     const verticalLimit = limit * (profile.vertical ? 1.8 : 1);
     const next = { zoom, x: clamp(x, -limit, limit), y: clamp(y, -verticalLimit, verticalLimit) };
     viewRef.current = next;
@@ -254,7 +273,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }
 
   function rememberZoom() {
-    if (!zoomScope) return;
+    if (!zoomScope || focusedView.current) return;
     try { window.localStorage.setItem(zoomKey(zoomScope), String(viewRef.current.zoom)); }
     catch { /* Continue with the in-memory zoom when storage is unavailable. */ }
   }
@@ -462,6 +481,10 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
   }
 
   function resetZoom() {
+    if (focusedSpot !== null && spotNavigation) {
+      spotNavigation.onSpot(null);
+      return;
+    }
     movedManually.current = false;
     changeView(1, 0, 0);
     rememberZoom();
@@ -476,7 +499,7 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
     top: size.height / 2 + view.y + point.y * baseRadius * view.zoom });
   const goldFlash = feedback?.points === 10 && (feedback.firstTen || (preferences.shotMotionStyle ?? DEFAULT_SHOT_MOTION_STYLE) === 'cards');
   return <section className="target-stage" aria-label="Отметка попаданий">
-    <div ref={surface} className="target-surface" data-testid="target" data-target-profile={spec.profileId}
+    <div ref={surface} className="target-surface" data-testid="target" data-target-profile={spec.profileId} data-focused-spot={focusedSpot ?? undefined}
       onPointerDown={start} onPointerMove={move} onPointerUp={event => end(event, true)}
       onPointerCancel={event => end(event, false)} onLostPointerCapture={event => end(event, false)}>
       <canvas ref={canvas} role="img" aria-label="Мишень для отметки попаданий" />
@@ -486,6 +509,15 @@ export function TargetBoard({ shots, inputEnabled, onShot, selectedIndex, onBloc
       {removed && ghost && <span key={removed.id} className="removed-shot-ghost" aria-hidden="true" style={markerStyle(ghost)} />}
     </div>
     {showZoom && <Zoom zoom={view.zoom} onStep={zoomBy} onReset={resetZoom} {...(zoomScope ? { onOpenLensSettings } : {})} />}
+    {onOpenGuide && <button type="button" className="target-guide-button" aria-label="Гайд по мишени" data-highlight={highlightGuide || undefined} onClick={onOpenGuide}>
+      <Icon name="helpCircle" />{highlightGuide && <span>Гайд</span>}
+    </button>}
+    {profile.vertical && spotNavigation && <div className="target-spot-navigation" role="group" aria-label="Пятно светофора">
+      <button type="button" aria-label="Мишень выше" disabled={spotNavigation.disabled || focusedSpot === 0}
+        onClick={() => spotNavigation.onSpot(((focusedSpot ?? 1) - 1) as TargetSpot)}><Icon name="up" /></button>
+      <button type="button" aria-label="Мишень ниже" disabled={spotNavigation.disabled || focusedSpot === 2}
+        onClick={() => spotNavigation.onSpot(((focusedSpot ?? 1) + 1) as TargetSpot)}><Icon name="down" /></button>
+    </div>}
     {aim && inputEnabled && !panOnly && <Lens aim={aim} baseRadius={baseRadius * view.zoom} spec={spec} shots={shots}
       selectedIndex={selectedIndex} realArrowDiameter={realArrowDiameter} />}
   </section>;

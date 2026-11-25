@@ -1,7 +1,45 @@
 import { expect, test } from '@playwright/test';
-import { openTraining } from './journal-navigation.ts';
+import { openHistoryEntry, openTraining } from './journal-navigation.ts';
 import { advanceSeries, appendShot, applyConditions, completePractice, emptyPractice } from '../src/practice.ts';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+
+test('switching completed trainings keeps the same statistics block in view', async ({ page }) => {
+  let practice = emptyPractice();
+  for (const points of [10, 9, 9]) practice = appendShot(practice, { code: String(points), points, point: null, imported: true });
+  const older = completePractice(practice, '2026-11-10T10:15:00Z');
+  for (let index = 0; index < 4; index++) {
+    practice = advanceSeries(practice);
+    for (const points of [10, 9, 9]) practice = appendShot(practice, { code: String(points), points, point: null, imported: true });
+  }
+  const newer = completePractice(practice, '2026-11-12T10:15:00Z');
+  await page.addInitScript(entries => localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries })), [
+    { id: 'older', startedAt: '2026-11-10T10:00:00Z', title: 'Предыдущий результат', practice: older },
+    { id: 'newer', startedAt: '2026-11-12T10:00:00Z', title: 'Новый результат', practice: newer },
+  ]);
+  await page.goto('./');
+  await openHistoryEntry(page, 'newer');
+  const date = page.locator('header').getByTestId('report-training-start');
+  await expect(date).toHaveAttribute('datetime', '2026-11-12T10:00:00.000Z');
+  const norms = page.locator('[data-report-block="norms"]');
+  await norms.evaluate(element => {
+    const body = element.closest('.report-body')!;
+    body.scrollTop += element.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  });
+  await expect(date).toBeInViewport();
+  await page.getByRole('button', { name: 'Предыдущая', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Предыдущий результат' })).toBeAttached();
+  await expect(date).toHaveAttribute('datetime', '2026-11-10T10:00:00.000Z');
+  await expect(date).toBeInViewport();
+  await expect.poll(() => norms.evaluate(element => {
+    const body = element.closest('.report-body')!;
+    const top = element.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    const maxScroll = body.scrollHeight - body.clientHeight;
+    return top >= -2 && top < body.clientHeight && (top < 24 || maxScroll - body.scrollTop <= 2);
+  })).toBe(true);
+  await page.getByRole('button', { name: 'Следующая', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новый результат' })).toBeAttached();
+  await expect(date).toHaveAttribute('datetime', '2026-11-12T10:00:00.000Z');
+});
 
 test('the accessible pie and its selected zone survive reopening the same report', async ({ page }) => {
   let practice = emptyPractice();

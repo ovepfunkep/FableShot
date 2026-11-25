@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { exchangeBrowserRoom } from './browser-room-probe.ts';
 import type { GroupSeriesRevision, GroupSeriesTransport } from './group-series.ts';
 
-type RoomCapabilities = { cg3?: boolean; pg1?: boolean };
+type RoomCapabilities = { cg3?: boolean; pg1?: boolean; shotPositions?: boolean };
 export type RoomStatus = RoomCapabilities & { invitation?: string; checks?: number; acceptedSeries?: number; roomName?: string; restorable?: boolean; finalizedAt?: number };
 export type RoomMembership = RoomCapabilities & { roomId: string; entryId: string; invitation: string; publicKey: string; privateKey: string; displayName?: string; roomName?: string };
 
@@ -50,7 +50,7 @@ export async function createRoomMembership(invitation: string, name = '', roomNa
   ]);
   return { roomId: hex(room), entryId: hex(await crypto.subtle.digest('SHA-256', publicKey)), invitation,
     publicKey: encode(publicKey), privateKey: encode(privateKey), displayName: name.trim().slice(0, 60) || undefined, roomName,
-    cg3: capabilities.cg3, pg1: capabilities.pg1 };
+    cg3: capabilities.cg3, pg1: capabilities.pg1, shotPositions: capabilities.shotPositions };
 }
 
 export function saveRoomMembership(value: RoomMembership) {
@@ -92,7 +92,8 @@ export function roomTransport(entryId: string): GroupSeriesTransport {
     if (!value || value.roomId !== roomId || value.entryId !== id) throw new Error('Приглашение в комнату недоступно.');
     const result = operation.result;
     return signedRoomRequest(value, { ...operation, result: result && { ...result, spread: value.cg3 ? result.spread : undefined,
-      progressBase: value.pg1 ? result.progressBase : undefined },
+      progressBase: value.pg1 ? result.progressBase : undefined,
+      shotPositions: value.shotPositions ? result.shotPositions : undefined },
       ...(value.roomName && value.displayName ? { displayName: value.displayName } : {}) });
   } };
 }

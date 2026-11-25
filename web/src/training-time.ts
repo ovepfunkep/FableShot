@@ -1,4 +1,20 @@
+import { isLocalDate } from './import-source.ts';
+import type { DiaryEntry } from './persistence.ts';
+
 export type TrainingTime = { closedMs: number | null; activeSinceMs: number | null; partial: boolean };
+
+const reportDate = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short' });
+const reportClock = new Intl.DateTimeFormat('ru-RU', { timeStyle: 'short' });
+
+export function reportedTrainingStart(entry: Pick<DiaryEntry, 'startedAt' | 'localDate' | 'source'>) {
+  if (entry.source?.kind === 'mytargets' || isLocalDate(entry.startedAt)) {
+    const localDate = entry.localDate ?? entry.startedAt;
+    return isLocalDate(localDate) ? { iso: localDate, label: reportDate.format(new Date(`${localDate}T12:00:00`)) } : null;
+  }
+  const instant = new Date(entry.startedAt);
+  if (!Number.isFinite(instant.getTime())) return null;
+  return { iso: instant.toISOString(), label: `${reportDate.format(instant)} · ${reportClock.format(instant)}` };
+}
 
 const validMs = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 

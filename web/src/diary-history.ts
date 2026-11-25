@@ -12,6 +12,20 @@ export function compareDiaryDate(left: DiaryEntry, right: DiaryEntry): number {
   return time(right) - time(left) || right.id.localeCompare(left.id);
 }
 
+export function frequentTrainingTitles(entries: readonly DiaryEntry[]): string[] {
+  const titles = new Map<string, { title: string; count: number }>();
+  for (const entry of [...entries].sort(compareDiaryDate)) {
+    const title = entry.title?.trim();
+    if (!title || entry.practice.savedAt === null || entry.deletedAt || entry.id === 'pilot' || entry.id.startsWith('demo-')) continue;
+    const key = title.replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
+    if (key === 'тренировка') continue;
+    const current = titles.get(key);
+    if (current) current.count++;
+    else titles.set(key, { title, count: 1 });
+  }
+  return [...titles.values()].sort((a, b) => b.count - a.count).slice(0, 5).map(item => item.title);
+}
+
 export function filterDiary(entries: readonly DiaryEntry[], filters: HistoryFilters): DiaryEntry[] {
   const query = filters.query.trim().toLocaleLowerCase('ru-RU');
   return entries.filter(entry => {

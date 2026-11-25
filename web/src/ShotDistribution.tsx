@@ -1,8 +1,10 @@
-import type { CSSProperties } from 'react';
+import { useMemo } from 'react';
+import type { KeyboardEvent } from 'react';
 import { formatAverage } from './preferences.ts';
 import { zoneColor } from './target.ts';
 import './shot-distribution.css';
 import { useReportView } from './report-view.ts';
+import { packMosaicGroups } from './mosaic-layout.ts';
 
 type Zone = { score: number; count: number; label: string };
 export type DistributionView = 'mosaic' | 'pie';
@@ -50,29 +52,50 @@ function ringLabels(zones: readonly Zone[], total: number) {
 function Mosaic({ zones, total, selected, onSelect }: {
   zones: readonly Zone[]; total: number; selected: number | null; onSelect: (score: number) => void;
 }) {
-  // All scores remain represented when a long training is compressed to 120 tiles.
-  // Quantile boundaries keep the total stable without allocating one DOM node per arrow.
-  const exact = total <= mosaicLimit;
-  const extra = mosaicLimit - zones.length;
-  let seen = 0;
-  return <div className="shot-mosaic" data-testid="shot-mosaic" aria-hidden="true" onClick={event => {
-    if (event.target instanceof HTMLElement && event.target.dataset.zone !== undefined) onSelect(Number(event.target.dataset.zone));
-  }}>
-    {zones.flatMap(zone => {
+  const layout = useMemo(() => {
+    const exact = total <= mosaicLimit;
+    const extra = mosaicLimit - zones.length;
+    let seen = 0;
+    const weighted = zones.map(({ score, count }) => {
       const before = seen;
-      seen += zone.count;
-      const count = exact ? zone.count : 1 + Math.round(extra * seen / total) - Math.round(extra * before / total);
-      return Array.from({ length: count }, (_, index) => <span key={`${zone.score}:${index}`} data-zone={zone.score}
-        data-muted={selected !== null && selected !== zone.score} style={{ background: distributionColor(zone.score) }} />);
+      seen += count;
+      return { score, tiles: exact ? count : 1 + Math.round(extra * seen / total) - Math.round(extra * before / total) };
+    });
+    return packMosaicGroups(weighted);
+  }, [zones, total]);
+  const cellSize = 16;
+  return <svg className="shot-mosaic" style={{ maxWidth: layout.columns * 27 }} data-testid="shot-mosaic" role="group" aria-label="Мозаика попаданий"
+    viewBox={`0 0 ${layout.columns * cellSize} ${layout.rows * cellSize}`}>
+    {zones.map(zone => {
+      const fill = distributionColor(zone.score);
+      const cells = layout.cellsByScore.get(zone.score) ?? [];
+      const first = cells[0];
+      return <g key={zone.score} role="button" tabIndex={0} aria-label={zoneName(zone)} aria-pressed={selected === zone.score}
+        data-testid={`report-zone-${zone.label}`} data-muted={selected !== null && selected !== zone.score}
+        onClick={() => onSelect(zone.score)} onKeyDown={event => activateZone(event, () => onSelect(zone.score))}>
+        {cells.map(({ column, row }) => <rect key={`${column}:${row}`} aria-hidden="true"
+          data-zone={zone.score} x={column * cellSize + 1} y={row * cellSize + 1} width={cellSize - 2} height={cellSize - 2}
+          rx={2} fill={fill} />)}
+        {first && <text aria-hidden="true" className="shot-mosaic-label" x={(first.column + .5) * cellSize} y={(first.row + .5) * cellSize}
+          textAnchor="middle" dominantBaseline="central" fill={zone.score === 0 || zone.score === 3 || zone.score === 4 ? '#fff' : '#111811'}>{zone.label}</text>}
+      </g>;
     })}
-  </div>;
+  </svg>;
+}
+
+const zoneName = (zone: Zone) => `${zone.score ? `Оценка ${zone.label}` : 'Промах'}, стрел: ${zone.count}`;
+
+function activateZone(event: KeyboardEvent<SVGGElement>, action: () => void) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  action();
 }
 
 export function ShotDistribution({ counts, total, view, reportId, scope }: { counts: readonly number[]; total: number; view: DistributionView; reportId?: string; scope?: number | null }) {
   const [selectedScore, setSelectedScore] = useReportView<number | null>(reportId, `zone:${scope ?? 'all'}`, null);
+  const zones = useMemo(() => counts.map((count, score) => ({ count, score, label: score === 0 ? 'M' : String(score) }))
+    .reverse().filter(zone => zone.count > 0), [counts]);
   if (!total) return null;
-  const zones = counts.map((count, score) => ({ count, score, label: score === 0 ? 'M' : String(score) }))
-    .reverse().filter(zone => zone.count > 0);
   const selected = zones.find(zone => zone.score === selectedScore);
   function select(score: number) { setSelectedScore(selectedScore === score ? null : score); }
   const reading = <div className="shot-distribution-reading" aria-live="polite" data-testid="shot-distribution-reading">
@@ -94,10 +117,8 @@ export function ShotDistribution({ counts, total, view, reportId, scope }: { cou
           const active = selected?.score === zone.score;
           return <g key={zone.score} role="button" tabIndex={0} aria-pressed={active}
             data-testid={`report-zone-${zone.label}`} data-muted={!!selected && !active}
-            aria-label={`${zone.score ? `Оценка ${zone.label}` : 'Промах'}, стрел: ${zone.count}`}
-            onClick={() => select(zone.score)} onKeyDown={event => {
-              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(zone.score); }
-            }}>
+            aria-label={zoneName(zone)}
+            onClick={() => select(zone.score)} onKeyDown={event => activateZone(event, () => select(zone.score))}>
             {zones.length === 1 ? <circle className="shot-sector" cx={center} cy={center} r={(outer + inner) / 2} fill="none" stroke={fill} strokeWidth={outer - inner} />
               : <><path className="shot-sector" d={ringSector(start, end)} fill={fill} stroke={active ? 'var(--ink)' : 'var(--surface)'} strokeWidth={active ? 2 : 1} />
                 <path d={`M ${point(start, inner)} L ${point(start, outer + 10)}`} stroke="var(--muted)" strokeWidth=".85" /></>}
@@ -112,12 +133,6 @@ export function ShotDistribution({ counts, total, view, reportId, scope }: { cou
         })}
       </svg>
       {reading}
-    </div>}
-    {view === 'mosaic' && <div className="shot-zone-keys" role="group" aria-label="Оценки попаданий">
-      {zones.map(zone => <button type="button" key={zone.score} data-testid={`report-zone-${zone.label}`}
-        style={{ '--zone-color': distributionColor(zone.score) } as CSSProperties}
-        aria-label={`${zone.score === 0 ? 'Промах' : `Оценка ${zone.label}`}, стрел: ${zone.count}`}
-        aria-pressed={selected?.score === zone.score} onClick={() => select(zone.score)}>{zone.label}</button>)}
     </div>}
   </>;
 }

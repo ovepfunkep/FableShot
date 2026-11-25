@@ -20,6 +20,14 @@ export type PersonalRecordEvent = {
   sessionRevision?: number;
 };
 
+export function personalRecordTitle(kind: PersonalRecordEvent['kind']) {
+  return { series: 'Рекорд серии', round: 'Рекорд раунда', volume: 'Рекорд по числу стрел', rank: 'Рекорд упражнения' }[kind];
+}
+
+export function personalRecordValue(kind: PersonalRecordEvent['kind'], value: number) {
+  return `${value} ${kind === 'volume' ? 'стр.' : 'очк.'}`;
+}
+
 export type PersonalSeriesRecord = {
   sessionId: string;
   seriesId: number;

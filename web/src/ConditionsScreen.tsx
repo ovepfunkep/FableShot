@@ -12,11 +12,15 @@ import { tournamentTitle } from './tournaments.ts';
 import type { Tournament, TournamentChoice } from './tournaments.ts';
 import { ConditionsCorrectionReview, preparePracticeConditionsCorrection } from './practice.ts';
 import type { Practice } from './practice.ts';
+import { TrainingTitleSuggestions } from './TrainingTitleSuggestions.tsx';
+import { TripleTargetControls } from './TripleTargetControls.tsx';
 import './conditions.css';
 
-export function BottomSheet({ title, onClose, children, tag, headerAction, startAtTop, onDismissRequest }: {
+export function BottomSheet({ title, onClose, children, tag, headerAction, headerLeading, startAtTop, onDismissRequest, className }: {
   title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode; startAtTop?: boolean;
   onDismissRequest?: () => boolean;
+  className?: string;
+  headerLeading?: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const drag = useRef<{ pointerId: number; startY: number; height: number } | null>(null);
@@ -64,7 +68,7 @@ export function BottomSheet({ title, onClose, children, tag, headerAction, start
     closeTimer.current = window.setTimeout(finishDismiss, 260);
   }
 
-  return <dialog ref={dialog} className="condition-sheet" aria-label={title} data-testid={tag} tabIndex={startAtTop ? -1 : undefined}
+  return <dialog ref={dialog} className={className ? `condition-sheet ${className}` : 'condition-sheet'} aria-label={title} data-testid={tag} tabIndex={startAtTop ? -1 : undefined}
     onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); dismiss(); }}
     onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === 'transform') finishDismiss(); }}
     onPointerDown={event => { backdropPress.current = event.target === event.currentTarget; }}
@@ -82,7 +86,7 @@ export function BottomSheet({ title, onClose, children, tag, headerAction, start
       <header onPointerDown={event => {
         const panel = dialog.current;
         if (!event.isPrimary || event.button !== 0 || !panel || panel.hasAttribute('data-sheet-closing') ||
-          event.target instanceof Element && event.target.closest('button, a, input')) return;
+          event.target instanceof Element && event.target.closest('button, a, input, select')) return;
         drag.current = { pointerId: event.pointerId, startY: event.clientY, height: panel.offsetHeight };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
@@ -106,7 +110,7 @@ export function BottomSheet({ title, onClose, children, tag, headerAction, start
           if (panel && drag.current?.pointerId === event.pointerId) resetDrag(panel);
         }}>
         <span className="sheet-handle" aria-hidden="true" />
-        {headerAction ? <div className="sheet-title-actions"><h2>{title}</h2>{headerAction}</div> : <h2>{title}</h2>}
+        {headerAction || headerLeading ? <div className="sheet-title-actions">{headerLeading ?? <h2>{title}</h2>}{headerAction}</div> : <h2>{title}</h2>}
       </header>
       {children}
     </div>
@@ -163,10 +167,11 @@ function readPresets() {
 }
 
 export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, achievementPreference,
-  correction, onFuture, onCorrection }: {
+  correction, onFuture, onCorrection, trainingTitles }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
-  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice) => Promise<boolean>; onBack: () => void;
+  onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice, title?: string) => Promise<boolean>; onBack: () => void;
+  trainingTitles?: readonly string[];
   tournaments?: readonly Tournament[];
   achievementPreference?: ReactNode;
   onTechnique: () => void; techniqueTitle: string;
@@ -180,6 +185,7 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const [equipment, setEquipment] = useState(initial.equipment);
   const [numberedArrows, setNumberedArrows] = useState(initialNumbering);
   const [tournamentKey, setTournamentKey] = useState('');
+  const [trainingTitle, setTrainingTitle] = useState('');
   const tournamentOptions = (tournaments ?? []).filter(item => !item.completed).flatMap(item =>
     item.starts.flatMap((start, index) => {
       if (start.status === 'absent') return [];
@@ -217,6 +223,9 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const nextRule: RoundRule = editableRule
     ? { unit: roundUnit, limit: roundUnit === 'unlimited' ? null : Number(roundLimit) } : rule;
   const valid = distanceValid && diameterValid && isConditions(nextConditions) && isRoundRule(nextRule);
+  const correctionChanged = !!correction && ([...touched].some(field => correctionSeries.some(series =>
+    JSON.stringify(series.conditions[field]) !== JSON.stringify(nextConditions[field]))) ||
+    correction.savedAt === null && (numberedArrows !== initialNumbering || nextRule.unit !== rule.unit || nextRule.limit !== rule.limit));
 
   function showCorrectionPreview(choices: Readonly<Record<string, string>> = {}) {
     if (!correction) return;
@@ -289,6 +298,11 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       <h1>{correction ? 'Исправить условия' : 'Условия тренировки'}</h1>
     </header>
     <div className="conditions-content">
+      {trainingTitles && <div className="training-title-field">
+        <input aria-label="Название тренировки" placeholder="Название (необязательно)" maxLength={5000} value={trainingTitle}
+          onChange={event => setTrainingTitle(event.currentTarget.value)} />
+        <TrainingTitleSuggestions titles={trainingTitles} onChoose={setTrainingTitle} />
+      </div>}
       {correction ? <div className="correction-scope">
         <span>Вся тренировка · серий {correctionSeries.length}</span>
         {onFuture && <button type="button" className="text-action" data-testid="conditions-future" onClick={onFuture}>Сменить со следующей серии</button>}
@@ -316,6 +330,7 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       {(!correction || correction.savedAt === null) && <details className="conditions-advanced">
         <summary data-testid="conditions-advanced"><Icon name="settings" /><span>Дополнительно</span><Icon name="right" /></summary>
         <div className="conditions-advanced-content">
+          {profile.vertical && <TripleTargetControls />}
           <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
             <Icon name="notes" /><span><strong>Памятка и фокус</strong><small>{techniqueTitle}</small></span><Icon name="right" />
           </button>
@@ -341,10 +356,14 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
     </div>
     <footer className="conditions-footer">
       <button type="button" className="primary" data-testid="start-training" disabled={!valid} onClick={async () => {
-        if (correction) { showCorrectionPreview(); return; }
+        if (correction) {
+          if (correctionChanged) showCorrectionPreview();
+          else onBack();
+          return;
+        }
         if (tournamentKey && !tournamentChoice) { setError('Этот турнирный старт больше недоступен. Выбери другой.'); return; }
-        if (!await onApply(nextConditions, nextRule, numberedArrows, tournamentChoice)) setError('Не удалось применить условия. Повтори действие.');
-      }}>{correction ? 'Проверить изменения' : editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
+        if (!await onApply(nextConditions, nextRule, numberedArrows, tournamentChoice, trainingTitle.trim() || undefined)) setError('Не удалось применить условия. Повтори действие.');
+      }}>{correction ? correctionChanged ? 'Проверить изменения' : 'Готово' : editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
     </footer>
     {review && <BottomSheet title="Сопоставить попадания" tag="conditions-correction-review" onClose={() => setReview(null)}>
       {review.choices.some(choice => choice.inOrder !== undefined) && <button type="button" className="text-action" onClick={() => setAnswers(previous => ({ ...previous,

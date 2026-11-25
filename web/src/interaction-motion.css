@@ -6,6 +6,7 @@
   border: 1px solid color-mix(in srgb, #b98613 52%, var(--edge)); border-radius: 12px; color: var(--ink);
 }
 .training-finish-highlight strong { font-variant-numeric: tabular-nums; }
+.training-finish-record-conditions { flex-basis: 100%; overflow-wrap: anywhere; color: var(--muted); }
 .training-finish-highlight[data-celebrate="true"] { animation: finish-emphasis 1000ms ease-out both; }
 .training-finish-highlight[data-celebrate="true"]::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -113,4 +114,11 @@ html[data-motion="off"] .journal-timeline-frame::before, html[data-motion="off"]
   .report-order li, .equipment-catalog-card, .equipment-card, .hit-map-modes button,
   .hit-map-spots button, .progress-timeline-metrics button, .progress-timeline-dot,
   .equipment-catalog-star svg, .equipment-chip, .journal-tab-history-card { transition: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="off"]) [data-new-round] { animation: training-new-round 480ms ease-out; }
+}
+@keyframes training-new-round {
+  from { box-shadow: 0 0 18px var(--accent-line), inset 0 0 0 2px var(--accent); }
+  to { box-shadow: 0 0 0 transparent, inset 0 0 0 transparent; }
 }

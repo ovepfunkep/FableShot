@@ -93,8 +93,9 @@ test('release notifications are optional and open verified notes after returning
         if (method === 'installedVersion') return { production: true, code: 74 };
         if (method === 'pendingRelease') return { code: Number(storage.getItem('pending-release') ?? 0) };
         if (method === 'acknowledge' && String(data.code) === storage.getItem('pending-release')) storage.removeItem('pending-release');
-        if (method === 'setEnabled' && storage.getItem('allow-push') === 'yes') storage.setItem('push-enabled', String(data.enabled));
-        return { available: true, enabled: storage.getItem('push-enabled') === 'true', allowed: storage.getItem('allow-push') === 'yes' };
+        if (method === 'setEnabled') storage.setItem('push-enabled', String(data.enabled));
+        return { available: true, enabled: storage.getItem('push-enabled') !== 'false',
+          allowed: storage.getItem('allow-push') === 'yes', canRequestPermission: true };
       },
     } });
   });
@@ -110,12 +111,18 @@ test('release notifications are optional and open verified notes after returning
   await page.getByTestId('settings-notifications').click();
   const toggle = page.getByRole('switch', { name: 'Обновления приложения' });
   await expect(page.getByRole('region', { name: 'Уведомления FableShot' })).not.toContainText('Сообщать о выходе новой версии');
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  const permission = page.getByRole('button', { name: 'Разрешить уведомления' });
+  await permission.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(permission).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(permission).toHaveCount(0);
   await page.evaluate(() => sessionStorage.setItem('allow-push', 'yes'));
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(permission).toHaveCount(0);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();

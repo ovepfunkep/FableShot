@@ -70,7 +70,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const [verified, setVerified] = useState('');
   const [name, setName] = useState(displayName ?? '');
   const [roomTitle, setRoomTitle] = useState('');
-  const [joinedRoom, setJoinedRoom] = useState<{ code: string; title?: string; cg3: boolean; pg1: boolean; finalized: boolean }>();
+  const [joinedRoom, setJoinedRoom] = useState<{ code: string; title?: string; cg3: boolean; pg1: boolean; shotPositions: boolean; finalized: boolean }>();
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -204,8 +204,9 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
             const title = readRoomName(snapshot);
             const cg3 = !!snapshot && typeof snapshot === 'object' && 'cg3' in snapshot && snapshot.cg3 === true;
             const pg1 = !!snapshot && typeof snapshot === 'object' && 'pg1' in snapshot && snapshot.pg1 === true;
+            const shotPositions = !!snapshot && typeof snapshot === 'object' && 'shotPositions' in snapshot && snapshot.shotPositions === true;
             const finalized = !!readRoomHistory(snapshot).finalizedAt;
-            if (alive.current) setJoinedRoom({ code, title, cg3, pg1, finalized });
+            if (alive.current) setJoinedRoom({ code, title, cg3, pg1, shotPositions, finalized });
           } catch { /* Old hosts can answer the connectivity check without room metadata. */ }
           setVerified(code);
           setMessage(`Комната ответила за ${result.milliseconds} мс.`);
@@ -214,7 +215,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
       {joinedRoom?.code === verified && joinedRoom.finalized && <p>Итоги уже зафиксированы. Участники могут открыть таблицу из своей тренировки.</p>}
       {onTraining && verified && verified === invitation.trim() && !(joinedRoom?.code === verified && joinedRoom.finalized) && <>{nameField}
         {joinedRoom?.code === verified && joinedRoom.title && <strong>{joinedRoom.title}</strong>}
-        <p>Участники увидят ваше имя, тип лука и результаты закрытых серий.</p>
+        <p>Участники увидят ваше имя, тип лука, результаты и мишени закрытых серий.</p>
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
         const metadata = joinedRoom?.code === verified ? joinedRoom : undefined;
         const membership = await createRoomMembership(verified, name, metadata?.title, metadata);

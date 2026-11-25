@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupStandings, readRoomSeries, roomConditionChoices } from '../src/group-leaderboard.ts';
+import { groupStandings, readRoomSeries, roomComparison, roomConditionChoices } from '../src/group-leaderboard.ts';
 
 test('PG1 compares frozen personal baselines, excludes future scores and requires enough complete arrows', () => {
   const conditions = { distanceMeters: 18, targetProfileId: 'wa-indoor-outer-v1', targetDiameterMm: 400 };
@@ -74,4 +74,47 @@ test('missing or deleted series stays partial and duplicate series cannot inflat
   assert.equal(rows[0].place, null);
   assert.equal(rows[0].points, 30);
   assert.throws(() => readRoomSeries({ series: [live, live] }));
+});
+
+test('room comparison uses the same window for all three metrics, with independent ranking', () => {
+  const ownId = 'a'.repeat(64);
+  const dadId = 'b'.repeat(64);
+  const awayId = 'c'.repeat(64);
+  const make = (entryId: string, count: number, score: string, distanceMeters: number, base: number) =>
+    Array.from({ length: count }, (_, index) => ({ entryId, ordinal: index + 1, result: {
+      scores: score, points: [...score].reduce((sum, value) => sum + Number(value), 0),
+      arrows: 3, hits: 3, bowCategory: 'barebow',
+      conditions: { distanceMeters, targetProfileId: 'wa-indoor-outer-v1', targetDiameterMm: 400 },
+      spread: { positions: 3, squaredDistance: 0, complete: true },
+      progressBase: { sessions: 3, arrows: 36, points: base * 36 },
+    } }));
+  const series = readRoomSeries({ series: [
+    ...make(ownId, 10, '555', 18, 4),
+    ...make(dadId, 10, '655', 18, 5), ...make(dadId, 11, '776', 18, 5).slice(10),
+    ...make(awayId, 10, '888', 10, 5),
+  ] });
+  const standings = (scope: 'through' | 'single', ordinal: number, sameConditions = false) =>
+    new Map(roomComparison(series, [], { ownId, ordinal, scope, sort: 'classic', sameConditions }).map(row => [row.id, row]));
+  const automatic = standings('through', 10);
+  assert.equal(automatic.get(ownId)!.points, 150);
+  assert.equal(automatic.get(dadId)!.points, 160);
+  assert.equal(automatic.get(awayId)!.metrics.pg1.place, 1);
+  assert.ok([...automatic.values()].every(row => row.metrics.classic.place === null && row.metrics.cg3.place === null));
+  const ranked = standings('through', 10, true);
+  assert.equal(ranked.get(awayId)!.metrics.classic.place, null);
+  assert.equal(ranked.get(awayId)!.metrics.cg3.place, null);
+  assert.equal(ranked.get(awayId)!.metrics.pg1.place, 1);
+  assert.equal(ranked.get(dadId)!.metrics.classic.place, 1);
+  assert.equal(ranked.get(dadId)!.metrics.cg3.place, 1);
+  assert.equal(ranked.get(ownId)!.metrics.classic.place, 2);
+  const throughEleven = standings('through', 11);
+  assert.equal(throughEleven.get(dadId)!.points, 180);
+  assert.equal(throughEleven.get(ownId)!.seriesCount, 10);
+  assert.equal(throughEleven.get(ownId)!.metrics.cg3.preliminary, true);
+  assert.equal(throughEleven.get(ownId)!.metrics.pg1.preliminary, true);
+  const singleEleven = standings('single', 11);
+  assert.equal(singleEleven.get(dadId)!.points, 20);
+  assert.equal(singleEleven.get(dadId)!.current?.scores, '776');
+  assert.equal(singleEleven.get(ownId)!.metrics.classic.value, null);
+  assert.throws(() => readRoomSeries({ series: [{ ...series[0], result: { ...series[0].result, scores: '777' } }] }));
 });

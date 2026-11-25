@@ -28,6 +28,8 @@ const paths = {
   stats: 'M3 3v18h18M6 16l5-6 4 3 6-8',
   left: 'm14 6-6 6 6 6',
   right: 'm10 6 6 6-6 6',
+  up: 'm6 14 6-6 6 6',
+  down: 'm6 10 6 6 6-6',
   settings: 'M9 2h6l.5 3 2 .9 2.7-1.1 2.4 5.1-2.6 1.6v2l2.6 1.6-2.4 5.1-2.7-1.1-2 .9-.5 3H9l-.5-3-2-.9-2.7 1.1-2.4-5.1L4 13.5v-2L1.4 9.9l2.4-5.1 2.7 1.1 2-.9L9 2M15.5 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0',
   notes: 'M6 3h14v18H6zM3 7h5M3 12h5M3 17h5M11 7h5m-5 5h5m-5 5h3',
 };
@@ -38,15 +40,15 @@ export function Icon({ name }: { name: keyof typeof paths }) {
   </svg>;
 }
 
-function ScoreTile({ label, number, shots, onOpen, tag, rank }: {
+function ScoreTile({ label, number, shots, onOpen, tag, rank, emphasis }: {
   label: string; number: number | string; shots: readonly Shot[]; onOpen: () => void; tag: 'round' | 'series';
-  rank?: ReactNode;
+  rank?: ReactNode; emphasis?: number;
 }) {
   const { preferences } = useTrainingPreferences();
   const result = summarize(shots);
   const score = `${result.points}/${result.maximum}`;
   const average = formatAverage(result.average, preferences.averageHundredths);
-  return <div className="stage-tile-container"><button type="button" className="stage-tile" data-testid={`training-${tag === 'round' ? 'rounds' : 'series'}-open`} onClick={onOpen}>
+  return <div className="stage-tile-container"><button key={emphasis} type="button" className="stage-tile" data-new-round={emphasis !== undefined || undefined} data-testid={`training-${tag === 'round' ? 'rounds' : 'series'}-open`} onClick={onOpen}>
     <span className="tile-heading">{label} <strong>{number}</strong></span>
     {statisticVisible(preferences, 'result') && <span className="tile-score" data-testid={`${tag}-score`}
       aria-live={tag === 'series' ? 'polite' : undefined} aria-atomic={tag === 'series' ? true : undefined}>
@@ -75,18 +77,18 @@ function ChangingScore({ text }: { text: string }) {
   return <span ref={digits} className="changing-score">{Array.from(text, (character, index) => <span key={index}>{character}</span>)}</span>;
 }
 
-export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesShots, onRound, onSeries, roundRank, seriesRank }: {
+export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesShots, onRound, onSeries, roundRank, seriesRank, roundEmphasis }: {
   roundNumber: number; seriesNumber: number | string; roundShots: readonly Shot[]; seriesShots: readonly Shot[];
   onRound: () => void; onSeries: () => void;
-  roundRank?: ReactNode; seriesRank?: ReactNode;
+  roundRank?: ReactNode; seriesRank?: ReactNode; roundEmphasis?: number;
 }) {
   const { preferences } = useTrainingPreferences();
   if (preferences.hideScores) return <section className="stage-summary stage-summary-hidden" aria-label="Этап тренировки">
-    <button type="button" data-testid="training-rounds-open" onClick={onRound}>Раунд {roundNumber}</button>
+    <button key={roundEmphasis} type="button" data-new-round={roundEmphasis !== undefined || undefined} data-testid="training-rounds-open" onClick={onRound}>Раунд {roundNumber}</button>
     <button type="button" data-testid="training-series-open" onClick={onSeries}>Серия {seriesNumber}</button>
   </section>;
   return <section className="stage-summary" aria-label="Результаты тренировки">
-    <ScoreTile label="Раунд" number={roundNumber} shots={roundShots} onOpen={onRound} tag="round" rank={roundRank} />
+    <ScoreTile label="Раунд" number={roundNumber} shots={roundShots} onOpen={onRound} tag="round" rank={roundRank} emphasis={roundEmphasis} />
     <ScoreTile label="Серия" number={seriesNumber} shots={seriesShots} onOpen={onSeries} tag="series" rank={seriesRank} />
   </section>;
 }

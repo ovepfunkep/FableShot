@@ -13,10 +13,26 @@ const env = { FCM_PROJECT_ID: 'fableshot-test', FCM_ACCESS_TOKEN: 'fixture-acces
 test('only the matching stable release can produce an Android update notification', () => {
   const { message } = releasePushMessage(published, expected);
   assert.equal(message.topic, 'fableshot_stable_updates');
-  assert.deepEqual(message.data, { type: 'release', version: '0.30.30', versionCode: '74' });
+  assert.deepEqual(message.data, { type: 'release', version: '0.30.30', versionCode: '74', title: 'В этот раз без креатива', body: 'Доступно обновление!' });
   for (const change of [{ draft: true }, { prerelease: true }, { id: 78 }, { tag_name: 'v0.30.31' }, { assets: [] },
     { target_commitish: 'b'.repeat(40) }, { assets: [{ ...published.assets[0], browser_download_url: 'https://example.com/app.apk' }] }]) {
     assert.throws(() => releasePushMessage({ ...published, ...change }, expected), /does not match/);
+  }
+});
+
+test('the release selects its fixed title and only the first supports background display on the previous app', () => {
+  for (const [code, title] of [
+    ['76', 'Не GTA 6, но тоже неплохо'], ['77', 'Как летающая тесла, только круче'],
+    ['78', 'Папа, я в шторке!'], ['79', 'В этот раз без креатива'], ['80', 'В этот раз без креатива'],
+  ]) {
+    const tag = `v0.30.${Number(code) - 44}`;
+    const name = `FableShot-android-${code}.apk`;
+    const release = { ...published, tag_name: tag, assets: [{ ...published.assets[0], name,
+      browser_download_url: `https://github.com/ovepfunkep/FableShot/releases/download/${tag}/${name}` }] };
+    const { message } = releasePushMessage(release, { ...expected, code, tag });
+    assert.equal(message.data.title, title);
+    assert.equal(message.data.body, 'Доступно обновление!');
+    assert.deepEqual(message.notification, code === '76' ? { title, body: message.data.body } : undefined);
   }
 });
 

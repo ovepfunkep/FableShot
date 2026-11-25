@@ -71,6 +71,18 @@ h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .target-stage { position: relative; flex: 1; min-height: 0; }
 .target-surface { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
 .target-surface canvas { display: block; width: 100%; height: 100%; }
+.target-spot-navigation { position: absolute; inset: 50% 10px auto auto; transform: translateY(-50%); display: grid; gap: 4px; }
+.target-spot-navigation button { display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid var(--edge); border-radius: 50%; background: var(--surface); color: var(--accent); }
+.target-spot-navigation button:disabled { opacity: .42; }
+.target-spot-navigation svg { width: 18px; height: 18px; }
+.target-guide-button { position: absolute; inset: 6px auto auto 10px; display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 999px; background: var(--surface); color: var(--muted); }
+.target-guide-button[data-highlight] { padding: 0 10px; color: var(--accent); font-size: 13px; font-weight: 700; }
+.target-guide-button svg { width: 18px; height: 18px; }
+.target-guide-step { display: grid; gap: 8px; }
+.target-guide-step h3, .target-guide-step p { margin: 0; }
+.target-guide-step img { width: 100%; max-height: 44dvh; object-fit: contain; border-radius: 12px; background: var(--app-bg); }
+.target-guide-controls { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 12px; }
+.target-guide-controls .primary { width: auto; min-width: 110px; }
 .zoom {
   position: absolute; z-index: 1; display: flex; align-items: center;
   border-radius: 28px; background: #1a231cec;

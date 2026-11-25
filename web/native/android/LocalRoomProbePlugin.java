@@ -161,7 +161,7 @@ public class LocalRoomProbePlugin extends Plugin {
 
     private JSObject roomStatus() {
         if (room != null) return new JSObject().put("invitation", invitation).put("checks", room.checks())
-            .put("acceptedSeries", store.acceptedSeries()).put("roomName", roomName).put("cg3", true).put("pg1", true)
+            .put("acceptedSeries", store.acceptedSeries()).put("roomName", roomName).put("cg3", true).put("pg1", true).put("shotPositions", true)
             .put("finalizedAt", savedRoom().getLong("finalizedAt", 0));
         SharedPreferences saved = savedRoom();
         return saved.contains("secret") ? new JSObject().put("restorable", true).put("roomName", saved.getString("name", "")) : new JSObject();

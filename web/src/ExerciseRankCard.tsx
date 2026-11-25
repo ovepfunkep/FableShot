@@ -34,7 +34,7 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
       <div className="exercise-rank__summary">
         <p className="exercise-rank__level" data-testid="exercise-rank-level">
           {rank.forecast?.pace && <RankMedal />}
-          {display.forecast ? `Темп ${display.label}` : `${display.label} по очкам`}
+          {display.label === '—' ? '—' : display.forecast ? `Темп ${display.label}` : `${display.label} по очкам`}
         </p>
         {(showResult || showAverage) && <p className="exercise-rank__score">
           {showResult && <><strong>{evaluation.points}</strong> / {evaluation.entered * 10}</>}

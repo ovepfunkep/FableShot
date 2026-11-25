@@ -9,6 +9,7 @@ import { hitGeometry, maximumSpread } from './hit-map.ts';
 import { useReportView } from './report-view.ts';
 import type { Practice, Series } from './practice.ts';
 import type { DiaryEntry } from './persistence.ts';
+import { personalRecordTitle, personalRecordValue } from './personal-record-events.ts';
 import { ProgressScoreCard } from './ProgressScoreCard.tsx';
 import { formatAverage } from './preferences.ts';
 import { getTargetProfile, summarize } from './target.ts';
@@ -56,16 +57,17 @@ function FinishHighlight({ moment }: { moment: TrainingMoment }) {
   const labels = { rank: 'Новый норматив', series: 'Чистая серия', record: 'Личный рекорд', progress: 'Заметный прогресс' };
   const achievement = moment.kind === 'series' && moment.achievementId ? getAchievementDefinition(moment.achievementId) : undefined;
   const detail = moment.kind === 'rank' ? moment.level : moment.kind === 'series' ? `${moment.arrows * 10}/${moment.arrows * 10}`
-    : moment.kind === 'record' ? `${moment.previous} → ${moment.value}`
+    : moment.kind === 'record' ? personalRecordValue(moment.recordKind, moment.value)
     : `${average(moment.previous)} → ${average(moment.value)} · ${moment.distance} м`;
   return <div className="training-finish-highlight" data-testid="training-finish-highlight" data-moment={moment.kind}
     data-celebrate={preferences.celebrationEffects !== false}>
-    <span>{achievement?.title ?? labels[moment.kind]}</span><strong>{detail}</strong>
+    <span>{moment.kind === 'record' ? personalRecordTitle(moment.recordKind) : achievement?.title ?? labels[moment.kind]}</span><strong>{detail}</strong>
+    {moment.kind === 'record' && <small className="training-finish-record-conditions">{moment.label}</small>}
   </div>;
 }
 
-function ResultCard({ shots, diameterMm, practice, onRankReference, moment }: {
-  shots: readonly Shot[]; diameterMm: number | null; practice: Practice; onRankReference: () => void; moment?: TrainingMoment;
+function ResultCard({ shots, diameterMm, practice, onRankReference, moment, duration }: {
+  shots: readonly Shot[]; diameterMm: number | null; practice: Practice; onRankReference: () => void; moment?: TrainingMoment; duration?: ReactNode;
 }) {
   const { preferences, update } = useTrainingPreferences();
   const [rankOpen, setRankOpen] = useState(false);
@@ -78,21 +80,20 @@ function ResultCard({ shots, diameterMm, practice, onRankReference, moment }: {
   const showOffset = diameterMm !== null && !visible('hit_map') && visible('offset');
   const rank = useMemo(() => exerciseRank(practice, preferences.rankCategory ?? null), [practice, preferences.rankCategory]);
   const rankDisplay = exerciseRankDisplay(rank);
-  if (!(['result', 'average', 'volume', 'norms'] as const).some(visible) && !showGrouping && !showOffset) return null;
   const hasMetrics = visible('average') || showGrouping || visible('volume') || showOffset;
   const highlight = moment && (moment.kind === 'rank' ? visible('norms') : moment.kind === 'progress' ? visible('average') : visible('result'));
   return <section className="report-metrics-card report-metrics-result" aria-label="Результат" data-testid="report-result" data-finish-moment={highlight ? moment.kind : undefined}>
     {highlight && <FinishHighlight moment={moment} />}
     <div className="report-result-score-row">
       <div className="report-result-main">
-        <h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>
+        <div className="report-result-label"><h3>{visible('result') ? 'Результат' : 'Показатели'}</h3>{duration}</div>
         {visible('result') && <div className="report-metrics-score" data-testid="report-result-score"><strong>{points}</strong><span>/ {maximum}</span></div>}
       </div>
       {visible('norms') && <button type="button" className="report-result-rank" title={rank.reason ?? (rank.finalResult ? 'Разряд по всей тренировке' : 'Прогноз по среднему баллу')}
         aria-label="Разряд по всей тренировке" aria-haspopup="dialog" onClick={() => setRankOpen(true)}
         data-forecast={rankDisplay.forecast}>
         <span>{rankDisplay.forecast ? 'Темп' : 'Разряд'}</span>
-        <strong><RankMedal /><span data-testid="report-result-rank">{rankDisplay.label ?? '—'}</span></strong>
+        <strong>{rankDisplay.label && rankDisplay.label !== '—' && <RankMedal />}<span data-testid="report-result-rank">{rankDisplay.label ?? '—'}</span></strong>
         {rankDisplay.actual && <span>{rankDisplay.actual}</span>}
       </button>}
     </div>
@@ -150,8 +151,8 @@ function ZoneDistribution({ series, view, onView, reportId }: {
   </section>;
 }
 
-export function TrainingReportMetrics({ practice, entries, overview, onRankReference, moment, reportId }: {
-  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void; moment?: TrainingMoment; reportId?: string;
+export function TrainingReportMetrics({ practice, entries, overview, onRankReference, moment, reportId, duration }: {
+  practice: Practice; entries: readonly DiaryEntry[]; overview: Partial<Record<ReportBlock, ReactNode>>; onRankReference: () => void; moment?: TrainingMoment; reportId?: string; duration?: ReactNode;
 }) {
   const { preferences, update } = useTrainingPreferences();
   const visible = (feature: Parameters<typeof statisticVisible>[1]) => statisticVisible(preferences, feature);
@@ -167,10 +168,13 @@ export function TrainingReportMetrics({ practice, entries, overview, onRankRefer
   const mayShowResult = (['result', 'average', 'volume', 'norms'] as const).some(visible) ||
     !mixed && (visible('grouping') || !visible('hit_map') && visible('offset'));
   const blocks = { ...overview };
+  if (scope && (mayShowResult || duration)) blocks.result = <ResultCard shots={shots} diameterMm={mixed ? null : scope.conditions.targetDiameterMm}
+    practice={practice} onRankReference={onRankReference} moment={moment} duration={duration} />;
+  if (!scope && duration) blocks.result = <section className="report-metrics-card report-metrics-result" data-testid="report-result">
+    <div className="report-result-label"><h3>Результат</h3>{duration}</div>
+  </section>;
   if (scope && (['result', 'average', 'volume', 'grouping', 'offset', 'norms', 'general_score', 'progress_score', 'hit_map', 'distribution', 'zone_trend', 'numbered_arrows'] as const).some(visible)) {
     Object.assign(blocks, {
-      result: mayShowResult && <ResultCard shots={shots} diameterMm={mixed ? null : scope.conditions.targetDiameterMm}
-        practice={practice} onRankReference={onRankReference} moment={moment} />,
       general_score: visible('general_score') && <CompositeScoreCard practice={practice} conditions={scope.conditions} />,
       progress_score: visible('progress_score') && <ProgressScoreCard key={`progress:${scope.key}`} practice={practice} series={scope.series} entries={entries} />,
       hit_map: visible('hit_map') && <TrainingHitMap key={`map:${scope.key}`} series={scope.series} conditions={scope.conditions} rememberView reportId={reportId} />,

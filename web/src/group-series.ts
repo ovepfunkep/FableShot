@@ -2,12 +2,27 @@ import { currentSeries } from './practice.ts';
 import type { Practice, Series } from './practice.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
 import { MAX_SERIES_ARROWS } from './conditions.ts';
-import { acceptsDiameter, getTargetProfile } from './target.ts';
+import { acceptsDiameter, getTargetProfile, MISS_RING_WIDTH } from './target.ts';
+import type { TargetProfile, TargetSpot } from './target.ts';
 import { groupSpread } from './composite-scoring.ts';
 import { MIN_SCORED_ARROWS, progressConditionKey } from './progress-scoring.ts';
 
 export type RoomSpread = { positions: number; squaredDistance: number; complete: boolean };
 export type RoomProgressBase = { sessions: number; arrows: number; points: number };
+export type RoomShotPosition = [x: number, y: number, spot?: TargetSpot] | null;
+const maxMappedArrows = 512;
+const roomPositionLimit = (profile: TargetProfile) => profile.zones.at(-1)!.outerRadius + MISS_RING_WIDTH + .0001;
+
+export function validRoomShotPositions(value: unknown, count: number, profile: TargetProfile): value is RoomShotPosition[] {
+  const limit = roomPositionLimit(profile);
+  return Array.isArray(value) && count <= maxMappedArrows && value.length === count && Array.from(value).every(point => {
+    if (point === null) return true;
+    if (!Array.isArray(point) || point.length !== (profile.vertical ? 3 : 2)) return false;
+    const [x, y, spot] = point;
+    return typeof x === 'number' && typeof y === 'number' && Math.hypot(x, y) <= limit &&
+      (!profile.vertical || spot === 0 || spot === 1 || spot === 2);
+  });
+}
 
 export function isRoomProgressBase(value: unknown): value is RoomProgressBase {
   if (!value || typeof value !== 'object') return false;
@@ -33,6 +48,7 @@ export type GroupSeriesResult = {
   targetDiameterMm: number;
   spread?: RoomSpread;
   progressBase?: RoomProgressBase;
+  shotPositions?: RoomShotPosition[];
 };
 
 export type GroupSeriesRevision = {
@@ -70,7 +86,8 @@ export function isGroupSeriesRevision(value: unknown): value is GroupSeriesRevis
     typeof result.distanceMeters === 'number' && Number.isFinite(result.distanceMeters) && result.distanceMeters > 0 &&
     typeof result.targetDiameterMm === 'number' && result.targetDiameterMm <= 10_000 && acceptsDiameter(profile, result.targetDiameterMm) &&
     (result.spread === undefined || isRoomSpread(result.spread, result.scores.replace(/0/g, '').length)) &&
-    (result.progressBase === undefined || isRoomProgressBase(result.progressBase));
+    (result.progressBase === undefined || isRoomProgressBase(result.progressBase)) &&
+    (result.shotPositions === undefined || validRoomShotPositions(result.shotPositions, result.scores.length, profile));
 }
 
 export function isGroupSeriesJournal(value: unknown): value is GroupSeriesJournal {
@@ -92,9 +109,18 @@ function projectSeries(series: Series, practice: Practice): GroupSeriesResult {
   const progressBase = baseline && baseline.status !== 'unknown_conditions' && baseline.maximumPerArrow === 10 &&
     baseline.conditionKey === progressConditionKey(series.conditions)
     ? { sessions: baseline.sources.length, arrows: baseline.scoredCount, points: baseline.scoreSum } : undefined;
+  const profile = getTargetProfile(targetProfileId)!;
+  const positions = series.shots.length <= maxMappedArrows ? series.shots.map<RoomShotPosition>(shot => {
+    const point = shot.point ?? shot.missPoint;
+    if (!point) return null;
+    const x = Number(point.x.toFixed(5)), y = Number(point.y.toFixed(5));
+    if (Math.hypot(x, y) > roomPositionLimit(profile)) return null;
+    return profile.vertical ? [x, y, shot.spot ?? 1] : [x, y];
+  }) : [];
   return { scores: series.shots.map(shot => shot.code === 'X' ? 'X' : shot.points === 10 ? 'T' : String(shot.points)).join(''),
     bowCategory: equipment?.bow.category ?? null, distanceMeters, targetProfileId, targetDiameterMm,
     ...(progressBase && { progressBase }),
+    ...(positions.some(point => point !== null) && { shotPositions: positions }),
     spread: {
       positions: series.shots.filter(shot => shot.points > 0 && shot.point !== null).length,
       squaredDistance: groupSpread(series.shots).squaredDistance,
@@ -109,16 +135,16 @@ function sameResult(first: GroupSeriesResult | null, second: GroupSeriesResult |
     first.spread?.positions === second.spread?.positions && first.spread?.squaredDistance === second.spread?.squaredDistance &&
     first.spread?.complete === second.spread?.complete &&
     first.progressBase?.sessions === second.progressBase?.sessions && first.progressBase?.arrows === second.progressBase?.arrows &&
-    first.progressBase?.points === second.progressBase?.points;
+    first.progressBase?.points === second.progressBase?.points &&
+    JSON.stringify(first.shotPositions) === JSON.stringify(second.shotPositions);
 }
 
-/** Attach only when starting a new training explicitly inside a joined room. */
+/** Start publication from the first closed series, including ones completed before joining. */
 export function newGroupSeriesJournal(roomId: string, entryId: string, practice: Practice): GroupSeriesJournal {
-  if (!identifier(roomId) || !identifier(entryId) || practice.savedAt !== null ||
-    practice.rounds.some(round => round.series.some(series => series.shots.length))) {
-    throw new Error('Для комнаты нужна новая тренировка.');
+  if (!identifier(roomId) || !identifier(entryId) || practice.savedAt !== null) {
+    throw new Error('В комнату можно добавить только активную тренировку.');
   }
-  return { roomId, entryId, ends: [] };
+  return trackGroupSeries({ roomId, entryId, ends: [] }, practice);
 }
 
 /** Keep publication and local edits in the same storage transaction. */
@@ -174,6 +200,7 @@ export function receiveGroupSeries(accepted: readonly GroupSeriesRevision[], ope
     targetProfileId: result.targetProfileId, targetDiameterMm: result.targetDiameterMm,
     ...(result.spread && { spread: { ...result.spread } }),
     ...(result.progressBase && { progressBase: { ...result.progressBase } }),
+    ...(result.shotPositions && { shotPositions: result.shotPositions.map(point => point && [...point] as RoomShotPosition) }),
   } };
   return { accepted: [...accepted.filter(end => end.endId !== endId), replacement], receipt: { endId, revision } };
 }

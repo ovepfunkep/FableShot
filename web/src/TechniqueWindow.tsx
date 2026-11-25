@@ -9,6 +9,7 @@ import {
 import type { TechniqueDocument, TechniqueLibrary, TechniquePhase, TechniqueSelection, TechniqueStep, TechniqueText, TechniqueVersion } from './technique.ts';
 import { exportDocument } from './document-export.ts';
 import { TechniqueDisplayControls, useTechniqueSettings } from './TechniqueSettings.tsx';
+import { TechniqueSubpointEditor } from './TechniqueSubpointEditor.tsx';
 import './technique.css';
 
 type Reading = { documentId: string | null; version: TechniqueVersion };
@@ -309,7 +310,9 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
               <div className="technique-row"><h3>{i + 1}. {phase.title || 'Фаза'}</h3><button type="button" className="icon-button" aria-label={`Изменить фазу ${i + 1}`} onClick={() => setOverlay({ kind: 'phase', phaseId: phase.id })}><PencilIcon /></button></div>
               {phase.steps.map((step, j) => <button type="button" key={step.id} className="technique-outline-step" data-testid={`technique-step-${i}-${j}`}
                 onClick={() => { setExpanded(false); setOverlay({ kind: 'step', phaseId: phase.id, stepId: step.id }); }}>
-                <span className="technique-outline-number">{j + 1}</span><span><strong>{step.short || step.detail.split('\n')[0] || 'Новый пункт'}</strong>{step.question.trim() && <small>Уточнить с тренером</small>}</span><PencilIcon />
+                <span className="technique-outline-number">{i + 1}.{j + 1}</span><span><strong>{step.short || 'Пункт'}</strong>
+                  {techniqueSubpoints(step, i + 1, j + 1).map((line, index) => <span className="technique-outline-subpoint" key={index}>{line}</span>)}
+                  {step.question.trim() && <small>Уточнить с тренером</small>}</span><PencilIcon />
               </button>)}
               <button type="button" className="technique-text-button" disabled={phase.steps.length >= 50} data-testid={`technique-add-step-${i}`} onClick={() => {
                 const step = newTechniqueStep(); updatePhase({ ...phase, steps: [...phase.steps, step] }); setExpanded(false); setOverlay({ kind: 'step', phaseId: phase.id, stepId: step.id });
@@ -415,12 +418,12 @@ export function TechniqueWindow({ onClose, onSelect, initial, readOnly = false, 
         <button type="button" className="primary" onClick={() => setOverlay(null)}>Готово</button>
       </>}
       {overlay.kind === 'step' && editingStep && editingPhase && <>
-        <h2>Пункт {editorStepIndex + 1}</h2>
+        <h2>Пункт {editorPhaseIndex + 1}.{editorStepIndex + 1}</h2>
         <Field label="Короткая подсказка" value={editingStep.short} onChange={short => updateStep(editingPhase.id, { ...editingStep, short })} maxLength={200} testId="technique-step-short" />
-        <Field label="Полное пояснение" value={editingStep.detail} onChange={detail => updateStep(editingPhase.id, { ...editingStep, detail })} maxLength={4000} multiline testId="technique-step-detail" />
-        <button type="button" className="technique-text-button" onClick={() => setExpanded(!expanded)}>{expanded ? 'Скрыть подробности' : 'Подпункты и тренер'}</button>
-        {expanded && <><Field label="Подпункты · каждый с новой строки" value={editingStep.children} onChange={children => updateStep(editingPhase.id, { ...editingStep, children })} maxLength={4000} multiline testId="technique-step-children" />
-          <Field label="Уточнить с тренером" value={editingStep.question} onChange={question => updateStep(editingPhase.id, { ...editingStep, question })} maxLength={1000} multiline testId="technique-step-question" />
+        <TechniqueSubpointEditor key={editingStep.id} step={editingStep} number={`${editorPhaseIndex + 1}.${editorStepIndex + 1}`}
+          onChange={fields => updateStep(editingPhase.id, { ...editingStep, ...fields })} />
+        <button type="button" className="technique-text-button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>Параметры пункта</button>
+        {expanded && <><Field label="Уточнить с тренером" value={editingStep.question} onChange={question => updateStep(editingPhase.id, { ...editingStep, question })} maxLength={1000} multiline testId="technique-step-question" />
           <label className="technique-check"><input type="checkbox" checked={editingStep.visible} onChange={event => updateStep(editingPhase.id, { ...editingStep, visible: event.target.checked })} />Показывать в кратком режиме</label></>}
         <div className="technique-row"><button type="button" className="icon-button" aria-label="Пункт выше" disabled={editorStepIndex <= 0} onClick={() => updatePhase({ ...editingPhase, steps: move(editingPhase.steps, editorStepIndex, -1) as TechniqueStep[] })}>↑</button>
           <button type="button" className="icon-button" aria-label="Пункт ниже" disabled={editorStepIndex >= editingPhase.steps.length - 1} onClick={() => updatePhase({ ...editingPhase, steps: move(editingPhase.steps, editorStepIndex, 1) as TechniqueStep[] })}>↓</button>

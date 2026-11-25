@@ -24,11 +24,17 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await page.getByTestId('next-end').click();
   await page.getByRole('button', { name: 'Отметить промах' }).click();
   await expect(page.getByTestId('rank-round')).toContainText('II');
-  await expect(page.getByTestId('rank-series')).toContainText('ниже порога');
+  await expect(page.getByTestId('rank-series').locator('strong')).toHaveText('—');
+  await expect(page.getByTestId('rank-series')).toHaveAccessibleName(/ниже порога/);
   await page.getByTestId('rank-series').click();
   await page.getByTestId('rank-open-reference').click();
   await expect(page.getByTestId('rank-reference')).toBeVisible();
   await page.reload();
   await openTraining(page);
   await expect(page.getByTestId('rank-round')).toContainText('II');
+  await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  const trend = page.getByTestId('training-mean-trend');
+  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('rank');
+  await expect(trend.getByTestId('training-mean-value')).toHaveText('—');
+  await expect(trend.locator('.training-mean-line')).toHaveAttribute('d', /M\s.+\sL\s/);
 });

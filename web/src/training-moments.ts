@@ -13,7 +13,7 @@ type CleanSeriesAwardId = typeof cleanSeriesAwards[number]['id'];
 
 export type TrainingMoment =
   | { kind: 'rank'; level: RankThreshold['label'] }
-  | { kind: 'record'; label: string; previous: number; value: number }
+  | { kind: 'record'; recordKind: PersonalRecordEvent['kind']; label: string; previous: number; value: number }
   | { kind: 'progress'; previous: number; value: number; distance: number }
   | { kind: 'series'; arrows: number; achievementId?: CleanSeriesAwardId };
 
@@ -66,7 +66,7 @@ export function trainingMoment(entry: DiaryEntry, history: readonly DiaryEntry[]
   const clean = series.find(end => isCleanSeries(end) && !hasFinishedCleanSeries(previous, bowOf(end), entry.id));
   if (clean) return { kind: 'series', arrows: clean.shots.length };
   const record = records.find(item => item.kind !== 'volume');
-  if (record) return { kind: 'record', label: record.label, previous: record.previousValue, value: record.value };
+  if (record) return { kind: 'record', recordKind: record.kind, label: record.label, previous: record.previousValue, value: record.value };
 
   const groups = new Map<number, Series[]>();
   for (const end of series) {
@@ -87,5 +87,5 @@ export function trainingMoment(entry: DiaryEntry, history: readonly DiaryEntry[]
     }
   }
   if (best) return best;
-  if (records[0]) return { kind: 'record', label: records[0].label, previous: records[0].previousValue, value: records[0].value };
+  if (records[0]) return { kind: 'record', recordKind: records[0].kind, label: records[0].label, previous: records[0].previousValue, value: records[0].value };
 }

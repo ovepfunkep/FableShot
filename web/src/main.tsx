@@ -5,6 +5,7 @@ import { useAndroidUpdates } from './android-updates.ts';
 import { createRoot } from 'react-dom/client';
 import { useAppBack } from './app-back.ts';
 import { ReportOverview } from './ReportOverview.tsx';
+import type { ReportPosition } from './ReportOverview.tsx';
 import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
 import { usePracticeTimer } from './usePracticeTimer.ts';
@@ -18,6 +19,8 @@ import type { TechniqueSelection } from './technique.ts';
 import { TechniqueSettingsProvider } from './TechniqueSettings.tsx';
 import { StagePicker } from './StagePicker.tsx';
 import { LensTestTarget, TargetBoard } from './TargetBoard.tsx';
+import { TargetGuide } from './TargetGuide.tsx';
+import { TripleTargetControls } from './TripleTargetControls.tsx';
 import { Icon, shotStripCapacity, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
@@ -56,7 +59,7 @@ import { STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-achievements.ts';
 import { DiaryNotesSheet } from './DiaryNotesSheet.tsx';
 import { NotebookScreen } from './NotebookScreen.tsx';
 import type { DiaryNoteScope } from './diary-notes.ts';
-import { compareDiaryDate, DEFAULT_HISTORY_FILTERS, renameDiaryEntry, setDiaryDeleted } from './diary-history.ts';
+import { compareDiaryDate, DEFAULT_HISTORY_FILTERS, frequentTrainingTitles, renameDiaryEntry, setDiaryDeleted } from './diary-history.ts';
 import { startTrainingTime, stopTrainingTime } from './training-time.ts';
 import { equipmentSnapshot, loadEquipment } from './equipment.ts';
 import { PhysicalArrowPicker } from './PhysicalArrowPicker.tsx';
@@ -85,6 +88,9 @@ import { advanceSeries, appendShot, applyConditions, attachProgressBaseline, bin
   startRound, usedArrowNumbers } from './practice.ts';
 import type { Practice } from './practice.ts';
 import type { Shot } from './target.ts';
+import { getTargetProfile } from './target.ts';
+import type { TargetSpot } from './target.ts';
+import { DEFAULT_TRIPLE_ORDER } from './preferences.ts';
 import type { Conditions, RoundRule } from './conditions.ts';
 import './style.css';
 import './interaction-motion.css';
@@ -121,6 +127,7 @@ function App() {
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [hostResults, setHostResults] = useState<{ history: RoomHistory; name?: string } | null>(null);
   const [onboardingRequested, setOnboardingRequested] = useState(false);
+  const [targetGuide, setTargetGuide] = useState<'standard' | 'triple' | null>(null);
   const [tutorialChapter, setTutorialChapter] = useState<Exclude<OnboardingChapter, 'welcome'> | null>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -141,9 +148,11 @@ function App() {
   const [futureConditions, setFutureConditions] = useState(false);
   const [roomSetup, setRoomSetup] = useState<RoomMembership | null>(null);
   const [roomSwitch, setRoomSwitch] = useState<RoomMembership | null>(null);
+  const [joiningOwnTraining, setJoiningOwnTraining] = useState(false);
   const [roomLeaderboardOpen, setRoomLeaderboardOpen] = useState(false);
   const [roomHelpOpen, setRoomHelpOpen] = useState(false);
   const syncingRoom = useRef(false);
+  const syncRoomNow = useRef<(() => Promise<void>) | null>(null);
   const announcedRooms = useRef(new Map<string, string | null>());
   const [repeatSetup, setRepeatSetup] = useState<NonNullable<Diary['lastSetup']> | null>(null);
   const [setupMemo, setSetupMemo] = useState<TechniqueSelection | null>(null);
@@ -169,6 +178,8 @@ function App() {
   const [finishHighlighting, setFinishHighlighting] = useState(false);
   const reportWasVisible = useRef(false);
   const [seriesTransition, setSeriesTransition] = useState<{ id: number; direction: 'previous' | 'next' }>();
+  const [newRoundMotion, setNewRoundMotion] = useState<{ session: string | null; round: number }>();
+  const [spotFocus, setSpotFocus] = useState<{ session: string | null; series: number; spot: TargetSpot | null }>();
   const [removedMarker, setRemovedMarker] = useState<{ id: number; seriesId: number; sessionId: string | null; shot: Shot; index: number }>();
   const pulse = useRef<Animation | null>(null);
   const [offline, setOffline] = useState<'pending' | 'ready' | 'error'>('pending');
@@ -323,9 +334,10 @@ function App() {
         }
       } finally { syncingRoom.current = false; }
     };
+    syncRoomNow.current = retry;
     const timer = window.setInterval(() => void retry(), 4000);
     window.addEventListener('online', retry);
-    return () => { window.clearInterval(timer); window.removeEventListener('online', retry); };
+    return () => { syncRoomNow.current = null; window.clearInterval(timer); window.removeEventListener('online', retry); };
   }, []);
 
   async function recordPublication({ documentId, content }: { documentId: string; content: string }) {
@@ -397,11 +409,16 @@ function App() {
   const tournaments = state.diary?.tournaments ?? [];
   const entry = entries.find(item => item.id === sessionId);
   const roomJournal = state.diary?.groupSeries?.find(item => item.trainingId === sessionId);
+  const lastClosedRoomSeries = roomJournal?.ends.reduce((last, end) => end.result ? end.ordinal : last, 0) ?? 0;
   const pendingRoomCount = roomJournal ? pendingGroupSeries(roomJournal).length : 0;
   const ongoing = entries.find(item => item.practice.savedAt === null && !item.paused && !item.deletedAt);
+  const roomPreviewSeries = roomSwitch && ongoing ? ongoing.practice.rounds.flatMap(round => round.series)
+    .slice(0, -1).filter(series => series.shots.length) : [];
   const paused = entries.filter(item => item.paused && !item.deletedAt).sort(compareDiaryDate)[0];
   const recent = useMemo(() => entries.filter(item => item.practice.savedAt !== null && !item.deletedAt)
     .sort(compareDiaryDate), [entries]);
+  const reportPosition = useRef<{ id: string; position?: ReportPosition } | null>(null);
+  const reportIndex = recent.findIndex(item => item.id === sessionId);
   const initial = useMemo(emptyPractice, []);
   const practice = entry?.practice ?? initial;
   const setup = page === 'conditions' && (!entry || repeatSetup !== null);
@@ -447,7 +464,7 @@ function App() {
     setPage(next);
   }
 
-  async function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice) {
+  async function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice, title?: string) {
     if (ongoing && !roomSetup) { selectEntry(ongoing, 'training'); return true; }
     if (!conditions && paused) return resumeEntry(paused);
     const chosen = refreshConditions(conditions ?? suggested.conditions);
@@ -459,6 +476,7 @@ function App() {
     const baseline = freezeProgressBaseline(diaryRef.current?.entries ?? [], id, startedAt, chosen, startedAt);
     const achievementLedger = diaryRef.current?.achievementLedger ?? { epoch: crypto.randomUUID(), grants: [] };
     const item: DiaryEntry = { id, startedAt, createdAt: startedAt, practice: attachProgressBaseline(next, baseline), trainingTime: startTrainingTime(Date.parse(startedAt)),
+      ...(title ? { title } : {}),
       ...(roomSetup ? { groupRoomName: roomSetup.roomName ?? 'Групповая тренировка' } : {}),
       achievementEnrollment: { epoch: achievementLedger.epoch, rankCategory: preferences.rankCategory ?? null,
         stageRankVersion: STAGE_RANK_ENROLLMENT_VERSION, seriesStories: true, ...(roomSetup ? { roomAwards: true as const } : {}) } };
@@ -495,6 +513,33 @@ function App() {
     setRoomSwitch(null);
     setRoomSetup(membership); setSetupMemo(null); setRepeatSetup(null); setSessionId(null);
     setConditionsBack('group-room'); setPage('conditions');
+  }
+
+  async function joinWithOwnTraining(membership: RoomMembership, id: string) {
+    setJoiningOwnTraining(true);
+    try {
+      saveRoomMembership(membership);
+      const joined = await writeDiary(previous => {
+        const own = previous.entries.find(item => item.id === id && item.practice.savedAt === null && !item.paused && !item.deletedAt);
+        if (!own) throw new Error('Активная тренировка уже изменилась. Открой комнату заново.');
+        const linked = previous.groupSeries?.find(journal => journal.trainingId === id);
+        if (linked?.entryId === membership.entryId) return previous;
+        if (linked || own.groupRoomName || own.groupRoomHistory) throw new Error('Эта тренировка уже привязана к другой комнате.');
+        if (previous.groupSeries?.some(journal => journal.roomId === membership.roomId)) throw new Error('Ты уже входил в эту комнату.');
+        const groupRoomName = membership.roomName ?? 'Групповая тренировка';
+        return { ...previous, entries: previous.entries.map(item => item.id === id ? { ...item, groupRoomName,
+          ...(item.achievementEnrollment ? { achievementEnrollment: { ...item.achievementEnrollment, roomAwards: true as const } } : {}) } : item),
+          groupSeries: [...(previous.groupSeries ?? []), { ...newGroupSeriesJournal(membership.roomId, membership.entryId, own.practice), trainingId: id }] };
+      });
+      const attached = joined && diaryRef.current?.entries.find(item => item.id === id);
+      if (attached) {
+        setRoomSwitch(null);
+        selectEntry(attached, 'training');
+        void syncRoomNow.current?.();
+      }
+    } catch {
+      setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' }));
+    } finally { setJoiningOwnTraining(false); }
   }
 
   function enterRoomTraining(membership: RoomMembership) {
@@ -586,6 +631,30 @@ function App() {
   const shownRank = rankScope ? (rankScope.kind === 'round' ? roundRank : seriesRank)(projectedPractice, rankScope.id, rankCategory) : null;
   const targetSpec = useMemo(() => ({ profileId: series.conditions.targetProfileId, diameterMm: series.conditions.targetDiameterMm,
     shaftDiameterMm: series.conditions.equipment?.arrows.diameterMm ?? 6 }), [series.conditions]);
+  const isTripleTarget = getTargetProfile(targetSpec.profileId)?.vertical === true;
+  const guideKind = isTripleTarget ? 'triple' : 'standard';
+  const tripleOrder = preferences.tripleOrder ?? DEFAULT_TRIPLE_ORDER;
+  const autoSpot = isTripleTarget && preferences.tripleAutoAdvance && !past && !completed && !seriesEditor;
+  const nextSpot = (spot: TargetSpot) => tripleOrder[(tripleOrder.indexOf(spot) + 1) % tripleOrder.length];
+  const focusedSpot = spotFocus?.session === sessionId && spotFocus.series === series.id ? spotFocus.spot
+    : autoSpot ? series.shots.reduce<TargetSpot>((spot, shot) => nextSpot(shot.spot ?? spot), tripleOrder[0]) : null;
+
+  function focusSpot(spot: TargetSpot | null) { setSpotFocus({ session: sessionId, series: series.id, spot }); }
+
+  function advanceSpot(shot: Shot) {
+    if (autoSpot) focusSpot(nextSpot(shot.spot ?? focusedSpot ?? tripleOrder[0]));
+  }
+
+  function acknowledgeTargetGuide() {
+    if (preferencesReadable && !preferences.seenTargetGuide?.[guideKind]) {
+      void updatePreferences({ ...preferences, seenTargetGuide: { ...preferences.seenTargetGuide, [guideKind]: true } });
+    }
+  }
+
+  useEffect(() => {
+    if (page !== 'training' || newRoundMotion?.round !== round.id) setNewRoundMotion(undefined);
+    if (page !== 'training' || !preferences.tripleAutoAdvance) setSpotFocus(undefined);
+  }, [page, round.id, newRoundMotion?.round, preferences.tripleAutoAdvance, preferences.tripleOrder]);
   const roundFull = isRoundFull(practice);
   const canAppend = !seriesEditor && !!entry && !past && !completed && !(practice.roundRule.unit === 'arrows' && roundFull);
   const canInput = !pendingShot && (editing !== null || canAppend);
@@ -665,6 +734,8 @@ function App() {
       setEdit({ ...editing, shot: updated });
     }
     else if (canAppend) {
+      // The shot is stored before the number picker opens. Keep its current camera until the picker closes.
+      if (autoSpot && numbering) focusSpot(focusedSpot);
       let index = -1;
       const saved = await update(previous => {
         const latest = currentSeries(previous)?.series;
@@ -675,18 +746,25 @@ function App() {
       const stored = diaryRef.current?.entries.find(item => item.id === sessionId)?.practice;
       const savedShots = stored && findSeries(stored, series.id)?.series.shots;
       if (index < 0 || !saved || !savedShots || savedShots[index] !== shot) return;
+      acknowledgeTargetGuide();
       const cleanSeries = cleanSeriesMotion(index, savedShots);
       if (preferences.haptics) performTrainingHaptic();
       if (numbering) {
         setNumberSaveError(false);
         setPostHit({ seriesId: series.id, index, shot, celebrated: cleanSeries !== undefined });
         if (cleanSeries) playShotMotion(index, shot, cleanSeries);
-      } else playShotMotion(index, shot, cleanSeries);
+      } else {
+        playShotMotion(index, shot, cleanSeries);
+        advanceSpot(shot);
+      }
     }
   }
 
   function closeNumberPicker() {
-    if (pendingShot && !pendingShot.celebrated) playShotMotion(pendingShot.index, pendingShot.shot);
+    if (pendingShot) {
+      if (!pendingShot.celebrated) playShotMotion(pendingShot.index, pendingShot.shot);
+      advanceSpot(pendingShot.shot);
+    }
     setPostHit(null);
     setNumberEditOpen(false);
     setNumberSaveError(false);
@@ -711,7 +789,16 @@ function App() {
       const next = diaryRef.current?.entries.find(item => item.id === sessionId);
       const id = next && currentSeries(next.practice)?.series.id;
       if (id !== undefined && id !== series.id) setSeriesTransition({ id, direction: 'next' });
+      afterRoundCreated();
       setSelection(null);
+    }
+  }
+
+  function afterRoundCreated() {
+    const next = diaryRef.current?.entries.find(item => item.id === sessionId);
+    const newRound = next && currentSeries(next.practice)?.round.id;
+    if (newRound !== undefined && newRound !== active.round.id && preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setNewRoundMotion({ session: sessionId, round: newRound });
     }
   }
 
@@ -888,6 +975,7 @@ function App() {
     setPage(conditionsBack);
   }
   useAppBack(showingOnboarding || page !== 'journal' || tab !== 'home', () => {
+    if (targetGuide) { setTargetGuide(null); return; }
     if (showingOnboarding) { leaveOnboarding(); return; }
     switch (page) {
       case 'journal': setTab('home'); break;
@@ -924,12 +1012,14 @@ function App() {
   if (showingOnboarding) {
     return <>{offlineLabel}<WebOnboarding initialChapter={tutorialChapter ?? 'welcome'} offerPreferences={!preferences.onboardingSeen}
       onEnableHundredths={() => recordServiceAchievement('APP11')}
+      onOpenTargetGuide={() => setTargetGuide('standard')}
       onClose={leaveOnboarding} onStart={async () => {
       await leaveOnboarding(); setSetupMemo(null); setConditionsBack('journal');
       if (ongoing) selectEntry(ongoing, 'conditions');
       else { setSessionId(null); setPage('conditions'); }
     }} onImport={async () => { await leaveOnboarding(); setPage('settings'); setMyTargetsOpen(true); }}
-      onRestore={async () => { await leaveOnboarding(); setArchiveBack('journal'); setPage('archive'); }} /></>;
+      onRestore={async () => { await leaveOnboarding(); setArchiveBack('journal'); setPage('archive'); }} />
+      {targetGuide && <TargetGuide kind={targetGuide} onClose={() => setTargetGuide(null)} />}</>;
   }
 
   if (page === 'journal') return <JournalShell tab={tab} onTab={setTab} onSettings={() => setPage('settings')}
@@ -1031,9 +1121,17 @@ function App() {
         unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense>
       {hostResults && <GroupLeaderboard archived mySeries={1} saved={hostResults.history} title={hostResults.name}
         onClose={() => setHostResults(null)} />}
-      {roomSwitch && <BottomSheet title="Перейти в групповую тренировку?" onClose={() => setRoomSwitch(null)}>
-        <p>Текущая тренировка встанет на паузу после запуска групповой. Её можно будет продолжить из истории.</p>
-        <button type="button" className="primary" onClick={() => prepareRoomTraining(roomSwitch)}>Выбрать условия</button>
+      {roomSwitch && <BottomSheet title={roomSwitch.roomName || 'Войти в комнату'} onClose={() => setRoomSwitch(null)}
+        onDismissRequest={() => !joiningOwnTraining} tag="room-training-choice">
+        {ongoing && !ongoing.groupRoomName && !ongoing.groupRoomHistory && !state.diary?.groupSeries?.some(item => item.trainingId === ongoing.id)
+          ? <><p>В зачёт войдут все серии текущей тренировки, включая отстрелянные до входа. Начатая серия отправится после закрытия.</p>
+            {roomPreviewSeries.length > 0 && <p>Готово к отправке · {roomPreviewSeries.length} сер. · {roomPreviewSeries.reduce((count, series) => count + series.shots.length, 0)} стрел</p>}
+            <button type="button" className="primary" disabled={joiningOwnTraining}
+              onClick={() => void joinWithOwnTraining(roomSwitch, ongoing.id)}>Войти с этой тренировкой</button></>
+          : <p>Текущая тренировка уже участвует в другой комнате.</p>}
+        <p>При выборе новой тренировки текущая встанет на паузу.</p>
+        <button type="button" className="room-pill" disabled={joiningOwnTraining} onClick={() => prepareRoomTraining(roomSwitch)}>Начать новую</button>
+        {state.error && <p role="alert">{state.error}</p>}
       </BottomSheet>}
     </div>
   </main>;
@@ -1062,7 +1160,7 @@ function App() {
       <TrainingPreferenceControls keys={['animations', 'celebrationEffects', 'haptics']} />
       {achievementPreference}
     </div>}
-    training={<div className="settings-panel"><LensControls preview={<LensTestTarget onAchievement={recordServiceAchievement} />} /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /></div>}
+    training={<div className="settings-panel"><LensControls preview={<LensTestTarget onAchievement={recordServiceAchievement} />} /><TrainingPreferenceControls keys={['keepAwake', 'trainingOnLockScreen', 'hideScores', 'showAchievementsDuringInput']} /><TripleTargetControls /></div>}
     statistics={<>
       <div className="settings-panel"><TrainingPreferenceControls keys={['averageHundredths', 'maximumSpread']} onEnableHundredths={() => recordServiceAchievement('APP11')} /></div>
       <SettingsAction icon="podium" aria-haspopup="dialog" onClick={() => setRankReference(true)}>Разрядная сетка</SettingsAction>
@@ -1080,6 +1178,8 @@ function App() {
       <SettingsAction icon="book" data-testid="settings-onboarding" onClick={() => setOnboardingRequested(true)}>Знакомство с FableShot</SettingsAction>
       <SettingsAction icon="spark" data-testid="help-quick-preferences" onClick={() => setTutorialChapter('preferences')}>Быстрые настройки</SettingsAction>
       <SettingsAction icon="help" data-testid="help-tutorial" onClick={() => setTutorialChapter('target')}>Как отмечать попадания</SettingsAction>
+      <SettingsAction icon="help" data-testid="help-standard-target" onClick={() => setTargetGuide('standard')}>Одинарная мишень</SettingsAction>
+      <SettingsAction icon="help" data-testid="help-triple-target" onClick={() => setTargetGuide('triple')}>Мишень «Светофор»</SettingsAction>
       <SettingsAction icon="stats" data-testid="help-report-tutorial" onClick={() => setTutorialChapter('report')}>Как читать статистику</SettingsAction>
     </div>}
     notifications={releasePushSupported() ? <ReleasePushSettings /> : undefined}
@@ -1089,6 +1189,7 @@ function App() {
     {myTargetsOpen && <MyTargetsImport onClose={() => setMyTargetsOpen(false)} />}
     {releaseHistoryOpen && releaseNotes}
     {notice}
+    {targetGuide && <TargetGuide kind={targetGuide} onClose={() => setTargetGuide(null)} />}
     {achievementResetOpen && <BottomSheet title="Обнулить достижения?" onClose={() => setAchievementResetOpen(false)}>
       <p>Тренировки останутся в истории. Достижения начнут начисляться с новых занятий.</p>
       <button type="button" className="primary" data-testid="achievement-reset-confirm" onClick={async () => {
@@ -1125,9 +1226,10 @@ function App() {
       initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
-      onBack={leaveConditions} onApply={async (conditions, rule, numberedArrows, tournament) => {
+      trainingTitles={setup ? frequentTrainingTitles(recent) : undefined}
+      onBack={leaveConditions} onApply={async (conditions, rule, numberedArrows, tournament, title) => {
         if (setup) {
-          return startPractice(conditions, rule, numberedArrows, tournament);
+          return startPractice(conditions, rule, numberedArrows, tournament, title);
         }
         const success = await update(previous => {
           const next = applyConditions(previous, conditions, hasHits ? undefined : rule, numberedArrows);
@@ -1146,7 +1248,7 @@ function App() {
 
   if (page === 'report') return <>
     {offlineLabel}
-    {entry?.groupRoomHistory && roomLeaderboardOpen && <GroupLeaderboard archived entryId={roomJournal?.entryId} mySeries={1}
+    {entry?.groupRoomHistory && roomLeaderboardOpen && <GroupLeaderboard archived entryId={roomJournal?.entryId} mySeries={lastClosedRoomSeries}
       saved={entry.groupRoomHistory} title={entry.groupRoomName} onClose={() => setRoomLeaderboardOpen(false)}
       onRefresh={roomJournal && !entry.groupRoomHistory.finalizedAt && !entry.deletedAt && supportsLocalRoom() ? async () => {
         const membership = loadRoomMembership(roomJournal.entryId);
@@ -1154,6 +1256,17 @@ function App() {
         return refreshRoomHistory(entry.id, membership, true);
       } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
+      navigation={reportIndex >= 0 && recent.length > 1 ? {
+        previous: recent[reportIndex + 1]?.id, next: recent[reportIndex - 1]?.id,
+        position: reportPosition.current?.id === sessionId ? reportPosition.current?.position : undefined,
+        open: (id, position) => {
+          const neighbor = recent.find(item => item.id === id);
+          if (!neighbor) return;
+          reportPosition.current = { id, position };
+          selectEntry(neighbor, 'report');
+        },
+        restored: () => { reportPosition.current = null; },
+      } : undefined}
       onCorrectConditions={entry && !entry.deletedAt ? () => {
         setFutureConditions(false); setConditionsBack('report'); setPage('conditions');
       } : undefined}
@@ -1235,10 +1348,11 @@ function App() {
     {roomJournal && roomLeaderboardOpen && <GroupLeaderboard key={roomJournal.entryId} entryId={roomJournal.entryId}
       saved={entry?.groupRoomHistory} title={entry?.groupRoomName}
       onFinalSnapshot={(history, name) => { if (sessionId) saveRoomHistory(sessionId, history, name); }}
-      mySeries={roomJournal.ends.find(end => end.endId === series.id)?.ordinal ??
-        Math.max(1, roomJournal.ends.length + Number(series.shots.length > 0))}
+      mySeries={lastClosedRoomSeries}
+      myOpenSeries={practice.savedAt === null ? roomJournal.ends.length + 1 : undefined}
       onClose={() => setRoomLeaderboardOpen(false)} />}
     {!seriesEditor && <TrainingSummary roundNumber={practice.rounds.indexOf(round) + 1}
+      roundEmphasis={newRoundMotion?.session === sessionId && newRoundMotion.round === round.id ? round.id : undefined}
       seriesNumber={`${round.series.indexOf(series) + 1}${practice.roundRule.unit === 'series' ? `/${practice.roundRule.limit}` : ''}`}
       roundShots={roundShown} seriesShots={shots} onRound={() => openPicker('round')} onSeries={() => openPicker('series')}
       roundRank={currentRanks && <RankTag rank={currentRanks.round} testId="rank-round" onOpen={() => setRankScope({ kind: 'round', id: round.id })} />}
@@ -1254,6 +1368,9 @@ function App() {
       onOpenLensSettings={() => setLensSettingsOpen(true)}
       realArrowDiameter={targetSpec.shaftDiameterMm}
       zoomScope={seriesEditor ? 'editor' : 'training'}
+      spotNavigation={isTripleTarget && !seriesEditor ? { spot: focusedSpot, onSpot: focusSpot, disabled: !!pendingShot } : undefined}
+      onOpenGuide={!seriesEditor && !pendingShot ? () => { acknowledgeTargetGuide(); setTargetGuide(guideKind); } : undefined}
+      highlightGuide={!preferences.seenTargetGuide?.[guideKind]}
       inputEnabled={canInput} panOnly={seriesEditor && !editing} onShot={mark}
       feedback={activeShotFeedback}
       removed={activeRemovedMarker}
@@ -1278,7 +1395,7 @@ function App() {
       onChoose={showSeries} onClose={() => setPicker(null)}
       onNewRound={async () => {
         const saved = await update(startRound);
-        if (saved) setSelection(null);
+        if (saved) { setSelection(null); afterRoundCreated(); }
         return saved;
       }}
       onDelete={async id => {
@@ -1287,6 +1404,7 @@ function App() {
         return saved;
       }} />}
     {timerWindow}
+    {targetGuide && <TargetGuide kind={targetGuide} onClose={() => setTargetGuide(null)} />}
     {techniqueWindow}
     {rankWindow}
     {notesWindow}

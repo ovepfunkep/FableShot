@@ -80,6 +80,14 @@ test('PNG and paged PDF preview offline without downloading, remain cached and s
   await page.getByTestId('report-share').click();
   await expect(sheet.locator('img')).toHaveCount(1);
   await expect(sheet.locator('img')).not.toHaveAttribute('src', poster!);
+  const changed = await sheet.locator('img').getAttribute('src');
+  await sheet.locator('.report-export-composition summary').click();
+  await sheet.getByRole('checkbox', { name: 'Все выстрелы', exact: true }).uncheck();
+  await expect(sheet.locator('img')).toHaveCount(1);
+  await expect(sheet.locator('img')).not.toHaveAttribute('src', changed!);
+  await sheet.getByRole('checkbox', { name: 'Раунды и серии', exact: true }).uncheck();
+  await expect(sheet.getByRole('checkbox', { name: 'Все выстрелы' })).toHaveCount(0);
+  await expect(page.getByTestId('report-export-share')).toBeEnabled();
 });
 
 test('Web Share cancellation leaves the cached report available', async ({ page }) => {

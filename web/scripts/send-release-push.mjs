@@ -1,5 +1,12 @@
 import { pathToFileURL } from 'node:url';
 
+const releaseTitleByCode = new Map([
+  ['76', 'Не GTA 6, но тоже неплохо'],
+  ['77', 'Как летающая тесла, только круче'],
+  ['78', 'Папа, я в шторке!'],
+]);
+const releaseBody = 'Доступно обновление!';
+
 export function releasePushMessage(release, { tag, code, commit, releaseId }) {
   if (typeof tag !== 'string' || !/^v\d+\.\d+\.\d+$/.test(tag) ||
       typeof code !== 'string' || !/^[1-9]\d{0,9}$/.test(code) || Number(code) > 2_100_000_000 ||
@@ -14,13 +21,20 @@ export function releasePushMessage(release, { tag, code, commit, releaseId }) {
         asset.browser_download_url === `https://github.com/ovepfunkep/FableShot/releases/download/${tag}/${apk}`)) {
     throw new Error('Latest public release does not match the verified Android and Pages build');
   }
+  const title = releaseTitleByCode.get(code) ?? 'В этот раз без креатива';
+  // Version 75 can display a custom title through Android's background notification only.
+  const showOnPreviousClient = code === '76';
   return {
     message: {
       topic: 'fableshot_stable_updates',
-      data: { type: 'release', version: tag.slice(1), versionCode: code },
+      data: { type: 'release', version: tag.slice(1), versionCode: code, title, body: releaseBody },
+      ...(showOnPreviousClient && { notification: { title, body: releaseBody } }),
       android: {
         priority: 'normal', ttl: '259200s', collapse_key: 'fableshot_stable_updates',
         restricted_package_name: 'app.fableshot.android.react',
+        ...(showOnPreviousClient && { notification: {
+          channel_id: 'fableshot_updates', icon: 'fableshot_update_notification', tag: 'fableshot_stable_updates',
+        } }),
       },
     },
   };

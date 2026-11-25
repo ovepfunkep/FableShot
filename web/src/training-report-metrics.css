@@ -12,11 +12,15 @@
 .report-metrics-scope { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
 .report-metrics-heading > svg { flex: none; color: var(--accent); }
 .progress-score-value { align-self: center; justify-self: start; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.progress-score-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.progress-score-comparison { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.progress-score-comparison small { color: var(--muted); }
 .progress-score-help { color: var(--muted); font-size: 14px; }
 .progress-score-help ul { list-style: none; margin: 8px 0 0; padding: 0; }
 .progress-score-help li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--edge); }
 
 .report-result-main { display: grid; min-width: 0; gap: 6px; }
+.report-result-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .report-result-rank {
   display: grid; justify-items: center; gap: 3px; flex: none; min-width: 74px; min-height: 48px;
   margin-inline-start: auto; padding: 6px 9px; border: 1px solid var(--accent-line, var(--edge));

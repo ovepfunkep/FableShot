@@ -186,6 +186,10 @@ function stageRank(practice: Practice, round: Round | undefined, series: Series 
     label: entered > 0 ? evaluation.pace?.label ?? 'ниже порога' : null, finalResult };
 }
 
+export function rankDisplayLabel(label: string | null): string | null {
+  return label === 'ниже порога' ? '—' : label;
+}
+
 export function roundRank(practice: Practice, roundId: number, category: RankCategory | null): StageRank {
   const index = practice.rounds.findIndex(round => round.id === roundId);
   return stageRank(practice, practice.rounds[index], null, category, index < 0 ? 'Раунд' : `Раунд ${index + 1}`);

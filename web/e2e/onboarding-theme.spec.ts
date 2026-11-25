@@ -22,13 +22,14 @@ test('first launch previews quick settings, saves them and lets the user revisit
   await expect(quick.getByTestId('onboard-achievement-example')).toBeVisible();
   await quick.getByRole('switch', { name: 'Достижения при отметке попаданий' }).click();
   await expect(quick.getByTestId('onboard-achievement-example')).toHaveCount(0);
+  await quick.getByLabel('Категория нормативов').selectOption('female');
   await quick.getByTestId('onboard-save-preferences').click();
   await expect(page.getByTestId('start-training')).toBeVisible();
   const { records, diary } = await readStoredJournal(page);
   expect(diary?.entries ?? []).toHaveLength(0);
   await expect.poll(async () => (await readStoredJournal(page)).diary?.achievementLedger?.grants.map(grant => grant.id)).toEqual(['APP11']);
   expect(JSON.parse(records['app.fableshot.training-preferences.v1']!).preferences).toMatchObject({
-    themeStyle: 'pop', averageHundredths: true, showAchievementsDuringInput: false, onboardingSeen: true,
+    themeStyle: 'pop', averageHundredths: true, showAchievementsDuringInput: false, onboardingSeen: true, rankCategory: 'female',
   });
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'pop');
@@ -76,7 +77,7 @@ test('first launch offers an isolated example and lets the user reopen it from s
   await report.getByTestId('hit-map-series').selectOption('2');
   await expect(report.getByTestId('hit-map-hit')).toHaveCount(3);
   await report.getByRole('button', { name: 'Распределение', exact: true }).click();
-  await report.getByTestId('report-zone-10').click();
+  await report.getByTestId('report-zone-10').locator('[data-zone="10"]').first().click();
   await expect(report.getByTestId('shot-distribution-reading')).toContainText('Оценка 10');
   await report.getByRole('button', { name: 'Выйти из примера' }).click();
   await expect(page.getByTestId('home-screen')).toBeVisible();

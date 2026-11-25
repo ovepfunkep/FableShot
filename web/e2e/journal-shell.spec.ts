@@ -28,9 +28,9 @@ test('recent practice uses a single graded outline even on the newest card', asy
     secondLine: getComputedStyle(node, '::before').content,
   })));
   expect(outlines.map(item => [item.thickness, item.secondLine])).toEqual([['1px', 'none'], ['1px', 'none']]);
-  expect(outlines[0].colors).toContain('rgb(206, 142, 93)');
-  expect(outlines[0].colors).toContain('rgb(237, 205, 114)');
-  expect(outlines[1].colors).not.toContain('rgb(206, 142, 93)');
+  expect(outlines[0].colors).toContain('rgb(230, 178, 28)');
+  expect(outlines[0].colors).toContain('rgb(255, 242, 164)');
+  expect(outlines[1].colors).not.toContain('rgb(230, 178, 28)');
   await page.getByTestId('home-week').screenshot({ path: '../.tools/recent-practice-single-outline.png' });
 });
 
@@ -249,7 +249,8 @@ test('training duration survives reload and continuation excludes the time after
   await page.clock.setFixedTime(new Date('2026-11-11T10:01:00Z'));
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
-  await expect(page.getByTestId('report-training-time')).toHaveText('1 мин');
+  await expect(page.getByTestId('report-result').getByTestId('report-training-time')).toHaveText('1 мин');
+  await expect(page.getByTestId('report-training-start')).toHaveAttribute('datetime', '2026-11-11T10:00:00.000Z');
   await page.reload();
   await openHistoryEntry(page);
   await expect(page.getByTestId('report-training-time')).toHaveText('1 мин');
@@ -262,6 +263,7 @@ test('training duration survives reload and continuation excludes the time after
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
   await expect(page.getByTestId('report-training-time')).toHaveText('3 мин');
+  await expect(page.getByTestId('report-training-start')).toHaveAttribute('datetime', '2026-11-11T10:00:00.000Z');
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('open-profile').click();
   await expect(page.getByTestId('shooting-hours-total')).toHaveText('3 мин');

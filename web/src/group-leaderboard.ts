@@ -1,8 +1,10 @@
 import { acceptsDiameter, getTargetProfile } from './target.ts';
 import { calculateCompositeFacts, displayCompositeScore } from './composite-scoring.ts';
-import { isRoomSpread, isRoomProgressBase } from './group-series.ts';
-import type { RoomProgressBase, RoomSpread } from './group-series.ts';
-import { calculateProgressTotals } from './progress-scoring.ts';
+import type { CompositeScore } from './composite-scoring.ts';
+import { isRoomSpread, isRoomProgressBase, validRoomShotPositions } from './group-series.ts';
+import type { RoomProgressBase, RoomShotPosition, RoomSpread } from './group-series.ts';
+import { calculateProgressTotals, MIN_SCORED_ARROWS } from './progress-scoring.ts';
+import type { ProgressResult } from './progress-scoring.ts';
 
 type RoomConditions = { distanceMeters: number; targetProfileId: string; targetDiameterMm: number };
 
@@ -11,10 +13,13 @@ export type RoomSeries = {
   ordinal: number;
   revision?: number;
   displayName?: string;
-  result: { points: number; arrows: number; bowCategory: string | null; conditions?: RoomConditions; hits?: number; spread?: RoomSpread; progressBase?: RoomProgressBase } | null;
+  result: { points: number; arrows: number; bowCategory: string | null; conditions?: RoomConditions; hits?: number; spread?: RoomSpread;
+    progressBase?: RoomProgressBase; scores?: string; shotPositions?: RoomShotPosition[] } | null;
 };
 export type RoomParticipant = { entryId: string; displayName?: string; bowCategory: string | null };
 export type RoomHistory = { receivedAt: number; series: RoomSeries[]; participants: RoomParticipant[]; finalizedAt?: number };
+export const roomShotPoints = (code: string) => code === 'T' || code === 'X' ? 10 : Number(code);
+export const roomShotLabel = (code: string) => code === 'T' ? '10' : code === '0' ? 'M' : code;
 
 function validRoomDate(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 8.64e15;
@@ -95,9 +100,20 @@ export function readRoomSeries(snapshot: unknown): RoomSeries[] {
     }
     const base = result?.progressBase;
     if (base !== undefined && !isRoomProgressBase(base)) throw new Error('Некорректная база прогресса.');
+    const scores = result?.scores;
+    if (result && scores !== undefined && (typeof scores !== 'string' || scores.length !== result.arrows || !/^[0-9TX]+$/.test(scores) ||
+      [...scores].reduce((sum, code) => sum + roomShotPoints(code), 0) !== result.points)) throw new Error('Некорректные оценки стрел.');
+    const conditions = result?.conditions === undefined ? undefined : readConditions(result.conditions);
+    const profile = conditions && getTargetProfile(conditions.targetProfileId);
+    const shotPositions = result?.shotPositions;
+    if (result && shotPositions !== undefined && (!profile || !scores || !validRoomShotPositions(shotPositions, result.arrows, profile))) {
+      throw new Error('Некорректные позиции стрел.');
+    }
     return { entryId: value.entryId, ordinal: value.ordinal, revision: value.revision, displayName: value.displayName, result: result && {
       points: result.points, arrows: result.arrows, bowCategory: result.bowCategory,
-      ...(result.conditions === undefined ? {} : { conditions: readConditions(result.conditions) }),
+      ...(scores === undefined ? {} : { scores }),
+      ...(conditions === undefined ? {} : { conditions }),
+      ...(shotPositions === undefined ? {} : { shotPositions: shotPositions.map(point => point && [...point] as RoomShotPosition) }),
       ...(base && { progressBase: { sessions: base.sessions, arrows: base.arrows, points: base.points } }),
       ...(result.spread && { hits: result.hits, spread: {
         positions: result.spread.positions, squaredDistance: result.spread.squaredDistance, complete: result.spread.complete,
@@ -111,6 +127,102 @@ export type GroupScoring = 'classic' | 'cg3' | 'pg1';
 function roomProgress(base: RoomProgressBase, arrows: number, points: number, complete: boolean) {
   return calculateProgressTotals({ status: base.sessions >= 3 ? 'ready' : 'building', maximumPerArrow: 10,
     scoredCount: base.arrows, scoreSum: base.points }, arrows, points, complete);
+}
+
+function roomSeriesFact(end: RoomSeries) {
+  const result = end.result!;
+  return { number: end.ordinal, arrows: result.arrows, points: result.points, closed: true,
+    complete: result.spread?.complete ?? true, positions: result.spread?.positions ?? 0,
+    missingPositions: !result.spread || result.spread.positions !== result.hits,
+    squaredDistance: result.spread?.squaredDistance ?? 0,
+    pointCount: (result.spread?.positions ?? 0) >= 2 ? result.spread!.positions : 0 };
+}
+
+export type RoomScope = 'through' | 'single';
+type Metric = { value: number | null; hint?: string; preliminary?: boolean; place: number | null };
+const metric = (value: number | null | undefined, hint?: string, preliminary = false): Metric =>
+  ({ value: value ?? null, hint, preliminary, place: null });
+
+const compositeReason: Record<CompositeScore['availability'], string> = {
+  'no-data': 'Нет закрытых серий', 'incomplete-slice': 'Не хватает серий', 'incomplete-end': 'Неполная серия',
+  'insufficient-end-shots': 'Нужно от 3 стрел в серии', 'insufficient-ends': 'Недостаточно серий',
+  'missing-coordinates': 'Нет данных о кучности', 'unverified-geometry': 'Разные или неизвестные условия',
+  'unknown-maximum': 'Неизвестен максимум', 'invalid-data': 'Некорректные данные', available: 'Недоступно',
+};
+
+function scoreRoomSelection(ends: readonly RoomSeries[], ordinal: number, scope: RoomScope) {
+  const first = ends[0]?.result;
+  const facts = ends.map(roomSeriesFact);
+  const arrows = facts.reduce((sum, end) => sum + end.arrows, 0);
+  const points = facts.reduce((sum, end) => sum + end.points, 0);
+  const full = ends.length === (scope === 'single' ? 1 : ordinal);
+  const compatible = !!first?.conditions && ends.every(({ result }) => result?.conditions &&
+    roomConditionsKey(result.conditions) === roomConditionsKey(first.conditions!) && result.bowCategory === first.bowCategory);
+  const base = first?.progressBase;
+  const oneBase = !!base && compatible && ends.every(({ result }) => result?.progressBase?.sessions === base.sessions &&
+    result.progressBase.arrows === base.arrows && result.progressBase.points === base.points);
+  let composite = calculateCompositeFacts(facts, ordinal, 10, compatible, undefined, scope === 'single');
+  if (!full && scope === 'through' && facts.length && compatible) {
+    composite = calculateCompositeFacts(facts.map((fact, index) => ({ ...fact, number: index + 1 })), facts.length, 10, true);
+  }
+  const progress = oneBase ? roomProgress(base, arrows, points, full && ends.every(end => end.result?.spread?.complete === true)) : undefined;
+  const status = scope === 'single' ? 'Серия не получена' : 'Нет серий в срезе';
+  const metrics: Record<GroupScoring, Metric> = {
+    classic: metric(arrows ? points : null, arrows ? undefined : status),
+    cg3: metric(composite.total, !arrows ? status : composite.total === undefined ? compositeReason[composite.availability]
+      : !full ? 'Не все серии получены' : composite.phase === 'early' ? 'Стабильность с третьей серии' : undefined,
+      composite.total !== undefined && (!full || composite.phase === 'early')),
+    pg1: metric(progress?.percentagePoints, !arrows ? status : !base ? 'Нет базы сравнения' : !oneBase ? 'Разная база или условия'
+      : base.sessions < 3 ? 'Набираем базу' : arrows < MIN_SCORED_ARROWS ? `Нужно от ${MIN_SCORED_ARROWS} стрел`
+      : !progress?.fullRankAvailable ? 'Нужны полные серии' : undefined, !!progress && !progress.fullRankAvailable),
+  };
+  // Comparable totals use the same conditions and the same number of arrows at each series position.
+  const comparisonKey = full && ends.length && ends.every(({ result }) => result?.conditions && result.bowCategory)
+    ? JSON.stringify(ends.map(({ result }) => [roomConditionsKey(result!.conditions!), result!.bowCategory, result!.arrows])) : null;
+  return { arrows, points, full, composite, progress, metrics, comparisonKey };
+}
+
+export function roomComparison(series: readonly RoomSeries[], participants: readonly RoomParticipant[], options: {
+  ordinal: number; scope: RoomScope; sort: GroupScoring; sameConditions: boolean; ownId?: string;
+  bow?: string | null; conditions?: string;
+}) {
+  const { ordinal, scope, sort, sameConditions, ownId } = options;
+  const grouped = new Map(participants.map(person => [person.entryId, { person, ends: [] as RoomSeries[] }]));
+  for (const end of series) {
+    if (!grouped.has(end.entryId)) grouped.set(end.entryId, { person: { entryId: end.entryId, bowCategory: null }, ends: [] });
+    grouped.get(end.entryId)!.ends.push(end);
+  }
+  const rows = [...grouped].flatMap(([id, { person, ends }]) => {
+    const visible = ends.filter(end => end.result && end.ordinal <= ordinal && (scope === 'through' || end.ordinal === ordinal))
+      .sort((a, b) => a.ordinal - b.ordinal);
+    const selected = visible.filter(({ result }) => (options.bow === undefined || result!.bowCategory === options.bow) &&
+      (options.conditions === undefined || !!result!.conditions && roomConditionsKey(result!.conditions) === options.conditions));
+    const last = selected.at(-1)?.result;
+    const bow = last?.bowCategory ?? person.bowCategory ?? ends.find(end => end.result)?.result?.bowCategory ?? null;
+    if (!selected.length && (options.conditions !== undefined || options.bow !== undefined && options.bow !== bow)) return [];
+    return [{ id, bow, name: person.displayName || ends.find(end => end.displayName)?.displayName,
+      seriesCount: selected.length, current: selected.find(end => end.ordinal === ordinal)?.result ?? null,
+      ...scoreRoomSelection(selected, ordinal, scope) }];
+  });
+  const cohorts = new Map<string, number>();
+  for (const row of rows) if (row.comparisonKey) cohorts.set(row.comparisonKey, (cohorts.get(row.comparisonKey) ?? 0) + 1);
+  const ownRow = rows.find(row => row.id === ownId);
+  const cohort = ownRow ? ownRow.comparisonKey : [...cohorts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const compare = (id: GroupScoring) => (a: typeof rows[number], b: typeof rows[number]) =>
+    (b.metrics[id].value ?? -Infinity) - (a.metrics[id].value ?? -Infinity) || a.id.localeCompare(b.id);
+  for (const id of ['classic', 'cg3', 'pg1'] as const) {
+    const ranked = rows.filter(row => row.metrics[id].value !== null && !row.metrics[id].preliminary &&
+      (id === 'pg1' || sameConditions && !!cohort && row.comparisonKey === cohort)).sort(compare(id));
+    let lastValue: string | undefined;
+    let place = 0;
+    ranked.forEach((row, index) => {
+      const value = displayCompositeScore(row.metrics[id].value!);
+      if (value !== lastValue) place = index + 1;
+      row.metrics[id].place = place;
+      lastValue = value;
+    });
+  }
+  return rows.sort((a, b) => (a.metrics[sort].place ?? Infinity) - (b.metrics[sort].place ?? Infinity) || compare(sort)(a, b));
 }
 
 export function groupStandings(series: readonly RoomSeries[], ordinal: number, category?: string | null, participants: readonly RoomParticipant[] = [],
@@ -140,14 +252,7 @@ export function groupStandings(series: readonly RoomSeries[], ordinal: number, c
     const comparableConditions = new Set(comparable.map(end => end.result!.conditions && roomConditionsKey(end.result!.conditions)));
     const compatible = comparableConditions.size === 1 && !comparableConditions.has(undefined) &&
       new Set(comparable.map(end => end.result!.bowCategory)).size === 1;
-    const facts = comparable.map(end => {
-      const result = end.result!;
-      return { number: end.ordinal, arrows: result.arrows, points: result.points, closed: true,
-        complete: result.spread?.complete ?? true, positions: result.spread?.positions ?? 0,
-        missingPositions: !result.spread || result.spread.positions !== result.hits,
-        squaredDistance: result.spread?.squaredDistance ?? 0,
-        pointCount: (result.spread?.positions ?? 0) >= 2 ? result.spread!.positions : 0 };
-    });
+    const facts = comparable.map(roomSeriesFact);
     const composite = mode === 'cg3' ? calculateCompositeFacts(facts, ordinal, 10, compatible) : undefined;
     const compositeSeries = mode === 'cg3' ? calculateCompositeFacts(facts.filter(end => end.number === ordinal), ordinal, 10,
       !!current?.conditions, undefined, true) : undefined;

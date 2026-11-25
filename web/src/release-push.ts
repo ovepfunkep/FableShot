@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-export type ReleasePushStatus = { available: boolean; enabled: boolean; allowed: boolean };
+export type ReleasePushStatus = { available: boolean; enabled: boolean; allowed: boolean; canRequestPermission?: boolean };
 
 export const releasePush = registerPlugin<{
   getStatus(): Promise<ReleasePushStatus>;

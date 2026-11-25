@@ -1,5 +1,6 @@
 import { formatAverage } from './preferences.ts';
 import { RANK_LABELS } from './sport-ranks.ts';
+import type { RankExercise } from './sport-ranks.ts';
 
 const ranks = [...RANK_LABELS].reverse();
 
@@ -24,4 +25,12 @@ export function chartScale(values: readonly number[], metric: string) {
   const lower = Math.max(metric === 'progress' ? -100 : 0, Math.floor((minimum - pad) / step) * step);
   const upper = Math.min(cap, Math.max(lower + step, Math.ceil((maximum + pad) / step) * step));
   return { lower, upper, ticks: [lower, (lower + upper) / 2, upper] };
+}
+
+export function rankAverageScale(values: readonly number[], exercise?: RankExercise) {
+  const scale = chartScale(values, 'average');
+  if (!exercise || !values.length) return { ...scale, thresholds: [] };
+  const thresholds = exercise.thresholds.map(({ label, score }) => ({ label, average: score / exercise.arrows }));
+  const visible = thresholds.filter(threshold => threshold.average >= scale.lower && threshold.average <= scale.upper);
+  return { ...scale, thresholds: visible, ticks: visible.length ? visible.map(item => item.average) : scale.ticks };
 }

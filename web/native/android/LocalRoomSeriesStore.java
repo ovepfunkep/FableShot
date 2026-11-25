@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import org.json.JSONException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class LocalRoomSeriesStore extends SQLiteOpenHelper {
@@ -126,13 +127,14 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
                         char score = scores.charAt(i);
                         points += score == 'X' || score == 'T' ? 10 : score - '0';
                     }
-                    JSONObject projected = new JSONObject().put("points", points).put("arrows", scores.length())
+                    JSONObject projected = new JSONObject().put("points", points).put("arrows", scores.length()).put("scores", scores)
                         .put("bowCategory", result.get("bowCategory"))
                         .put("conditions", new JSONObject().put("distanceMeters", result.get("distanceMeters"))
                             .put("targetProfileId", result.get("targetProfileId")).put("targetDiameterMm", result.get("targetDiameterMm")));
                     if (result.has("spread")) projected.put("spread", result.getJSONObject("spread"))
                         .put("hits", scores.replace("0", "").length());
                     if (result.has("progressBase")) projected.put("progressBase", result.getJSONObject("progressBase"));
+                    if (result.has("shotPositions")) projected.put("shotPositions", result.getJSONArray("shotPositions"));
                     end.put("result", projected);
                 }
                 series.put(end);
@@ -143,7 +145,8 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
                 new String[] {roomId}, null, null, "entry")) {
             while (rows.moveToNext()) participants.put(new JSONObject(rows.getString(0)));
         }
-        JSONObject result = new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("series", series).put("participants", participants);
+        JSONObject result = new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("shotPositions", true)
+            .put("series", series).put("participants", participants);
         if (finalizedAt > 0) result.put("finalizedAt", finalizedAt);
         return result;
     }
@@ -201,7 +204,8 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     }
 
     private static void validateResult(JSONObject result) throws JSONException, IOException {
-        if (result.length() != 5 + (result.has("spread") ? 1 : 0) + (result.has("progressBase") ? 1 : 0)) throw new IOException("Unexpected result fields");
+        if (result.length() != 5 + (result.has("spread") ? 1 : 0) + (result.has("progressBase") ? 1 : 0) +
+            (result.has("shotPositions") ? 1 : 0)) throw new IOException("Unexpected result fields");
         String scores = result.getString("scores");
         String profile = result.getString("targetProfileId");
         String codes;
@@ -245,6 +249,25 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
                 arrows < sessions * 12 || arrows > 900_719_925_474_099L || arrows != Math.rint(arrows) ||
                 points < 0 || points > arrows * 10 || points != Math.rint(points) || (sessions == 0 && arrows != 0)) {
                 throw new IOException("Invalid progress baseline");
+            }
+        }
+        if (result.has("shotPositions")) {
+            boolean vertical = profile.startsWith("wa-indoor-triple-");
+            double limit = (codes.startsWith("06") ? .5 : codes.startsWith("05") ? .6 : 1.0) + .1001;
+            validatePositions(result.getJSONArray("shotPositions"), scores.length(), vertical, limit);
+        }
+    }
+
+    private static void validatePositions(JSONArray positions, int count, boolean vertical, double limit) throws JSONException, IOException {
+        if (count > 512 || count != positions.length()) throw new IOException("Invalid shot position count");
+        for (int i = 0; i < count; i++) {
+            if (positions.isNull(i)) continue;
+            JSONArray point = positions.getJSONArray(i);
+            if (point.length() != (vertical ? 3 : 2) || !(point.get(0) instanceof Number) || !(point.get(1) instanceof Number) ||
+                !(Math.hypot(point.getDouble(0), point.getDouble(1)) <= limit)) throw new IOException("Invalid shot position");
+            if (vertical) {
+                Object spot = point.get(2);
+                if (!(spot instanceof Integer) || (Integer) spot < 0 || (Integer) spot > 2) throw new IOException("Invalid target face");
             }
         }
     }

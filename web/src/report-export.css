@@ -1,6 +1,14 @@
 .report-export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
 .report-export-actions button, .report-export-share, .report-export-data button { min-height: 48px; padding: 10px; border: 1px solid var(--edge); border-radius: 15px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; }
 .report-export-actions button[aria-pressed="true"], .report-export-share { background: var(--accent); color: #111811; border-color: var(--accent); }
+.report-export-composition { margin-bottom: 14px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); }
+.report-export-composition summary { cursor: pointer; padding: 10px 12px; font-weight: 650; }
+.report-export-composition summary span { float: inline-end; color: var(--muted); font-variant-numeric: tabular-nums; }
+.report-export-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 4px; padding: 0 8px 8px; }
+.report-export-sections label { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 5px; font-size: 13px; }
+.report-export-sections label:has(:disabled) { color: var(--muted); }
+.report-export-sections label small { display: block; }
+.report-export-sections input { flex: none; accent-color: var(--accent); }
 .report-export-share { display: block; width: 100%; margin-top: 16px; font-size: 16px; }
 .report-export-share:disabled { opacity: .45; }
 .report-export-previews { display: grid; gap: 18px; }

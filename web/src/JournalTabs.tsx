@@ -93,7 +93,7 @@ function HistoryCard({ entry, hundredths, onOpen, tournament }: {
       {progress && <span className="history-progress" data-progress-tone={progress.tone} aria-label={`Прогресс относительно похожих тренировок ${progress.text}`}>{progress.text}</span>}
     </span>}
     {rankDisplay?.label && <span className="rank-tag" data-testid={`history-rank-${entry.id}`}>
-      <strong>{rankDisplay.forecast ? 'Темп ' : ''}{rankDisplay.label}</strong>
+      <strong>{rankDisplay.forecast && rankDisplay.label !== '—' ? 'Темп ' : ''}{rankDisplay.label}</strong>
       <span>{rankDisplay.actual ?? rank?.classLabel}</span>
     </span>}
     <span className="journal-tab-conditions">

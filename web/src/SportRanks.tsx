@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { bowCategoryName } from './equipment.ts';
 import { formatAverage } from './preferences.ts';
-import { RANK_CATEGORIES, RANK_DOCUMENT, RANK_LABELS, RANK_REFERENCE, RANK_SOURCE } from './sport-ranks.ts';
+import { rankDisplayLabel, RANK_CATEGORIES, RANK_DOCUMENT, RANK_LABELS, RANK_REFERENCE, RANK_SOURCE } from './sport-ranks.ts';
 import type { RankBow, RankCategory, RankEvaluation, RankGroup, StageRank } from './sport-ranks.ts';
 import { getTargetProfile } from './target.ts';
 import { ExerciseThresholdTable } from './ExerciseThresholdTable.tsx';
@@ -16,11 +16,11 @@ export function RankMedal() {
 }
 
 export function RankTag({ rank, onOpen, testId }: { rank: StageRank; onOpen?: () => void; testId?: string }) {
-  const label = rank.label;
+  const label = rankDisplayLabel(rank.label);
   const forecast = !rank.finalResult && rank.evaluation?.pace;
   const contents = <><strong>{forecast && <RankMedal />}{label ?? '—'}</strong><span>{rank.classLabel ?? 'Разряд'}</span></>;
   if (onOpen) return <button type="button" className="rank-tag" data-testid={testId} onClick={onOpen}
-    aria-label={`${rank.scopeLabel} · ${forecast ? 'Прогноз ' : ''}${label ?? 'разряд'}`}>{contents}</button>;
+    aria-label={`${rank.scopeLabel} · ${forecast ? 'Прогноз ' : ''}${rank.label ?? 'разряд'}`}>{contents}</button>;
   return rank.label ? <span className="rank-tag" data-testid={testId}>{contents}</span> : null;
 }
 
@@ -74,7 +74,7 @@ export function RankDetails({ rank, forecast, onClose, onOpenReference, onCatego
       {evaluation ? <>
         <div className="rank-summary">
           <div className="rank-summary-level"><span>{rank.finalResult ? 'Результат упражнения' : 'Прогноз по среднему'}</span>
-            <h3 data-testid="rank-headline"><RankMedal />{rank.label ?? '—'}</h3></div>
+            <h3 data-testid="rank-headline">{rank.label && rankDisplayLabel(rank.label) !== '—' && <RankMedal />}{rankDisplayLabel(rank.label) ?? '—'}</h3></div>
           <div className="rank-summary-average"><span>Средний балл</span><strong>{formatAverage(evaluation.entered ? evaluation.points / evaluation.entered : null, true)}</strong></div>
         </div>
         {forecast?.pace && <p>Темп {forecast.pace.label} · сетка на {forecast.exercise.arrows} стрел</p>}

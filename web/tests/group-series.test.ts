@@ -13,7 +13,7 @@ const newJournal = () => newGroupSeriesJournal('room', 'entry', emptyPractice())
 test('a local save queues only completed series, including all misses, with stable numbers across edits and deletion', () => {
   const first = appendShot(emptyPractice(), miss);
   const journal = newJournal();
-  assert.throws(() => newGroupSeriesJournal('room', 'entry', first));
+  assert.deepEqual(pendingGroupSeries(newGroupSeriesJournal('room', 'entry', first)), []);
   assert.equal(trackGroupSeries(journal, first), journal);
   const practice = advanceSeries(first);
   const queued = trackGroupSeries(journal, practice);

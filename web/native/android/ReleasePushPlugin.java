@@ -35,14 +35,18 @@ public class ReleasePushPlugin extends Plugin {
     private static final String CHANNEL = "fableshot_updates";
     private static final String LAUNCH_CODE = "app.fableshot.releasePush.versionCode";
     private static final String ENABLED = "enabled";
+    private static final String TOPIC_REQUESTED = "topic-requested";
     private static final String SHOWN = "shown";
     private static final String PENDING = "pending";
     private static final int NOTICE_ID = 1;
     private static final int MAX_VERSION_CODE = 2_100_000_000;
+    private Boolean requestedSubscription;
 
     private static SharedPreferences store(Context context) {
         return context.getSharedPreferences("release-push", Context.MODE_PRIVATE);
     }
+
+    private static boolean enabled(Context context) { return store(context).getBoolean(ENABLED, true); }
 
     private static String topic(Context context) {
         return "app.fableshot.android.react".equals(context.getPackageName())
@@ -76,50 +80,66 @@ public class ReleasePushPlugin extends Plugin {
     }
 
     private JSObject status() {
-        return new JSObject().put("available", available()).put("enabled", store(getContext()).getBoolean(ENABLED, false))
-                .put("allowed", allowed(getContext()));
+        return new JSObject().put("available", available()).put("enabled", enabled(getContext()))
+                .put("allowed", allowed(getContext())).put("canRequestPermission", canRequestPermission());
+    }
+
+    private boolean canRequestPermission() {
+        if (Build.VERSION.SDK_INT < 33) return false;
+        PermissionState permission = getPermissionState("notifications");
+        return permission == PermissionState.PROMPT || permission == PermissionState.PROMPT_WITH_RATIONALE;
     }
 
     @PluginMethod
-    public void getStatus(PluginCall call) { call.resolve(status()); }
+    public void getStatus(PluginCall call) {
+        synchronizeSubscription();
+        call.resolve(status());
+    }
 
     @PluginMethod
     public void setEnabled(PluginCall call) {
         Boolean enabled = call.getBoolean("enabled");
         if (enabled == null || enabled && !available()) { call.reject("Уведомления недоступны на этом устройстве."); return; }
+        Context context = getContext();
+        SharedPreferences.Editor choice = store(context).edit().putBoolean(ENABLED, enabled);
         if (!enabled) {
-            applySubscription(call, false);
-            return;
+            notifications(context).cancel(NOTICE_ID);
+            choice.remove(PENDING);
         }
-        ensureChannel(getContext());
-        if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+        choice.apply();
+        if (enabled && canRequestPermission()) {
             requestPermissionForAlias("notifications", call, "permissionResult");
         } else permissionResult(call);
     }
 
     @PermissionCallback
     private void permissionResult(PluginCall call) {
-        if (!allowed(getContext())) { call.resolve(status()); return; }
-        applySubscription(call, true);
+        synchronizeSubscription();
+        call.resolve(status());
     }
 
-    private void applySubscription(PluginCall call, boolean enabled) {
+    private void synchronizeSubscription() {
+        if (!available()) return;
         Context context = getContext();
         SharedPreferences preferences = store(context);
-        preferences.edit().putBoolean(ENABLED, enabled).apply();
+        boolean subscribe = enabled(context) && allowed(context);
+        if (requestedSubscription != null && requestedSubscription == subscribe) return;
+        if (!subscribe && !preferences.getBoolean(TOPIC_REQUESTED, preferences.contains(ENABLED))) return;
+        requestedSubscription = subscribe;
         FirebaseMessaging messaging = FirebaseMessaging.getInstance();
-        if (enabled) {
-            messaging.setAutoInitEnabled(true);
-            messaging.subscribeToTopic(topic(context)).addOnFailureListener(error ->
-                    Log.w("FableShotPush", "Update topic subscription failed"));
-        } else {
-            notifications(context).cancel(NOTICE_ID);
-            preferences.edit().remove(PENDING).apply();
-            messaging.setAutoInitEnabled(false);
-            messaging.unsubscribeFromTopic(topic(context)).addOnFailureListener(error ->
-                    Log.w("FableShotPush", "Update topic unsubscription failed"));
+        if (subscribe) {
+            ensureChannel(context);
+            preferences.edit().putBoolean(TOPIC_REQUESTED, true).apply();
         }
-        call.resolve(status());
+        messaging.setAutoInitEnabled(subscribe);
+        (subscribe ? messaging.subscribeToTopic(topic(context)) : messaging.unsubscribeFromTopic(topic(context)))
+                .addOnSuccessListener(ignored -> {
+                    if (!subscribe && requestedSubscription == Boolean.FALSE) preferences.edit().putBoolean(TOPIC_REQUESTED, false).apply();
+                })
+                .addOnFailureListener(error -> {
+                    if (requestedSubscription != null && requestedSubscription == subscribe) requestedSubscription = null;
+                    Log.w("FableShotPush", "Could not update the release topic subscription");
+                });
     }
 
     @PluginMethod
@@ -132,7 +152,13 @@ public class ReleasePushPlugin extends Plugin {
     }
 
     @Override
-    public void load() { capture(getActivity().getIntent()); }
+    public void load() {
+        capture(getActivity().getIntent());
+        synchronizeSubscription();
+    }
+
+    @Override
+    protected void handleOnResume() { synchronizeSubscription(); }
 
     @Override
     protected void handleOnNewIntent(Intent intent) { capture(intent); }
@@ -142,7 +168,7 @@ public class ReleasePushPlugin extends Plugin {
         int code = intent.getIntExtra(LAUNCH_CODE, 0);
         intent.removeExtra(LAUNCH_CODE);
         SharedPreferences preferences = store(getContext());
-        if (!preferences.getBoolean(ENABLED, false) || code <= 0 || code > MAX_VERSION_CODE) return;
+        if (!enabled(getContext()) || code <= 0 || code > MAX_VERSION_CODE) return;
         preferences.edit().putInt(PENDING, Math.max(code, preferences.getInt(PENDING, 0))).apply();
         getBridge().triggerWindowJSEvent("fableshot-release-push");
     }
@@ -162,7 +188,7 @@ public class ReleasePushPlugin extends Plugin {
         @Override
         public void onMessageReceived(RemoteMessage message) {
             SharedPreferences preferences = store(this);
-            if (!preferences.getBoolean(ENABLED, false) || !allowed(this) || !"release".equals(message.getData().get("type"))) return;
+            if (!enabled(this) || !allowed(this) || !"release".equals(message.getData().get("type"))) return;
             String version = message.getData().get("version");
             String rawCode = message.getData().get("versionCode");
             if (version == null || !version.matches("[0-9]{1,8}\\.[0-9]{1,8}\\.[0-9]{1,8}") ||
@@ -176,10 +202,18 @@ public class ReleasePushPlugin extends Plugin {
             PendingIntent tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification.Builder notice = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
             int icon = getResources().getIdentifier("fableshot_update_notification", "drawable", getPackageName());
+            String title = noticeText(message.getData().get("title"), 80, "Доступен FableShot " + version);
+            String body = noticeText(message.getData().get("body"), 120, "Доступно обновление!");
             notifications(this).notify(NOTICE_ID, notice.setSmallIcon(icon == 0 ? android.R.drawable.stat_sys_download_done : icon)
-                    .setContentTitle("Доступен FableShot " + version).setContentText("Посмотреть, что нового")
+                    .setContentTitle(title).setContentText(body)
                     .setContentIntent(tap).setAutoCancel(true).build());
             preferences.edit().putInt(SHOWN, (int) code).apply();
+        }
+
+        private static String noticeText(String value, int maxLength, String fallback) {
+            if (value == null || value.length() > maxLength || value.chars().anyMatch(Character::isISOControl)) return fallback;
+            String trimmed = value.trim();
+            return trimmed.isEmpty() ? fallback : trimmed;
         }
 
         @SuppressWarnings("deprecation")

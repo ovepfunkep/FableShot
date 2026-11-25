@@ -9,7 +9,7 @@ import { currentSeries } from './practice.ts';
 import { calculateProgress } from './progress-scoring.ts';
 import { roundRank } from './sport-ranks.ts';
 import { buildNumberedArrowAnalysis } from './numbered-arrow-analysis.ts';
-import { elapsedTrainingTime, formatTrainingTime } from './training-time.ts';
+import { elapsedTrainingTime, formatTrainingTime, reportedTrainingStart } from './training-time.ts';
 import { groupAchievementGrants } from './achievement-ledger.ts';
 import type { AchievementGrant } from './achievement-ledger.ts';
 import type { StatisticFeature } from './statistics-visibility.ts';
@@ -125,7 +125,8 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
   const upper = final?.next;
   const duration = entry.trainingTime ? elapsedTrainingTime(entry.trainingTime, Date.now()) : null;
   const focus = practice.techniqueUses?.at(-1)?.selection;
-  return { entryId: entry.id, startedAt: entry.startedAt, completed: practice.savedAt !== null, rounds, result, analysis,
+  return { entryId: entry.id, startedAt: entry.startedAt, startLabel: reportedTrainingStart(entry)?.label,
+    completed: practice.savedAt !== null, rounds, result, analysis,
     title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank, rankDisplay: exerciseRankDisplay(rank),
     duration: duration === null ? null : `${formatTrainingTime(duration)}${entry.trainingTime?.partial ? ' · учтённое время' : ''}`,
     focus: [focus?.focus1, focus?.focus2].filter((value): value is string => !!value),

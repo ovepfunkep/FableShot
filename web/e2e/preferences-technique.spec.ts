@@ -90,8 +90,11 @@ test('memo drafts, numbered subpoints and immutable training snapshot survive re
   await page.getByTestId('technique-title').fill('Спокойный выстрел');
   await page.getByTestId('technique-add-step-0').click();
   await page.getByTestId('technique-step-short').fill('Плечи расслаблены');
-  await page.getByRole('button', { name: 'Подпункты и тренер', exact: true }).click();
-  await page.getByTestId('technique-step-children').fill('Проверить стойку\nВыдохнуть');
+  await page.getByRole('button', { name: 'Добавить подпункт' }).click();
+  const first = page.getByRole('textbox', { name: 'Подпункт 1.1.1', exact: true });
+  await expect(first).toBeFocused();
+  await first.fill('Проверить стойку\nВыдохнуть');
+  await expect(page.getByRole('textbox', { name: 'Подпункт 1.1.2', exact: true })).toBeFocused();
   await page.getByTestId('technique-step-done').click();
   await page.getByTestId('technique-back').click();
   await page.locator('[data-testid^="technique-draft-"]').click();
@@ -119,4 +122,36 @@ test('memo drafts, numbered subpoints and immutable training snapshot survive re
   await page.locator('.reflection-memo').click();
   await expect(page.getByTestId('technique-reader')).toContainText('Спокойный выстрел');
   await expect(page.getByTestId('technique-apply')).toHaveCount(0);
+});
+
+test('legacy memo lines remain editable, reorderable and repeatable', async ({ page }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByTestId('training-technique-open').click();
+  await page.getByText('Импорт', { exact: true }).click();
+  await page.getByRole('button', { name: 'Вставить текст', exact: true }).click();
+  await page.getByTestId('technique-paste-text').fill(JSON.stringify({ schema: 1, title: 'Разминка', context: '', description: '',
+    phases: [{ id: 'phase-1', title: 'Подготовка', steps: [{ id: 'step-1', short: 'Проверка', detail: 'Стойка\r\nДыхание',
+      children: '\nСтойка', visible: true, question: 'Проверить с тренером' }] }], discussed: null, change: '' }));
+  await page.getByTestId('technique-paste-apply').click();
+  const step = page.getByTestId('technique-step-0-0');
+  await expect(step).toContainText('1.1.3 Стойка');
+  await step.click();
+  const field = (index: number) => page.getByRole('textbox', { name: `Подпункт 1.1.${index}`, exact: true });
+  await expect(field(2)).toHaveValue('Дыхание');
+  await page.getByRole('button', { name: 'Порядок подпункта 1.1.2' }).click();
+  await page.getByRole('button', { name: 'Выше', exact: true }).click();
+  await expect(field(1)).toHaveValue('Дыхание');
+  await page.getByRole('button', { name: 'Удалить подпункт 1.1.2' }).click();
+  await expect(field(3)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Вернуть', exact: true }).click();
+  await expect(field(3)).toHaveValue('Стойка');
+  await page.getByTestId('technique-step-done').click();
+  await page.getByTestId('technique-publish').click();
+  await page.locator('[data-testid^="technique-read-"]').click();
+  const reader = page.getByTestId('technique-reader');
+  await expect(reader).toContainText('1.1.1 Дыхание');
+  await expect(reader).toContainText('1.1.2 Стойка');
+  await expect(reader).toContainText('1.1.3 Стойка');
+  await expect(reader).toContainText('Проверить с тренером');
 });

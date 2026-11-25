@@ -10,11 +10,13 @@ import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { formatAverage } from './preferences.ts';
 import { WebThemeSettings } from './WebThemeSettings.tsx';
 import { DEFAULT_THEME_STYLE } from './web-theme.ts';
+import { RANK_CATEGORIES } from './sport-ranks.ts';
+import type { RankCategory } from './sport-ranks.ts';
 import './web-onboarding.css';
 
 export type OnboardingChapter = 'welcome' | 'target' | 'report' | 'preferences';
 
-type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void; onEnableHundredths?: () => void };
+type OnboardingActions = { onStart: () => void; onImport: () => void; onRestore: () => void; onClose: () => void; onEnableHundredths?: () => void; onOpenTargetGuide: () => void };
 
 const tutorial = [
   { title: 'Поймай свою точку', hint: 'Удержи палец, уточни попадание в лупе и отпусти. Короткое касание тоже работает.' },
@@ -55,7 +57,7 @@ function Welcome({ onStart, onImport, onRestore, onClose, onExample }: Onboardin
   </main>;
 }
 
-function TargetTutorial({ onStart, onClose, onReport }: Pick<OnboardingActions, 'onStart' | 'onClose'> & { onReport: () => void }) {
+function TargetTutorial({ onStart, onClose, onReport, onOpenTargetGuide }: Pick<OnboardingActions, 'onStart' | 'onClose' | 'onOpenTargetGuide'> & { onReport: () => void }) {
   const [step, setStep] = useState(0);
   const [history, setHistory] = useState<Shot[][]>([[]]);
   const [edit, setEdit] = useState<{ index: number; shot: Shot } | null>(null);
@@ -102,7 +104,7 @@ function TargetTutorial({ onStart, onClose, onReport }: Pick<OnboardingActions, 
         <p>{instruction.hint}</p>
       </div>
       <div className="web-onboard-board">
-        <TargetBoard shots={display} inputEnabled={canMark} onShot={mark} selectedIndex={edit?.index ?? null} />
+        <TargetBoard shots={display} inputEnabled={canMark} onShot={mark} selectedIndex={edit?.index ?? null} onOpenGuide={onOpenTargetGuide} />
       </div>
       <div className="web-onboard-shots" role="group" aria-label="Стрелы примера">
         {Array.from({ length: 3 }, (_, index) => {
@@ -180,10 +182,11 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
   const [themeStyle, setThemeStyle] = useState(preferences.themeStyle ?? DEFAULT_THEME_STYLE);
   const [hundredths, setHundredths] = useState(preferences.averageHundredths);
   const [inputNotices, setInputNotices] = useState(preferences.showAchievementsDuringInput !== false);
+  const [rankCategory, setRankCategory] = useState<RankCategory | undefined>(preferences.rankCategory);
   const [saving, setSaving] = useState(false);
   async function save() {
     setSaving(true);
-    const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths,
+    const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths, rankCategory,
       showAchievementsDuringInput: inputNotices, ...(standalone ? {} : { onboardingSeen: true }) });
     if (success) {
       if (hundredths && !preferences.averageHundredths) onEnableHundredths?.();
@@ -204,6 +207,17 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
       <div><span>Результат</span><strong>192/230</strong></div>
       <div><span>Средний</span><strong data-testid="onboard-average-example">{formatAverage(192 / 23, hundredths)}</strong></div>
     </section>
+    <label className="web-onboard-option"><span>Категория нормативов</span>
+      <select className="report-scope-select" value={rankCategory ?? ''} disabled={saving}
+        onChange={event => {
+          const category = event.currentTarget.value;
+          setRankCategory(category === 'male' || category === 'female' ? category : undefined);
+        }}>
+        <option value="">Выбрать позже</option>
+        <option value="male">{RANK_CATEGORIES.male}</option>
+        <option value="female">{RANK_CATEGORIES.female}</option>
+      </select>
+    </label>
     <div className="web-onboard-preference-options">
       <button type="button" role="switch" aria-checked={hundredths} className="web-onboard-option" disabled={saving}
         onClick={() => setHundredths(!hundredths)}>
@@ -252,6 +266,6 @@ export function WebOnboarding(actions: OnboardingActions & { initialChapter: Onb
   if (chapter === 'preferences') return <QuickPreferences standalone={standalone} onEnableHundredths={actions.onEnableHundredths}
     onDone={standalone ? actions.onClose : actions.onStart} onBack={standalone ? actions.onClose : () => setChapter(previousChapter)} />;
   if (chapter === 'report') return <TutorialReport onStart={start} onClose={actions.onClose} onBack={() => setChapter('target')} />;
-  if (chapter === 'target') return <TargetTutorial onStart={start} onClose={actions.onClose} onReport={() => setChapter('report')} />;
+  if (chapter === 'target') return <TargetTutorial onStart={start} onClose={actions.onClose} onReport={() => setChapter('report')} onOpenTargetGuide={actions.onOpenTargetGuide} />;
   return <Welcome {...actions} onStart={start} onExample={() => setChapter('target')} />;
 }

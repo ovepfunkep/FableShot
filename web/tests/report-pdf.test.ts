@@ -75,3 +75,19 @@ test('long series continue across PDF cards and disabled statistics are not expo
   assert.match(text, /Р2 · Серия 1/);
   for (const title of ['Сравнение попаданий', 'Карта попаданий', 'Распределение попаданий', 'Нормативы', 'Личные рекорды']) assert.equal(text.includes(title), false, title);
 });
+
+test('export composition keeps only selected blocks and can summarize series without individual arrows', async () => {
+  const entry = fixture();
+  const first = entry.practice.rounds[0].series[0];
+  first.shots = Array.from({ length: 92 }, () => structuredClone(first.shots[0]));
+  first.plannedCount = 92;
+  const snapshot = reportSnapshot(entry, 'male', false);
+  const summary = await extract(await createReportPdf(snapshot, await fonts, { sections: ['series'], showShots: false }));
+  const text = summary.pages.join(' ');
+  assert.match(text, /92 стрел/);
+  assert.equal((text.match(/Р1 · Серия 1/g) ?? []).length, 1);
+  assert.doesNotMatch(text, /РЕЗУЛЬТАТ|Карта попаданий|Нормативы|Личные рекорды/);
+  const distribution = await extract(await createReportPdf(snapshot, await fonts, { sections: ['distribution'], showShots: false }));
+  assert.match(distribution.pages.join(' '), /Распределение попаданий/);
+  assert.doesNotMatch(distribution.pages.join(' '), /Раунд 1|РЕЗУЛЬТАТ|Карта попаданий/);
+});

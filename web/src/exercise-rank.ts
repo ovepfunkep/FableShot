@@ -1,6 +1,6 @@
 import { conditionsKey } from './composite-scoring.ts';
 import type { Practice } from './practice.ts';
-import { evaluateRank, matchingRankExercises } from './sport-ranks.ts';
+import { evaluateRank, matchingRankExercises, rankDisplayLabel } from './sport-ranks.ts';
 import type { RankCategory, RankEvaluation, StageRank } from './sport-ranks.ts';
 
 const bowClasses = { recurve: 'КЛ', barebow: 'КЛб', compound: 'БЛ' } as const;
@@ -49,6 +49,6 @@ export function exerciseRankDisplay(rank: ExerciseRank) {
   const pace = rank.forecast?.pace?.label ?? null;
   const separate = rank.finalResult && pace !== null && pace !== rank.label;
   const forecast = !!rank.evaluation && (!rank.finalResult || separate);
-  return { forecast, label: forecast ? pace ?? rank.label : rank.label,
-    actual: separate ? `Разряд ${rank.label} · ${rank.evaluation!.entered} стрел` : null };
+  return { forecast, label: rankDisplayLabel(forecast ? pace ?? rank.label : rank.label),
+    actual: separate ? `Разряд ${rankDisplayLabel(rank.label)} · ${rank.evaluation!.entered} стрел` : null };
 }

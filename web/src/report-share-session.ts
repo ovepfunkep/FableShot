@@ -1,4 +1,5 @@
 import type { ReportSnapshot } from './report-export.ts';
+import type { ReportComposition } from './report-composition.ts';
 
 export type ReportFormat = 'png' | 'pdf';
 export type PreparedReport = { files: File[]; previews: string[] };
@@ -14,14 +15,14 @@ export async function loadReportFonts() {
 }
 
 /** Owned by one statistics screen. Closing its sheet keeps the immutable files. */
-export function createReportShareSession(snapshot: ReportSnapshot) {
+export function createReportShareSession(snapshot: ReportSnapshot, compositions?: Record<ReportFormat, ReportComposition>) {
   const name = `FableShot-${/^\d{4}-\d{2}-\d{2}/.exec(snapshot.startedAt)?.[0] ?? 'training'}`;
   let posters: Promise<Uint8Array[]> | undefined;
   let disposed = false;
   const pending = new Map<ReportFormat, Promise<PreparedReport>>();
   const urls: string[] = [];
   async function images() {
-    if (!posters) posters = import('./report-poster.ts').then(module => module.createReportPosters(snapshot)).catch(error => {
+    if (!posters) posters = import('./report-poster.ts').then(module => module.createReportPosters(snapshot, compositions?.png)).catch(error => {
       posters = undefined; throw error;
     });
     return posters;
@@ -33,7 +34,7 @@ export function createReportShareSession(snapshot: ReportSnapshot) {
       files = pages.map((bytes, index) => new File([new Uint8Array(bytes)], `${name}-${index + 1}.png`, { type: 'image/png' }));
     } else {
       const { createReportPdf } = await import('./report-pdf.ts');
-      const bytes = await createReportPdf(snapshot, await loadReportFonts());
+      const bytes = await createReportPdf(snapshot, await loadReportFonts(), compositions?.pdf);
       files = [new File([new Uint8Array(bytes)], `${name}.pdf`, { type: 'application/pdf' })];
     }
     if (disposed) throw new DOMException('Экран статистики закрыт.', 'AbortError');

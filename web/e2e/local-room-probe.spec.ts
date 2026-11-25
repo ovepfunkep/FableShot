@@ -1,7 +1,7 @@
 import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { createHash, createHmac, createPublicKey, verify } from 'node:crypto';
-import { appendShot, emptyPractice } from '../src/practice.ts';
+import { advanceSeries, appendShot, emptyPractice } from '../src/practice.ts';
 
 test('the host can restore a saved room on the current hotspot address', async ({ page }) => {
   const invitation = 'FS1:192.168.44.1:25000:' + 'a'.repeat(32);
@@ -73,8 +73,8 @@ test('Android group training keeps its series queued during an outage and sends 
           return { participants: [
           { entryId: 'b'.repeat(64), displayName: 'Новичок', bowCategory: 'recurve' },
         ], series: [
-          { entryId: 'a'.repeat(64), displayName: 'Алексей', ordinal: 1, result: { points: 22, arrows: 3, bowCategory: 'barebow', hits: 3,
-            spread: { positions: 3, squaredDistance: 0, complete: true },
+          { entryId: 'a'.repeat(64), displayName: 'Алексей', ordinal: 1, result: { points: 22, arrows: 3, bowCategory: 'barebow', hits: 3, scores: '877',
+            spread: { positions: 3, squaredDistance: 0, complete: true }, shotPositions: [[.23, 0], [.32, 0], [.34, 0]],
             conditions: { distanceMeters: 18, targetProfileId: 'wa-indoor-outer-v1', targetDiameterMm: 400 } } },
           { entryId: 'a'.repeat(64), ordinal: 2, result: { points: 25, arrows: 3, bowCategory: 'barebow',
             conditions: { distanceMeters: 18, targetProfileId: 'wa-indoor-outer-v1', targetDiameterMm: 400 } } },
@@ -90,7 +90,7 @@ test('Android group training keeps its series queued during an outage and sends 
   await page.getByTestId('home-group-room').click();
   await page.getByLabel('Имя для комнаты').fill('Иван');
   await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
-  await page.getByRole('button', { name: 'Выбрать условия' }).click();
+  await page.getByRole('button', { name: 'Начать новую', exact: true }).click();
   await page.getByTestId('start-training').click();
   expect((await readDiary(page)).entries[0]).toMatchObject({
     id: 'personal', paused: true, practice: { rounds: [{ series: [{ shots: [{ code: 'M' }] }] }] },
@@ -116,22 +116,37 @@ test('Android group training keeps its series queued during an outage and sends 
   await help.getByText('Что будет, если закрыть комнату?', { exact: true }).click();
   await expect(help.getByText(/завершит обмен для всех/)).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Общие', exact: true }).click();
-  await page.getByText('Разбор очков', { exact: true }).click();
-  await expect(page.getByText('Попадания +73.33 · кучность +5.00')).toBeVisible();
-  await page.getByRole('button', { name: 'Классика', exact: true }).click();
-  await page.getByRole('button', { name: 'Фильтры таблицы' }).click();
-  await page.getByRole('combobox', { name: /Вид/ }).selectOption('rows');
-  await page.getByRole('button', { name: 'Готово' }).click();
-  await expect(page.getByRole('cell', { name: '22/30', exact: true })).toHaveCount(2);
+  const alexey = page.locator('[data-room-member]').filter({ hasText: 'Алексей' });
+  await expect(alexey.getByTestId('room-score-classic')).toHaveText('22/30');
+  await expect(alexey.getByTestId('room-score-cg3')).toContainText('78,33');
+  await alexey.getByRole('button').click();
+  await expect(page.getByText('Попадания +73,33 · кучность +5,00')).toBeVisible();
+  await page.getByRole('button', { name: 'Только серия' }).click();
+  await expect(alexey.locator('.room-series-shots span')).toHaveText(['8', '7', '7']);
+  await alexey.getByRole('button').click();
+  const targets = page.getByTestId('room-target-viewer');
+  await expect(targets.getByTestId('room-viewer-marker')).toHaveCount(3);
+  await targets.getByRole('button', { name: 'Стрела 1 · 8' }).click();
+  await expect(targets.locator('[data-selected="true"]')).toHaveCount(1);
+  await targets.getByRole('button', { name: 'Следующая серия на мишени' }).click();
+  await expect(targets.getByText('Координаты не переданы')).toBeVisible();
+  await targets.getByRole('button', { name: 'Следующий участник' }).click();
+  await expect(targets.getByText('Серия не получена')).toBeVisible();
+  await targets.getByRole('button', { name: 'Таблица', exact: true }).click();
+  await expect(page.getByLabel('Серия', { exact: true })).toHaveValue('2');
+  await page.getByRole('button', { name: 'До серии', exact: true }).click();
   await page.getByLabel('Серия', { exact: true }).selectOption('2');
-  await expect(page.getByRole('cell', { name: '47/60' })).toBeVisible();
+  await expect(alexey.getByTestId('room-score-classic')).toHaveText('47/60');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await page.context().setOffline(true);
   await page.getByRole('button', { name: 'Таблица комнаты' }).click();
   await expect(page.getByText(/Получено /)).toBeVisible();
   await expect(page.getByText('Новичок')).toBeVisible();
+  await page.getByRole('button', { name: 'Только серия' }).click();
+  await alexey.getByRole('button').click();
+  await expect(targets.getByTestId('room-viewer-marker')).toHaveCount(3);
+  await targets.getByRole('button', { name: 'Таблица', exact: true }).click();
   await page.getByRole('button', { name: 'Обновить таблицу' }).click();
   await expect(page.getByText(/Не удалось обновить таблицу/)).toBeVisible();
   await expect(page.getByText('Новичок')).toBeVisible();
@@ -142,6 +157,48 @@ test('Android group training keeps its series queued during an outage and sends 
   await page.context().setOffline(false);
   await page.getByRole('button', { name: 'Обновить таблицу' }).click();
   await expect(page.getByText(/Не удалось обновить таблицу/)).toHaveCount(0);
+});
+
+test('joining with an active training sends its closed series and keeps the existing diary entry', async ({ page }) => {
+  const invitation = 'FS1:192.168.43.1:25000:' + 'a'.repeat(32);
+  const mark = (practice: ReturnType<typeof emptyPractice>) => appendShot(practice, { point: { x: 0, y: 0 }, code: '10', points: 10 });
+  const practice = mark(advanceSeries(mark(advanceSeries(mark(emptyPractice())))));
+  const published: { ordinal: number; endId: number; revision: number }[] = [];
+  await page.exposeFunction('joinExistingRoom', (payload: string) => {
+    const operation = JSON.parse(payload);
+    if (operation.action === 'join') return { joined: operation.entryId };
+    published.push(operation);
+    return { endId: operation.endId, revision: operation.revision };
+  });
+  await page.addInitScript(({ invite, practice }) => {
+    if (!localStorage.getItem('app.fableshot.practice-diary.v1')) localStorage.setItem('app.fableshot.practice-diary.v1',
+      JSON.stringify({ version: 1, entries: [{ id: 'warmup', startedAt: '2026-11-25T04:00:00Z', practice }] }));
+    Object.assign(window, { androidBridge: {}, Capacitor: {
+      PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'publish', 'snapshot'].map(name => ({ name, rtype: 'promise' })) }],
+      nativePromise: async (_plugin: string, method: string, options?: { payload: string }) => {
+        if (method === 'status') return { invitation: invite, roomName: 'Клуб', cg3: true, pg1: true };
+        if (method === 'snapshot') return { participants: [], series: [] };
+        return (window as unknown as { joinExistingRoom(payload: string): Promise<unknown> }).joinExistingRoom(options!.payload);
+      },
+    } });
+  }, { invite: invitation, practice });
+  await page.goto('./');
+  await page.getByTestId('home-group-room').click();
+  await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+  const choice = page.getByTestId('room-training-choice');
+  await expect(choice).toContainText('2 сер. · 2 стрел');
+  await choice.getByRole('button', { name: 'Войти с этой тренировкой' }).click();
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+  await expect.poll(() => published.map(end => end.ordinal)).toEqual([1, 2]);
+  const diary = await readDiary(page);
+  expect(diary.entries).toHaveLength(1);
+  expect(diary.entries[0]).toMatchObject({ id: 'warmup', groupRoomName: 'Клуб' });
+  expect(diary.groupSeries).toHaveLength(1);
+  expect(diary.entries[0].practice.rounds[0].series).toHaveLength(3);
+  await page.getByTestId('next-end').click();
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => published.map(end => end.ordinal)).toEqual([1, 2, 3]);
+  expect((await readDiary(page)).entries).toHaveLength(1);
 });
 
 test('Android probe exposes a QR and supports retrying a failed invitation', async ({ page }) => {

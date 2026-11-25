@@ -138,6 +138,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.journal-timeline-point button[data-score-outline] {
+  --score-outline-nine: light-dark(#b58300, #e6b21c);
+  --score-outline-ten: light-dark(#6e5100, #fff2a4);
+}
 .journal-timeline-point button strong { overflow-wrap: anywhere; }
 .journal-timeline-point button span { color: var(--muted); font-size: 11px; }
 .journal-timeline-secondary { display: flex; justify-content: center; align-items: center; gap: 3px; flex-wrap: wrap; line-height: 1.1; }

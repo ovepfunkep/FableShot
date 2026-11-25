@@ -173,8 +173,21 @@ export function latestTechnique(document: TechniqueDocument): TechniqueVersion |
   return document.versions.reduce<TechniqueVersion | null>((latest, version) => !latest || version.number > latest.number ? version : latest, null);
 }
 
+export function techniqueStepLines(step: TechniqueStep): string[] {
+  return `${step.detail}\n${step.children}`.split(/\r\n?|\n/).map(line => line.trim()).filter(Boolean);
+}
+
+export function encodeTechniqueStepLines(lines: string[]): Pick<TechniqueStep, 'detail' | 'children'> | null {
+  const content = lines.map(line => line.trim()).filter(Boolean).join('\n');
+  if (content.length <= 4000) return { detail: content, children: '' };
+  // Keep whole lines when splitting the two fields in the v1 archive format.
+  const split = content.lastIndexOf('\n', 4000);
+  if (split < 0 || content.length - split - 1 > 4000) return null;
+  return { detail: content.slice(0, split), children: content.slice(split + 1) };
+}
+
 export function techniqueSubpoints(step: TechniqueStep, phase: number, number: number): string[] {
-  return `${step.detail}\n${step.children}`.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  return techniqueStepLines(step)
     .map((line, index) => `${phase}.${number}.${index + 1} ${line}`);
 }
 

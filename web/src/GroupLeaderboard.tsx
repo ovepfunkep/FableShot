@@ -1,58 +1,68 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { BOW_CATEGORIES } from './equipment.ts';
-import { groupStandings, readRoomHistory, roomConditionChoices } from './group-leaderboard.ts';
-import type { GroupScoring, RoomHistory } from './group-leaderboard.ts';
-import { MIN_SCORED_ARROWS } from './progress-scoring.ts';
-import type { ProgressResult } from './progress-scoring.ts';
+import { readRoomHistory, roomComparison, roomConditionChoices, roomShotLabel, roomShotPoints } from './group-leaderboard.ts';
+import type { GroupScoring, RoomHistory, RoomScope } from './group-leaderboard.ts';
 import { loadRoomMembership, readRoomName, roomSnapshot } from './group-room-membership.ts';
 import { displayCompositeScore } from './composite-scoring.ts';
-import type { CompositeScore } from './composite-scoring.ts';
+import { scoreColor } from './score-appearance.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
 import { shareReport } from './share-report.ts';
 import { roomResultCard } from './room-result-card.ts';
-import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import { RoomTargetViewer } from './RoomTargetViewer.tsx';
+import './room-leaderboard.css';
 
-function CompositeBreakdown({ score }: { score: CompositeScore }) {
-  if (score.total === undefined) return <small>{{
-    'incomplete-slice': 'В срезе не хватает серий.',
-    'incomplete-end': 'Есть неполная серия.',
-    'insufficient-end-shots': 'Для кучности нужно от трёх стрел в серии.',
-    'missing-coordinates': 'В срезе не хватает данных о кучности.',
-    'unverified-geometry': 'Для зачёта нужны серии с одним типом лука и одинаковыми условиями.',
-    'available': 'Расчёт пока недоступен.',
-    'no-data': 'Нет закрытых серий.',
-    'insufficient-ends': 'Пока недостаточно серий.',
-    'unknown-maximum': 'Максимум мишени неизвестен.',
-    'invalid-data': 'Некорректные данные серии.',
-  }[score.availability]}</small>;
-  return <details><summary>Разбор очков</summary>
-    <small>Попадания +{displayCompositeScore(score.base ?? 0)} · кучность +{displayCompositeScore(score.groupBonus ?? 0)}
-      {score.stabilityBonus !== undefined && ` · стабильность +${displayCompositeScore(score.stabilityBonus)}`}</small>
-    {score.phase === 'early' && <small>Предварительно · стабильность учитывается с третьей полной серии</small>}
-  </details>;
+const scoring = [
+  { id: 'classic', label: 'Очки', icon: 'target' },
+  { id: 'cg3', label: 'Общие', icon: 'trophy' },
+  { id: 'pg1', label: 'Прогресс', icon: 'stats' },
+] as const;
+const emptySeries: RoomHistory['series'] = [];
+const emptyParticipants: RoomHistory['participants'] = [];
+type RoomRow = ReturnType<typeof roomComparison>[number];
+const bowName = (bow: string | null) => BOW_CATEGORIES.find(item => item.value === bow)?.label ?? 'Без категории';
+const decimal = (value: number) => displayCompositeScore(value).replace('.', ',');
+function scoreLabel(row: RoomRow, mode: GroupScoring) {
+  const { value } = row.metrics[mode];
+  if (value === null) return '—';
+  if (mode === 'classic') return value + '/' + row.arrows * 10;
+  if (mode === 'cg3') return decimal(value);
+  return (Number(displayCompositeScore(value)) > 0 ? '+' : '') + decimal(value) + '%';
 }
 
-export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, archived, onRefresh, onFinalSnapshot }: {
-  entryId?: string; mySeries: number; onClose: () => void; saved?: RoomHistory; title?: string; archived?: boolean;
+function SeriesShots({ scores }: { scores: string }) {
+  const visible = scores.slice(0, 6);
+  return <div className="room-series-shots" aria-label="Оценки выстрелов">
+    {Array.from(visible, (code, index) => {
+      const points = roomShotPoints(code);
+      return <span key={index} data-dark={points >= 3 && points <= 4 || points === 0}
+        title={'Стрела ' + (index + 1)} style={{ backgroundColor: scoreColor(points) }}>{roomShotLabel(code)}</span>;
+    })}
+    {visible.length < scores.length && <small>+{scores.length - visible.length}</small>}
+  </div>;
+}
+
+export function GroupLeaderboard({ entryId, mySeries, myOpenSeries, onClose, saved, title, archived, onRefresh, onFinalSnapshot }: {
+  entryId?: string; mySeries: number; myOpenSeries?: number; onClose: () => void; saved?: RoomHistory; title?: string; archived?: boolean;
   onRefresh?: () => Promise<RoomHistory>;
   onFinalSnapshot?: (history: RoomHistory, name?: string) => void;
 }) {
-  const { preferences } = useTrainingPreferences();
-  const table = useRef<HTMLDivElement>(null);
-  const lastStandings = useRef<{ view: string; scores: Map<string, { top: number; result: string }> } | null>(null);
   const [live, setLive] = useState<RoomHistory>();
   const [selected, setSelected] = useState<number | null>(null);
+  const [scope, setScope] = useState<RoomScope>('through');
   const [category, setCategory] = useState('all');
   const [mode, setMode] = useState<GroupScoring>('classic');
   const [condition, setCondition] = useState('');
-  const [layout, setLayout] = useState('auto');
+  const [sameConditions, setSameConditions] = useState(false);
   const [error, setError] = useState('');
   const [roomName, setRoomName] = useState(title);
   const [refreshing, setRefreshing] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [openMember, setOpenMember] = useState<string>();
+  const [viewer, setViewer] = useState<{ initialId: string; ids: string[] }>();
   const [shareStatus, setShareStatus] = useState('');
   const [sharing, setSharing] = useState(false);
   const persistFinalSnapshot = useEffectEvent((history: RoomHistory, name?: string) => onFinalSnapshot?.(history, name));
@@ -86,156 +96,158 @@ export function GroupLeaderboard({ entryId, mySeries, onClose, saved, title, arc
 
   const history = saved?.finalizedAt ? saved : live ?? saved;
   const finalizedAt = history?.finalizedAt;
-  const { series = [], participants = [] } = history ?? {};
-  const received = !!history;
-  const latest = archived || finalizedAt ? series.reduce((max, end) => Math.max(max, end.result ? end.ordinal : 0), 1) : mySeries;
-  const ordinal = selected ?? latest;
-  const choices = [...new Set([latest, ...(selected === null ? [] : [selected]), ...series.map(end => end.ordinal)])].sort((a, b) => a - b);
-  const conditions = roomConditionChoices(series);
+  const series = history?.series ?? emptySeries;
+  const participants = history?.participants ?? emptyParticipants;
+  const latest = useMemo(() => series.reduce((max, end) => end.result ? Math.max(max, end.ordinal) : max, 0), [series]);
+  const ownSnapshotSeries = useMemo(() => series.reduce((max, end) =>
+    end.entryId === entryId && end.result ? Math.max(max, end.ordinal) : max, 0), [series, entryId]);
+  const automatic = entryId ? Math.max(mySeries, ownSnapshotSeries) : archived ? latest : mySeries;
+  const ordinal = selected ?? automatic;
+  const choices = useMemo(() =>
+    [...new Set([automatic, selected ?? 0, ...series.map(end => end.ordinal)])].filter(value => value > 0).sort((a, b) => a - b),
+  [automatic, selected, series]);
+  const conditions = useMemo(() => roomConditionChoices(series), [series]);
   const conditionFilter = conditions.has(condition) ? condition : undefined;
-  const rows = groupStandings(series, ordinal, category === 'all' ? undefined : category === 'unknown' ? null : category, participants, conditionFilter, mode);
-  const cards = layout === 'cards' || layout === 'auto' && new Set([...series, ...participants].map(end => end.entryId)).size <= 8;
-  useLayoutEffect(() => {
-    const board = table.current;
-    if (!board) return;
-    const view = JSON.stringify([ordinal, category, mode, conditionFilter, cards]);
-    const previous = lastStandings.current;
-    const frame = board.getBoundingClientRect();
-    const animate = previous?.view === view && preferences.animations && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const scores = new Map<string, { top: number; result: string }>();
-    const scroll = board.closest('dialog');
-    const viewport = scroll?.getBoundingClientRect();
-    const scale = frame.width / (board.offsetWidth || frame.width || 1);
-    for (const node of board.querySelectorAll<HTMLElement>('[data-room-member]')) {
-      const { roomMember, roomResult } = node.dataset;
-      if (!roomMember || !roomResult) continue;
-      const top = node.getBoundingClientRect().top - frame.top;
-      scores.set(roomMember, { top, result: roomResult });
-      const old = animate ? previous?.scores.get(roomMember) : undefined;
-      if (!old) continue;
-      const delta = old.top - top;
-      if (Math.abs(delta) > 1) {
-        if (node.dataset.own === 'true' && viewport && old.top + frame.top >= viewport.top && old.top + frame.top < viewport.bottom) {
-          node.scrollIntoView({ block: 'nearest' });
-        }
-        node.animate([{ transform: `translateY(${delta / (scale || 1)}px)` }, { transform: 'none' }],
-          { duration: 165, easing: 'ease-out' });
-      }
-      if (old.result !== roomResult) {
-        node.animate([{ backgroundColor: 'color-mix(in srgb, var(--accent) 24%, var(--surface))' }, {}],
-          { duration: 650, easing: 'ease-out' });
-      }
-    }
-    lastStandings.current = { view, scores };
-  }, [history, ordinal, category, mode, conditionFilter, cards, preferences.animations]);
-  const name = (row: typeof rows[number]) => row.displayName || (row.id === entryId ? 'Вы' : `Стрелок ${row.id.slice(0, 5).toUpperCase()}`);
-  const bow = (row: typeof rows[number]) => BOW_CATEGORIES.find(item => item.value === row.bow)?.label ?? 'Без категории';
-  const format = (value: number | undefined) => value === undefined ? '—' : displayCompositeScore(value);
-  const progressLabel = (value?: ProgressResult) => {
-    if (value?.percentagePoints == null) return '—';
-    const rounded = displayCompositeScore(value.percentagePoints);
-    return `${Number(rounded) > 0 ? '+' : ''}${rounded.replace('.', ',')}%`;
-  };
-  const score = (row: typeof rows[number]) => !row.current ? 'Ещё нет' : mode === 'cg3' ? format(row.compositeSeries?.total)
-    : mode === 'pg1' ? progressLabel(row.progressSeries) : `${row.current.points}/${row.current.arrows * 10}`;
-  const total = (row: typeof rows[number]) => mode === 'cg3' ? format(row.composite?.total)
-    : mode === 'pg1' ? progressLabel(row.progress) : row.arrows ? `${row.points}/${row.arrows * 10}` : '—';
-  const progressDetails = (row: typeof rows[number]) => {
-    if (mode !== 'pg1' || !row.arrows) return null;
-    const { progress, base } = row;
-    if (!row.current) return <small>В срезе не хватает серий.</small>;
-    if (!base) return <small>Нет базы для этих условий.</small>;
-    if (!progress) return <small>Для итога нужна одна база и одинаковые условия.</small>;
-    return <details><summary>{progress.fullRankAvailable ? 'Разбор прогресса' : 'Предварительный результат'}</summary>
-      <small>{base.sessions < 3 ? 'Для места нужны три похожие тренировки.' : progress.scoredCount < MIN_SCORED_ARROWS
-        ? `Для места нужно от ${MIN_SCORED_ARROWS} стрел.` : !progress.fullRankAvailable ? 'Для места нужны все полные серии среза.' : null}</small>
-      {progress.baselineAverage !== null && <small>Обычный средний {format(progress.baselineAverage)} · текущий {format(progress.currentAverage ?? undefined)}.
-        Процент показывает, на сколько изменилась доля от максимума: 8 вместо 7 из 10 — это +10%.</small>}
-    </details>;
-  };
-  const filtersActive = category !== 'all' || !!conditionFilter || layout !== 'auto';
+  const rows = useMemo(() => roomComparison(series, participants, { ordinal, scope, sort: mode, sameConditions, ownId: entryId,
+    bow: category === 'all' ? undefined : category === 'unknown' ? null : category, conditions: conditionFilter }),
+  [series, participants, ordinal, scope, mode, sameConditions, entryId, category, conditionFilter]);
+  const filtersActive = category !== 'all' || !!conditionFilter;
+  const name = (row: RoomRow) => row.name || (row.id === entryId ? 'Вы' : 'Стрелок ' + row.id.slice(0, 5).toUpperCase());
   const count = new Set([...series, ...participants].map(end => end.entryId)).size;
-  return <BottomSheet title={roomName || 'Таблица комнаты'} onClose={onClose} tag="room-leaderboard"
-    headerAction={<RoomHelpButton onClick={() => setHelpOpen(true)} />}>
-    <div className="room-leaderboard" ref={table}>
+  const index = choices.indexOf(ordinal);
+  const before = index > 0 ? choices[index - 1] : undefined;
+  const after = choices[index + 1];
+  const canShare = finalizedAt && scope === 'through' && rows.some(row => row.arrows);
+  return <BottomSheet title={roomName || 'Таблица комнаты'} onClose={onClose} tag="room-leaderboard" startAtTop
+    className={'room-leaderboard-sheet' + (expanded ? ' is-expanded' : '')}
+    headerAction={<div className="room-header-actions">
+      <button type="button" className="icon-button" aria-label={expanded ? 'Свернуть таблицу' : 'Развернуть таблицу'}
+        onClick={() => setExpanded(!expanded)}><Icon name={expanded ? 'down' : 'up'} /></button>
+      <RoomHelpButton onClick={() => setHelpOpen(true)} />
+    </div>}>
+    <section className="room-leaderboard" aria-label="Результаты участников">
       <div className="room-toolbar">
         <div className="room-status" role="status" data-offline={!!error}>
-          <Icon name="group" /><span>{finalizedAt ? 'Итоги зафиксированы' : error ? archived ? 'Обновление недоступно' : 'Нет связи' : archived ? 'Сохранённая таблица'
-            : received ? `Участники · ${count}` : 'Подключаемся…'}</span>
+          <Icon name="group" /><span>{finalizedAt ? 'Итоги зафиксированы' : error ? 'Нет связи' : archived ? 'Сохранённая таблица'
+            : history ? 'Участники · ' + count : 'Подключаемся…'}</span>
         </div>
-        {finalizedAt && ordinal === latest && rows.some(row => row.arrows) && <button type="button" className="room-pill" disabled={sharing} onClick={async () => {
+        {canShare && <button type="button" className="room-pill" disabled={sharing} onClick={async () => {
           setSharing(true);
           setShareStatus('');
           try {
             const label = { classic: 'Классика', cg3: 'Общие очки', pg1: 'Прогресс' }[mode];
-            const scope = [conditionFilter && conditions.get(conditionFilter), category !== 'all' &&
-              (BOW_CATEGORIES.find(item => item.value === category)?.label ?? 'Без категории')].filter(Boolean).join(' · ');
-            const file = roomResultCard(roomName || 'Групповая тренировка', finalizedAt, label, ordinal, scope,
-              rows.filter(row => row.arrows).map(row => ({ name: name(row), bow: bow(row), place: row.place, score: total(row) })));
+            const selection = [conditionFilter && conditions.get(conditionFilter), category !== 'all' && bowName(category),
+              sameConditions && 'Одинаковые условия'].filter(Boolean).join(' · ');
+            const file = roomResultCard(roomName || 'Групповая тренировка', finalizedAt, label, ordinal, selection,
+              rows.filter(row => row.arrows).map(row => ({ name: name(row), bow: bowName(row.bow), place: row.metrics[mode].place, score: scoreLabel(row, mode) })));
             const result = await shareReport([file], 'FableShot — итоги комнаты');
             if (result === 'downloaded') setShareStatus('Карточка скачана.');
           } catch { setShareStatus('Не удалось подготовить карточку. Попробуйте ещё раз.'); }
           finally { setSharing(false); }
         }}>{sharing ? 'Готовим…' : 'Поделиться итогами'}</button>}
+        {onRefresh && !finalizedAt && <button type="button" className="icon-button room-filter-button" disabled={refreshing}
+          aria-label="Обновить таблицу" onClick={async () => {
+            setRefreshing(true); setError('');
+            try { setLive(await onRefresh()); }
+            catch { setError('Не удалось обновить таблицу комнаты.'); }
+            finally { setRefreshing(false); }
+          }}><Icon name="undo" /></button>}
       </div>
-      {shareStatus && <small role="status">{shareStatus}</small>}
-      {history && (archived || error) && <small>Получено {new Date(history.receivedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</small>}
-      {onRefresh && !finalizedAt && <button type="button" className="room-pill" disabled={refreshing} onClick={async () => {
-        setRefreshing(true);
-        setError('');
-        try { setLive(await onRefresh()); }
-        catch { setError('Не удалось обновить таблицу комнаты.'); }
-        finally { setRefreshing(false); }
-      }}>{refreshing ? 'Обновляем…' : 'Обновить таблицу'}</button>}
-      <div className="room-modes" role="group" aria-label="Зачёт">
-        {([['classic', 'Классика'], ['cg3', 'Общие'], ['pg1', 'Прогресс']] as const).map(([id, label]) =>
-          <button key={id} type="button" aria-pressed={mode === id} onClick={() => setMode(id)}>{label}</button>)}
+      {(archived || error || shareStatus) && <small role={error || shareStatus ? 'status' : undefined} className="room-caption">
+        {[error || shareStatus, history?.receivedAt ? 'Получено ' + new Date(history.receivedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '']
+          .filter(Boolean).join(' · ')}
+      </small>}
+      <div className="room-toolbar room-scope-toolbar">
+        <div className="room-scope" role="group" aria-label="Режим сравнения">
+          <button type="button" aria-pressed={scope === 'through'} onClick={() => setScope('through')}>До серии</button>
+          <button type="button" aria-pressed={scope === 'single'} onClick={() => setScope('single')}>Только серия</button>
+        </div>
+        <div className="room-ordinal">
+          <button type="button" className="icon-button" aria-label="Предыдущая серия" disabled={before === undefined}
+            onClick={() => setSelected(before!)}><Icon name="left" /></button>
+          <select aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
+            <option value="">{automatic || '—'} · авто</option>
+            {choices.map(value => <option value={value} key={value}>{value}</option>)}
+          </select>
+          <button type="button" className="icon-button" aria-label="Следующая серия" disabled={after === undefined}
+            onClick={() => setSelected(after)}><Icon name="right" /></button>
+        </div>
       </div>
       <div className="room-toolbar">
-        <select className="room-pill" aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">{finalizedAt ? 'Итоги' : archived ? 'Последняя' : 'Моя серия'} · {latest}</option>
-          {choices.map(value => <option value={value} key={value}>Серия {value}</option>)}
-        </select>
+        <button type="button" className="room-conditions-toggle" role="switch" aria-checked={sameConditions} onClick={() => setSameConditions(!sameConditions)}>
+          <span>Одинаковые условия</span><span className="preference-switch" aria-hidden="true"><span /></span>
+        </button>
         <button type="button" className="icon-button room-filter-button" data-active={filtersActive} aria-haspopup="dialog"
           aria-label="Фильтры таблицы" onClick={() => setFiltersOpen(true)}><Icon name="filter" /></button>
       </div>
-      {filtersActive && <small>Фильтры активны</small>}
       {filtersOpen && <BottomSheet title="Фильтры таблицы" onClose={() => setFiltersOpen(false)}>
-      <div className="room-leaderboard-filters">
-        <label>Лук<select aria-label="Лук" value={category} onChange={event => setCategory(event.target.value)}>
-          <option value="all">Все луки</option><option value="unknown">Без категории</option>
-          {BOW_CATEGORIES.map(item => <option value={item.value} key={item.value}>{item.label}</option>)}
-        </select></label>
-      {conditions.size > 0 && <label>Условия<select aria-label="Условия"
-        value={conditionFilter ?? ''} onChange={event => setCondition(event.target.value)}>
-        <option value="">Все условия</option>
-        {[...conditions].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label>}
-      <label>Вид<select aria-label="Вид" value={layout} onChange={event => setLayout(event.target.value)}>
-        <option value="auto">Авто</option><option value="cards">Карточки</option><option value="rows">Список</option>
-      </select></label>
-      <button type="button" className="primary" onClick={() => setFiltersOpen(false)}>Готово</button>
-      </div></BottomSheet>}
+        <div className="room-leaderboard-filters">
+          <label>Лук<select aria-label="Лук" value={category} onChange={event => setCategory(event.target.value)}>
+            <option value="all">Все луки</option><option value="unknown">Без категории</option>
+            {BOW_CATEGORIES.map(item => <option value={item.value} key={item.value}>{item.label}</option>)}
+          </select></label>
+          {conditions.size > 0 && <label>Условия<select aria-label="Условия"
+            value={conditionFilter ?? ''} onChange={event => setCondition(event.target.value)}>
+            <option value="">Все условия</option>
+            {[...conditions].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select></label>}
+          {filtersActive && <button type="button" className="room-pill" onClick={() => { setCategory('all'); setCondition(''); }}>Сбросить</button>}
+          <button type="button" className="primary" onClick={() => setFiltersOpen(false)}>Готово</button>
+        </div>
+      </BottomSheet>}
       {helpOpen && <RoomHelp onClose={() => setHelpOpen(false)} />}
-      {mode === 'classic' && (!conditionFilter || category === 'all') && rows.length > 1 && <small>Товарищеский зачёт</small>}
-      {error && <small>{error}{received && ' Показана сохранённая таблица.'}</small>}
-      {received && !rows.length && <p>{conditionFilter || category !== 'all' ? 'На этом срезе нет результатов по выбранным фильтрам.' : 'Здесь появятся опубликованные серии.'}</p>}
-      {rows.length > 0 && (cards ? <ul className="room-standing-cards">
-        {rows.map(row => <li key={row.id} data-own={row.id === entryId} data-room-member={row.id} data-room-result={`${score(row)} · ${total(row)}`}>
-          <div className="room-standing-person"><span className="room-place" aria-label={row.place ? `Место ${row.place}` : 'Без места'}>{row.place ?? '—'}</span>
-            <span><strong>{name(row)}</strong><small>{bow(row)}</small></span></div>
-          <dl><div><dt>За серию</dt><dd>{score(row)}</dd></div><div><dt>{row.arrows && !row.complete ? 'Частичный итог' : 'Итог'}</dt><dd>{total(row)}</dd></div></dl>
-          {row.composite && <CompositeBreakdown score={row.composite} />}
-          {progressDetails(row)}
-        </li>)}
-      </ul> : <table><thead><tr><th>Стрелок</th><th>За серию</th><th>Итог</th></tr></thead><tbody>
-        {rows.map(row => <tr key={row.id} data-own={row.id === entryId} data-room-member={row.id} data-room-result={`${score(row)} · ${total(row)}`}>
-          <th scope="row">{row.place ? `${row.place}. ` : ''}{name(row)}<small>{bow(row)}</small></th>
-          <td>{score(row)}</td>
-          <td>{total(row)}{mode === 'classic' && row.arrows > 0 && !row.complete && <small>Частичный</small>}
-            {row.composite && <CompositeBreakdown score={row.composite} />}{progressDetails(row)}</td>
-        </tr>)}
-      </tbody></table>)}
-    </div>
+      <div className="room-score-head" role="group" aria-label="Сортировка">
+        {scoring.map(({ id, label, icon }) => <button key={id} type="button" aria-pressed={mode === id} onClick={() => setMode(id)}>
+          <Icon name={icon} />{label}
+        </button>)}
+      </div>
+      <div className="room-table-scroll">
+        {!ordinal && !!choices.length && <small className="room-caption">Выбери принятую серию.</small>}
+        {history && !rows.length && <p>{filtersActive ? 'На этом срезе нет результатов по выбранным фильтрам.' : 'Здесь появятся участники комнаты.'}</p>}
+        <ul className="room-standing-cards">
+          {rows.map(row => {
+            const opened = openMember === row.id;
+            const own = row.id === entryId;
+            const missing = !row.current && ordinal > 0;
+            const state = missing && own && ordinal === myOpenSeries ? 'Серия открыта'
+              : missing && scope === 'single' ? 'Серия не получена'
+              : ordinal > 0 && scope === 'through' && !row.full ? row.seriesCount + ' из ' + ordinal + ' серий' : undefined;
+            return <li key={row.id} data-own={own} data-room-member={row.id}>
+              <button type="button" className="room-standing-person" aria-expanded={scope === 'through' ? opened : undefined}
+                aria-haspopup={scope === 'single' ? 'dialog' : undefined} onClick={() => {
+                  if (scope === 'single' && ordinal > 0) {
+                    setViewer({ initialId: row.id, ids: [...new Set([...rows.map(person => person.id),
+                      ...participants.map(person => person.entryId), ...series.map(end => end.entryId)])] });
+                  } else setOpenMember(opened ? undefined : row.id);
+                }}>
+                <span><strong>{name(row)}</strong>{own && row.name && <small>Вы</small>}</span>
+                <span>{state ?? bowName(row.bow)}<Icon name={scope === 'single' ? 'target' : opened ? 'up' : 'down'} /></span>
+              </button>
+              {scope === 'single' && row.current?.scores && <SeriesShots scores={row.current.scores} />}
+              <div className="room-metric-row">
+                {scoring.map(({ id, label }) => {
+                  const measurement = row.metrics[id];
+                  return <div key={id} data-testid={'room-score-' + id} aria-label={label} data-preliminary={measurement.preliminary || undefined}>
+                    <span className="room-reading"><strong>{scoreLabel(row, id)}</strong>
+                      {measurement.place !== null && <span className="room-place" data-place={Math.min(4, measurement.place)} aria-label={'Место ' + measurement.place}>{measurement.place}</span>}
+                    </span>
+                    {measurement.hint && <small>{measurement.preliminary ? 'Предварительно' : measurement.hint}</small>}
+                  </div>;
+                })}
+              </div>
+              {opened && scope === 'through' && <div className="room-standing-details">
+                {row.composite.total !== undefined && <small>Попадания +{decimal(row.composite.base ?? 0)} · кучность +{decimal(row.composite.groupBonus ?? 0)}
+                  {row.composite.stabilityBonus !== undefined && ' · стабильность +' + decimal(row.composite.stabilityBonus)}</small>}
+                {row.progress?.baselineAverage != null && <small>Обычный средний {decimal(row.progress.baselineAverage)} · текущий {decimal(row.progress.currentAverage ?? 0)}</small>}
+                {row.metrics.pg1.preliminary && row.metrics.pg1.hint && <small>{row.metrics.pg1.hint}</small>}
+                {row.current?.conditions && <small>{bowName(row.bow)} · {row.current.conditions.distanceMeters} м · {row.current.conditions.targetDiameterMm / 10} см</small>}
+              </div>}
+            </li>;
+          })}
+        </ul>
+      </div>
+      {viewer && history && <RoomTargetViewer history={history} ids={viewer.ids} initialId={viewer.initialId} ownId={entryId}
+        ordinal={ordinal} choices={choices} onSeries={setSelected} onClose={() => setViewer(undefined)} />}
+    </section>
   </BottomSheet>;
 }
