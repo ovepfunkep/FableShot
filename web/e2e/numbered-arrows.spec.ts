@@ -31,6 +31,7 @@ test('numbered kit records hits first, prevents duplicates and edits old assignm
   await number(3).click();
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
   await page.getByTestId('training-confirm').click();
+  await expect(page.getByTestId('report-screen')).toBeVisible();
   await page.reload();
   await openHistoryEntry(page);
   await expect(page.getByTestId('numbered-arrow-analysis')).toBeVisible();
