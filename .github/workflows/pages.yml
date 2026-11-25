@@ -60,14 +60,17 @@ jobs:
       - run: npm test
         working-directory: web
       - run: npm run build
+        env:
+          VITE_FABLESHOT_GOOGLE_CLIENT_ID: ${{ vars.FABLESHOT_GOOGLE_CLIENT_ID }}
         working-directory: web
       - name: Install Chromium for release checks
         run: npx playwright install --with-deps chromium
         working-directory: web
       - name: Check training, archives, offline startup and rooms
-        run: npm run test:ui -- training.spec.ts training-analysis.spec.ts progress-timeline.spec.ts numbered-arrows.spec.ts migration-parity.spec.ts archive.spec.ts mytargets-ui.spec.ts onboarding-theme.spec.ts settings-navigation.spec.ts offline-readiness.spec.ts local-room-probe.spec.ts storage-migration.spec.ts
+        run: npm run test:ui -- training.spec.ts training-analysis.spec.ts progress-timeline.spec.ts numbered-arrows.spec.ts migration-parity.spec.ts archive.spec.ts drive-backup.spec.ts mytargets-ui.spec.ts onboarding-theme.spec.ts settings-navigation.spec.ts offline-readiness.spec.ts local-room-probe.spec.ts storage-migration.spec.ts
         env:
           FABLE_BROWSER: chromium
+          VITE_FABLESHOT_GOOGLE_CLIENT_ID: ${{ vars.FABLESHOT_GOOGLE_CLIENT_ID }}
         working-directory: web
       - uses: actions/upload-pages-artifact@v4
         with:

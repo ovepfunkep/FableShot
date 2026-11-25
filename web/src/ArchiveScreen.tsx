@@ -4,16 +4,17 @@ import { BottomSheet } from './ConditionsScreen.tsx';
 import { DATA_KEYS } from './app-storage.ts';
 import type { DataRecords } from './app-storage.ts';
 import { exportDocument } from './document-export.ts';
-import { DIARY_KEY, loadDiary } from './persistence.ts';
+import { DIARY_KEY } from './persistence.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { SettingsAction } from './SettingsScreen.tsx';
 import { archiveDigest, captureArchiveState, createWebArchive, inspectWebArchive, lastRecovery, MAX_ARCHIVE_BYTES, preserveArchiveSource, replaceArchiveRecords, saveArchiveRecovery } from './web-archive.ts';
 import type { ArchiveSummary, WebArchivePreview } from './web-archive.ts';
 import type { NativeConversion } from './native-conversion.ts';
 import type { buildNativeRecords } from './native-activation.ts';
-import { getNativeSource } from './native-source-store.ts';
 import packageInfo from '../package.json';
 import { pickAndroidArchive, usesAndroidArchivePicker } from './archive-picker.ts';
+import { DriveBackupPanel } from './DriveBackupPanel.tsx';
+import { driveBackupAvailable } from './drive-backup.ts';
 import './archive-screen.css';
 
 function Summary({ summary }: { summary: ArchiveSummary }) {
@@ -36,14 +37,12 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
   const [status, setStatus] = useState('');
   const [resetComplete, setResetComplete] = useState(false);
   const [recovery, setRecovery] = useState<ReturnType<typeof lastRecovery>>(null);
-  const [hasOriginal, setHasOriginal] = useState(false);
   const alive = useRef(false);
   const running = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
   useEffect(() => {
     alive.current = true;
     try { setRecovery(lastRecovery()); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось прочитать резервную копию.'); }
-    try { setHasOriginal(!!loadDiary().nativeArchive); } catch { /* Archive restore can replace an unreadable diary. */ }
     return () => { alive.current = false; };
   }, []);
 
@@ -68,8 +67,8 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
   }
   async function checkFile(file: File) {
     setPreview(null); setNativePreview(null); setExpected(null);
-    if (!file.size) throw new Error('Выбранный архив пуст. Сохрани его на телефон и выбери повторно.');
-    if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Архив должен быть не больше 76 МБ.');
+    if (!file.size) throw new Error('Выбранный файл пуст. Сохрани копию на телефон и выбери её повторно.');
+    if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Размер резервной копии должен быть не больше 76 МБ.');
     const bytes = new Uint8Array(await file.arrayBuffer());
     const original = captureArchiveState(true);
     {
@@ -103,7 +102,7 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
   async function download(records: DataRecords) {
     const bytes = await createWebArchive(records, packageInfo.version);
     if (!alive.current) return false;
-    return (await exportDocument({ bytes, mimeType: 'application/zip', name: `FableShot-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` })).saved;
+    return (await exportDocument({ bytes, mimeType: 'application/zip', name: backupFilename(), saveOnly: true })).saved;
   }
   async function saveBackup() {
     await action(async () => {
@@ -113,11 +112,11 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
       // Keep a verified local copy even if the system download is later cancelled.
       await saveArchiveRecovery(current);
       setRecovery(lastRecovery());
-      const result = await exportDocument({ bytes, mimeType: 'application/zip', name: `FableShot-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` });
-      if (alive.current) setStatus(result.saved ? 'Архив передан на сохранение. Локальная копия также готова.' : 'Сохранение файла отменено. Локальная копия готова.');
+      const result = await exportDocument({ bytes, mimeType: 'application/zip', name: backupFilename(), saveOnly: true });
+      if (alive.current) setStatus(result.saved ? 'Резервная копия сохранена в файл.' : 'Файл не сохранён. Копия на этом устройстве готова.');
       if (result.saved) {
         try { onAchievement?.('MIND08'); }
-        catch (cause) { if (alive.current) setError(`Архив сохранён. ${cause instanceof Error ? cause.message : 'Не удалось сохранить достижение.'}`); }
+        catch (cause) { if (alive.current) setError(`Копия сохранена. ${cause instanceof Error ? cause.message : 'Не удалось сохранить достижение.'}`); }
       }
     });
   }
@@ -125,7 +124,7 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
     const operation = confirm;
     await action(async () => {
       const current = operation === 'restore' || operation === 'native' ? expected : captureArchiveState(operation === 'recovery');
-      if (!current) throw new Error('Сначала проверь архив.');
+      if (!current) throw new Error('Сначала выбери резервную копию.');
       let records: DataRecords;
       let source: Uint8Array | undefined;
       if (operation === 'restore' && preview) { records = preview.records; source = preview.nativeSource; }
@@ -149,32 +148,39 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
   }
   if (resetComplete) return <main className="conditions-page" data-testid="account-reset-complete">
     <div className="conditions-content archive-content"><h1>Профиль обнулён</h1>
-      <p>Архив передан на сохранение. Локальная копия также сохранена — её можно восстановить в настройках.</p>
+      <p>Резервная копия сохранена. Дневник можно восстановить в настройках.</p>
       <button type="button" className="archive-action" data-testid="account-reset-finish" onClick={() => window.location.reload()}>На главную</button>
     </div>
   </main>;
   return <main className="conditions-page settings-page" data-testid="archive-screen">
-    <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Архив дневника</h1></header>
+    <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Резервная копия</h1></header>
     <div className="conditions-content archive-content">
-      <p className="archive-caption">{restoreFirst ? 'Выбери ZIP, который сохранил из FableShot на прежнем устройстве. Перед восстановлением можно сверить тренировки и стрелы.' : 'Архив включает тренировки, снаряжение, памятки и настройки. Чтобы восстановить дневник после потери телефона, сохрани ZIP в облако или на другое устройство.'}</p>
-      <input ref={picker} type="file" hidden accept=".fableshot,.zip,application/zip,application/octet-stream" data-testid="archive-file" onChange={event => void select(event)} />
-      <button type="button" className="archive-action primary" disabled={busy} onClick={() => void chooseArchive()}>Выбрать и проверить архив</button>
-      {!restoreFirst && <SettingsAction icon="archive" disabled={busy} data-testid="archive-save" onClick={() => void saveBackup()}>Сохранить архив</SettingsAction>}
-      {hasOriginal && <button type="button" className="archive-action" data-testid="native-archive-original" disabled={busy} onClick={() => void action(async () => {
-        const reference = loadDiary().nativeArchive;
-        if (!reference) return;
-        const bytes = await getNativeSource(reference.sha256);
-        if (alive.current) await exportDocument({ bytes, mimeType: 'application/zip', name: 'FableShot-Android-original.zip' });
-      })}>Скачать исходный архив Android</button>}
+      {restoreFirst && <p className="archive-caption">Перед восстановлением можно сверить тренировки и стрелы.</p>}
+      {driveBackupAvailable && <DriveBackupPanel disabled={busy} onPreview={load => action(async () => {
+        setPreview(null);
+        setNativePreview(null);
+        setExpected(null);
+        const original = captureArchiveState(true);
+        const candidate = await load();
+        if (alive.current) { setExpected(original); setPreview(candidate); }
+      })} />}
+      <section className="archive-panel" aria-label="Файл резервной копии">
+        <h2>Файл ZIP</h2>
+        <input ref={picker} type="file" hidden accept=".fableshot,.zip,application/zip,application/octet-stream" data-testid="archive-file" onChange={event => void select(event)} />
+        <div className="archive-actions">
+          {!restoreFirst && <button type="button" className="archive-action" disabled={busy} data-testid="archive-save" onClick={() => void saveBackup()}>Сохранить в файл</button>}
+          <button type="button" className="archive-action" disabled={busy} onClick={() => void chooseArchive()}>Восстановить из файла</button>
+        </div>
+      </section>
       {busy && <p role="status" className="motion-status" data-busy="true">Проверяю и подготавливаю данные…</p>}
       {error && <p role="alert">{error}</p>}{status && <p key={status} role="status" className="motion-status" data-busy="false">{status}</p>}
       {preview && <section className="archive-panel" data-testid="archive-preview">
-        <h2>Проверенный архив</h2><p>{new Date(preview.manifest.createdAt).toLocaleString('ru-RU')} · {preview.manifest.appVersion}</p>
+        <h2>Содержимое копии</h2><p>{new Date(preview.manifest.createdAt).toLocaleString('ru-RU')} · {preview.manifest.appVersion}</p>
         <Summary summary={preview.summary} />
         <button type="button" className="archive-action" disabled={busy} data-testid="archive-restore" onClick={() => setConfirm('restore')}>Заменить дневник</button>
       </section>}
       {nativePreview && <section className="archive-panel" data-testid="native-archive-preview">
-        <h2>Архив Android</h2>
+        <h2>Резервная копия Android</h2>
         <p>FableShot {nativePreview.conversion.inspection.manifest.appVersion} · формат {nativePreview.conversion.inspection.manifest.formatVersion}</p>
         <dl className="archive-counts">
           <div><dt>Тренировки</dt><dd>{nativePreview.conversion.inspection.summary.sessions}</dd></div>
@@ -189,18 +195,23 @@ export function ArchiveScreen({ onBack, onAchievement, restoreFirst = false }: {
         <button type="button" className="archive-action" data-testid="native-archive-activate" disabled={busy} onClick={() => setConfirm('native')}>Перенести дневник</button>
       </section>}
       {recovery && <section className="archive-panel" data-testid="archive-last-backup">
-        <h2>Последняя копия на этом устройстве</h2><p>{new Date(recovery.savedAt).toLocaleString('ru-RU')}</p><Summary summary={recovery.summary} />
+        <h2>Копия на этом устройстве</h2>
+        <p>{new Date(recovery.savedAt).toLocaleString('ru-RU')} · {recovery.summary.trainings} трен. · {recovery.summary.arrows} стрел</p>
         <button type="button" className="archive-action" disabled={busy} data-testid="archive-recover" onClick={() => setConfirm('recovery')}>Восстановить копию</button>
       </section>}
       <SettingsAction icon="delete" tone="danger" aria-haspopup="dialog" disabled={busy} data-testid="account-reset" onClick={() => setConfirm('reset')}>Обнулить профиль</SettingsAction>
     </div>
     {confirm && <BottomSheet title={confirm === 'reset' ? 'Обнулить профиль?' : 'Заменить текущий дневник?'}
       onClose={() => setConfirm(null)} onDismissRequest={() => !running.current} tag="archive-confirm">
-      <p>{confirm === 'reset' ? 'Тренировки, снаряжение, памятки и настройки будут сброшены. Сначала сохранится архив; локальная копия также останется для восстановления.'
+      <p>{confirm === 'reset' ? 'Тренировки, снаряжение, памятки и настройки будут сброшены. Перед сбросом сохранится резервная копия.'
         : 'Текущие данные заменятся выбранной копией. Перед заменой сохранится локальная резервная копия текущего дневника.'}</p>
       {error && <p role="alert">{error}</p>}
       {busy && <p role="status" className="motion-status" data-busy="true">{confirm === 'reset' ? 'Сохраняю копию и обнуляю профиль…' : 'Восстанавливаю дневник…'}</p>}
       <button type="button" className="archive-action" disabled={busy} data-testid="archive-confirm-apply" onClick={() => void apply()}>{confirm === 'reset' ? 'Сохранить копию и обнулить' : 'Заменить дневник'}</button>
     </BottomSheet>}
   </main>;
+}
+
+function backupFilename() {
+  return `FableShot-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
 }

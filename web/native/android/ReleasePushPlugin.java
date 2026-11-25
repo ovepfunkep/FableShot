@@ -35,6 +35,7 @@ public class ReleasePushPlugin extends Plugin {
     private static final String CHANNEL = "fableshot_updates";
     private static final String LAUNCH_CODE = "app.fableshot.releasePush.versionCode";
     private static final String ENABLED = "enabled";
+    private static final String DEFAULT_PERMISSION_OFFERED = "default-permission-offered";
     private static final String TOPIC_REQUESTED = "topic-requested";
     private static final String SHOWN = "shown";
     private static final String PENDING = "pending";
@@ -97,6 +98,17 @@ public class ReleasePushPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void requestDefaultPermission(PluginCall call) {
+        Context context = getContext();
+        SharedPreferences preferences = store(context);
+        if (available() && enabled(context) && !allowed(context) && canRequestPermission() &&
+                !preferences.getBoolean(DEFAULT_PERMISSION_OFFERED, false)) {
+            preferences.edit().putBoolean(DEFAULT_PERMISSION_OFFERED, true).apply();
+            requestPermissionForAlias("notifications", call, "permissionResult");
+        } else permissionResult(call);
+    }
+
+    @PluginMethod
     public void setEnabled(PluginCall call) {
         Boolean enabled = call.getBoolean("enabled");
         if (enabled == null || enabled && !available()) { call.reject("Уведомления недоступны на этом устройстве."); return; }
@@ -108,6 +120,7 @@ public class ReleasePushPlugin extends Plugin {
         }
         choice.apply();
         if (enabled && canRequestPermission()) {
+            store(context).edit().putBoolean(DEFAULT_PERMISSION_OFFERED, true).apply();
             requestPermissionForAlias("notifications", call, "permissionResult");
         } else permissionResult(call);
     }

@@ -13,6 +13,9 @@
 .report-hits { grid-column: 1; display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .report-hit { flex: 0 0 auto; min-width: 18px; padding: 1px 2px; border: .5px solid var(--edge); border-radius: 5px; text-align: center; font-size: 12px; line-height: 16px; font-weight: 600; }
 .report-round .report-hits { column-gap: 2px; }
+.report-round > .report-series { min-height: 34px; padding-block: 3px; }
+.report-round > .report-series .report-hit { min-height: 24px; display: grid; place-items: center; }
+.report-round > .report-series .report-series-number:is([data-digits="1"], [data-digits="2"]) { font-size: 36px; }
 .report-series:has(.report-series-number[data-digits="2"]) { padding-inline-start: max(var(--series-start, 41px), 56px); }
 .report-hits { --hit-gap: 3px; }
 .report-round .report-hits { --hit-gap: 2px; }

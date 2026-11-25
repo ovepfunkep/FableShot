@@ -87,6 +87,9 @@ test('first launch offers an isolated example and lets the user reopen it from s
   await page.getByTestId('open-settings').click();
   await openSettingsCategory(page, 'help', 'settings-onboarding');
   await page.getByTestId('settings-onboarding').click();
+  await page.getByTestId('onboard-open-preferences').click();
+  await expect(page.getByTestId('onboard-preferences')).toContainText('Уведомления об обновлениях');
+  await page.getByTestId('onboard-save-preferences').click();
   await page.getByTestId('onboard-import').click();
   await expect(page.getByTestId('mytargets-import')).toBeVisible();
 });

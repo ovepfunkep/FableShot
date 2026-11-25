@@ -27,7 +27,10 @@
 .report-neighbors button:disabled { visibility: hidden; }
 .report-neighbors svg { width: 18px; height: 18px; }
 .report-start-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 0 20px 8px 60px; }
-.report-start-row:empty { display: none; }
+.report-start-row:not(:has(time, button)) { display: none; }
+.report-start-actions { display: flex; align-items: center; gap: 4px; margin-inline-start: auto; }
+.report-start-actions:empty { display: none; }
+.report-room-action { color: var(--accent); }
 .report-start { color: var(--muted); white-space: nowrap; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; }
 .session-achievements-action { display: inline-flex; flex: none; }
 .session-achievements-action > button { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding: 0 2px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; }

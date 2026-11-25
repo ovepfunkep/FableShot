@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openSettingsCategory } from './journal-navigation.ts';
 
 test('Android rechecks when Home becomes active and opens release notes or the APK only on request', async ({ page }) => {
   const url = 'https://github.com/ovepfunkep/FableShot/releases/download/v0.30.0/FableShot-android-45.apk';
@@ -87,12 +88,13 @@ test('release notifications are optional and open verified notes after returning
     Object.assign(window, { androidBridge: {}, Capacitor: {
       PluginHeaders: [
         { name: 'AndroidUpdates', methods: methods(['installedVersion', 'openDownload']) },
-        { name: 'ReleasePush', methods: methods(['getStatus', 'setEnabled', 'pendingRelease', 'acknowledge']) },
+        { name: 'ReleasePush', methods: methods(['getStatus', 'requestDefaultPermission', 'setEnabled', 'pendingRelease', 'acknowledge']) },
       ],
       nativePromise: async (_plugin: string, method: string, data: { enabled?: boolean; code?: number }) => {
         if (method === 'installedVersion') return { production: true, code: 74 };
         if (method === 'pendingRelease') return { code: Number(storage.getItem('pending-release') ?? 0) };
         if (method === 'acknowledge' && String(data.code) === storage.getItem('pending-release')) storage.removeItem('pending-release');
+        if (method === 'requestDefaultPermission') document.documentElement.dataset.pushOffered = 'true';
         if (method === 'setEnabled') storage.setItem('push-enabled', String(data.enabled));
         return { available: true, enabled: storage.getItem('push-enabled') !== 'false',
           allowed: storage.getItem('allow-push') === 'yes', canRequestPermission: true };
@@ -107,6 +109,7 @@ test('release notifications are optional and open verified notes after returning
   await page.route('https://api.github.com/repos/ovepfunkep/FableShot/contents/web/src/web-release-history.json?ref=v0.31.0', route =>
     route.fulfill({ json: [{ code: 75, highlights: ['Новый выпуск'] }] }));
   await page.goto('./');
+  await expect(page.locator('html')).toHaveAttribute('data-push-offered', 'true');
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-notifications').click();
   const toggle = page.getByRole('switch', { name: 'Обновления приложения' });
@@ -144,4 +147,15 @@ test('release notifications are optional and open verified notes after returning
   await page.keyboard.press('Escape');
   await expect(notes).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('pending-release'))).toBeNull();
+  await page.evaluate(() => sessionStorage.setItem('push-enabled', 'false'));
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'help', 'settings-onboarding');
+  await page.getByTestId('settings-onboarding').click();
+  await page.getByTestId('onboard-open-preferences').click();
+  const onboardPush = page.getByRole('switch', { name: 'Уведомления об обновлениях' });
+  await expect(onboardPush).toHaveAttribute('aria-checked', 'false');
+  await onboardPush.click();
+  await page.getByTestId('onboard-save-preferences').click();
+  await expect(page.getByTestId('onboarding-screen')).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('push-enabled'))).toBe('true');
 });

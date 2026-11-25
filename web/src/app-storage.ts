@@ -57,6 +57,12 @@ let active: JournalSnapshot | null = null;
 let pending: Promise<unknown> = Promise.resolve();
 let replaced = false;
 const newRevision = () => crypto.randomUUID();
+const journalChanges = new EventTarget();
+
+export function onJournalCommit(listener: () => void) {
+  journalChanges.addEventListener('commit', listener);
+  return () => journalChanges.removeEventListener('commit', listener);
+}
 
 export async function initializeAppStorage(isDiary: (value: unknown) => value is Diary): Promise<void> {
   const storage = await openIndexedJournal();
@@ -94,6 +100,7 @@ function commit(change: (previous: JournalSnapshot) => JournalSnapshot): Promise
     const next = change(previous);
     await indexed!.write(next, previous);
     active = next;
+    journalChanges.dispatchEvent(new Event('commit'));
   });
   pending = operation.catch(() => {});
   return operation;

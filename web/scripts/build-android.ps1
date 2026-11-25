@@ -3,7 +3,8 @@ param(
     [switch] $Offline,
     [switch] $Release,
     [string] $Keystore,
-    [string] $FirebaseConfig
+    [string] $FirebaseConfig,
+    [switch] $GoogleDriveBackup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,10 @@ $toolchain = Get-Content -Raw -LiteralPath (Join-Path $repoRoot '.tools/android-
 $toolchainRoot = [IO.Path]::GetFullPath($toolchain.ToolchainRoot)
 $mirrorName = if ($Release) { 'release-apk-web' } else { 'pilot-apk-web' }
 if ($FirebaseConfig) { $mirrorName += '-push' }
+if ($GoogleDriveBackup) {
+    if (!$Release) { throw 'Google Drive backup is configured for the production application ID.' }
+    $mirrorName += '-drive'
+}
 $mirror = [IO.Path]::GetFullPath((Join-Path $toolchainRoot $mirrorName))
 if (!$mirror.StartsWith($toolchainRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
     $mirror -match '[^\x00-\x7F]' -or $mirror -eq $webRoot) {
@@ -114,12 +119,16 @@ $nativeDestination = Join-Path $shell ('app/src/main/java/' + $capConfig.appId.R
 New-Item -ItemType Directory -Path $nativeDestination -Force | Out-Null
 $nativeFiles = @('MainActivity.java', 'DocumentExportPlugin.java', 'PracticeTimerSoundPlugin.java', 'LocalRoomProbe.java', 'LocalRoomProbePlugin.java', 'LocalRoomSeriesStore.java')
 if ($FirebaseConfig) { $nativeFiles += 'ReleasePushPlugin.java' }
+if ($GoogleDriveBackup) { $nativeFiles += 'DriveAuthorizationPlugin.java' }
 foreach ($file in $nativeFiles) {
     $source = Join-Path $nativeSource $file
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing pilot native source: $file" }
     $java = [IO.File]::ReadAllText($source).Replace('package app.fableshot.android.webpilot;', "package $($capConfig.appId);")
     if ($FirebaseConfig -and $file -eq 'MainActivity.java') {
         $java = $java.Replace('registerPlugin(AndroidUpdatesPlugin.class);', "registerPlugin(AndroidUpdatesPlugin.class);`n        registerPlugin(ReleasePushPlugin.class);")
+    }
+    if ($GoogleDriveBackup -and $file -eq 'MainActivity.java') {
+        $java = $java.Replace('registerPlugin(AndroidUpdatesPlugin.class);', "registerPlugin(AndroidUpdatesPlugin.class);`n        registerPlugin(DriveAuthorizationPlugin.class);")
     }
     [IO.File]::WriteAllText((Join-Path $nativeDestination $file), $java, $utf8)
 }
@@ -148,6 +157,9 @@ if ($FirebaseConfig) {
     if (!$appGradle.Contains('com.google.android.gms:play-services-base')) {
         $appGradle += "`ndependencies { implementation 'com.google.android.gms:play-services-base:18.9.0' }`n"
     }
+}
+if ($GoogleDriveBackup -and !$appGradle.Contains('com.google.android.gms:play-services-auth:')) {
+    $appGradle += "`ndependencies { implementation 'com.google.android.gms:play-services-auth:22.0.0' }`n"
 }
 [IO.File]::WriteAllText($appGradlePath, $appGradle, $utf8)
 

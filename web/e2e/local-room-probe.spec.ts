@@ -140,7 +140,7 @@ test('Android group training keeps its series queued during an outage and sends 
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await page.context().setOffline(true);
-  await page.getByRole('button', { name: 'Таблица комнаты' }).click();
+  await page.locator('.report-start-row').getByRole('button', { name: 'Таблица комнаты' }).click();
   await expect(page.getByText(/Получено /)).toBeVisible();
   await expect(page.getByText('Новичок')).toBeVisible();
   await page.getByRole('button', { name: 'Только серия' }).click();

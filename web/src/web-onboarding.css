@@ -129,6 +129,7 @@ html:is([data-theme-style="sport"], [data-theme-style="pop"]) .web-onboard-scene
   font-size: .9rem;
 }
 .web-onboard-option + .web-onboard-option { border-top: 1px solid var(--edge); }
+.web-onboard-option > small { max-width: 14ch; color: var(--muted); text-align: end; }
 .web-onboard-preferences .web-onboard-option[aria-checked="true"] .preference-switch {
   justify-content: flex-end; padding: 2px; background: var(--accent); border-color: var(--accent);
 }

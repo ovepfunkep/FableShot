@@ -12,6 +12,8 @@ import { WebThemeSettings } from './WebThemeSettings.tsx';
 import { DEFAULT_THEME_STYLE } from './web-theme.ts';
 import { RANK_CATEGORIES } from './sport-ranks.ts';
 import type { RankCategory } from './sport-ranks.ts';
+import { releasePush, releasePushSupported } from './release-push.ts';
+import { autoBackupEnabled, driveBackupAvailable, setAutoBackup } from './drive-backup.ts';
 import './web-onboarding.css';
 
 export type OnboardingChapter = 'welcome' | 'target' | 'report' | 'preferences';
@@ -34,7 +36,9 @@ function Brand() {
   </span>;
 }
 
-function Welcome({ onStart, onImport, onRestore, onClose, onExample }: OnboardingActions & { onExample: () => void }) {
+function Welcome({ onStart, onImport, onRestore, onClose, onExample, onPreferences }: OnboardingActions & {
+  onExample: () => void; onPreferences: () => void;
+}) {
   return <main className="web-onboard web-onboard-welcome" data-testid="onboarding-screen">
     <header className="web-onboard-header">
       <Brand />
@@ -50,8 +54,9 @@ function Welcome({ onStart, onImport, onRestore, onClose, onExample }: Onboardin
     <div className="web-onboard-actions">
       <button type="button" className="primary" data-testid="onboard-start" onClick={onStart}>Начать тренировку</button>
       <button type="button" className="web-onboard-outline" data-testid="onboard-example" onClick={onExample}>Попробовать на примере</button>
+      <button type="button" className="web-onboard-link" data-testid="onboard-open-preferences" onClick={onPreferences}>Быстрые настройки</button>
       <button type="button" className="web-onboard-link" data-testid="onboard-import" onClick={onImport}>Перенести из MyTargets</button>
-      <button type="button" className="web-onboard-link" data-testid="onboard-restore" onClick={onRestore}>Восстановить архив FableShot</button>
+      <button type="button" className="web-onboard-link" data-testid="onboard-restore" onClick={onRestore}>Восстановить из резервной копии</button>
     </div>
     <p className="web-onboard-storage">Дневник хранится на устройстве. Историю можно сохранить в резервную копию.</p>
   </main>;
@@ -184,8 +189,42 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
   const [inputNotices, setInputNotices] = useState(preferences.showAchievementsDuringInput !== false);
   const [rankCategory, setRankCategory] = useState<RankCategory | undefined>(preferences.rankCategory);
   const [saving, setSaving] = useState(false);
+  const [savedUpdateNotices, setSavedUpdateNotices] = useState<boolean | null>(null);
+  const [updateNotices, setUpdateNotices] = useState(true);
+  const [noticeError, setNoticeError] = useState('');
+  const [autoBackup, setBackup] = useState(() => driveBackupAvailable && autoBackupEnabled());
+  useEffect(() => {
+    if (!releasePushSupported()) return;
+    let live = true;
+    void releasePush.getStatus().then(status => {
+      if (!live || !status.available) return;
+      setSavedUpdateNotices(status.enabled);
+      setUpdateNotices(status.enabled);
+    }).catch(() => { if (live) setNoticeError('Не удалось проверить настройки уведомлений.'); });
+    return () => { live = false; };
+  }, []);
   async function save() {
     setSaving(true);
+    setNoticeError('');
+    if (driveBackupAvailable && autoBackup !== autoBackupEnabled()) {
+      try { setAutoBackup(autoBackup); }
+      catch {
+        setNoticeError('Не удалось сохранить настройку автобэкапа. Попробуй ещё раз.');
+        setSaving(false);
+        return;
+      }
+    }
+    if (savedUpdateNotices !== null && updateNotices !== savedUpdateNotices) {
+      try {
+        await releasePush.setEnabled({ enabled: updateNotices });
+        setSavedUpdateNotices(updateNotices);
+      }
+      catch {
+        setNoticeError('Не удалось сохранить настройку уведомлений. Попробуй ещё раз.');
+        setSaving(false);
+        return;
+      }
+    }
     const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths, rankCategory,
       showAchievementsDuringInput: inputNotices, ...(standalone ? {} : { onboardingSeen: true }) });
     if (success) {
@@ -219,6 +258,16 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
       </select>
     </label>
     <div className="web-onboard-preference-options">
+      {savedUpdateNotices !== null ? <button type="button" role="switch" aria-checked={updateNotices} className="web-onboard-option"
+        disabled={saving} onClick={() => setUpdateNotices(!updateNotices)}>
+        <span>Уведомления об обновлениях</span><span className="preference-switch" aria-hidden="true"><span /></span>
+      </button> : <div className="web-onboard-option">
+        <span>Уведомления об обновлениях</span><small>В основном приложении Android</small>
+      </div>}
+      {driveBackupAvailable && <button type="button" role="switch" aria-checked={autoBackup} className="web-onboard-option"
+        disabled={saving} onClick={() => setBackup(!autoBackup)}>
+        <span>Автобэкап на Google Диск</span><span className="preference-switch" aria-hidden="true"><span /></span>
+      </button>}
       <button type="button" role="switch" aria-checked={hundredths} className="web-onboard-option" disabled={saving}
         onClick={() => setHundredths(!hundredths)}>
         <span>Средний до сотых</span>
@@ -244,6 +293,7 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
       </dl>
     </aside>
     {error && <p className="preferences-error" role="alert">{error}</p>}
+    {noticeError && <p className="preferences-error" role="alert">{noticeError}</p>}
     <div className="web-onboard-actions">
       <button type="button" className="primary" data-testid="onboard-save-preferences" disabled={saving || !readable} onClick={save}>
         {standalone ? 'Сохранить' : 'Сохранить и продолжить'}
@@ -257,15 +307,25 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
 export function WebOnboarding(actions: OnboardingActions & { initialChapter: OnboardingChapter; offerPreferences: boolean }) {
   const [chapter, setChapter] = useState(actions.initialChapter);
   const [previousChapter, setPreviousChapter] = useState<OnboardingChapter>('welcome');
-  const standalone = actions.initialChapter === 'preferences';
+  const [preferencesOnly, setPreferencesOnly] = useState(false);
+  const standalone = actions.initialChapter === 'preferences' || preferencesOnly;
+  const back = () => {
+    if (actions.initialChapter === 'preferences') { actions.onClose(); return; }
+    setPreferencesOnly(false);
+    setChapter(previousChapter);
+  };
   function start() {
     if (!actions.offerPreferences) { actions.onStart(); return; }
     setPreviousChapter(chapter);
     setChapter('preferences');
   }
   if (chapter === 'preferences') return <QuickPreferences standalone={standalone} onEnableHundredths={actions.onEnableHundredths}
-    onDone={standalone ? actions.onClose : actions.onStart} onBack={standalone ? actions.onClose : () => setChapter(previousChapter)} />;
+    onDone={standalone ? back : actions.onStart} onBack={back} />;
   if (chapter === 'report') return <TutorialReport onStart={start} onClose={actions.onClose} onBack={() => setChapter('target')} />;
   if (chapter === 'target') return <TargetTutorial onStart={start} onClose={actions.onClose} onReport={() => setChapter('report')} onOpenTargetGuide={actions.onOpenTargetGuide} />;
-  return <Welcome {...actions} onStart={start} onExample={() => setChapter('target')} />;
+  return <Welcome {...actions} onStart={start} onExample={() => setChapter('target')} onPreferences={() => {
+    setPreviousChapter('welcome');
+    setPreferencesOnly(true);
+    setChapter('preferences');
+  }} />;
 }

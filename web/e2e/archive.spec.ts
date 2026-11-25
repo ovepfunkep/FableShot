@@ -3,7 +3,7 @@ import { openSettingsCategory } from './journal-navigation.ts';
 import { expect, test } from '@playwright/test';
 import { DATA_KEYS } from '../src/app-storage.ts';
 import type { DataRecords } from '../src/app-storage.ts';
-import { createWebArchive } from '../src/web-archive.ts';
+import { createWebArchive, inspectWebArchive } from '../src/web-archive.ts';
 import { appendShot, emptyPractice } from '../src/practice.ts';
 import { zipSync } from 'fflate';
 import { archiveDigest } from '../src/web-archive.ts';
@@ -186,12 +186,13 @@ test('Android diary activates after confirmation and round-trips the original ZI
   await page.getByTestId('open-settings').click();
   await openSettingsCategory(page, 'data', 'settings-archive');
   await page.getByTestId('settings-archive').click();
-  const originalDownload = page.waitForEvent('download');
-  await page.getByTestId('native-archive-original').click();
-  expect(await readFile((await (await originalDownload).path())!)).toEqual(originalZip);
+  await expect(page.getByRole('heading', { name: 'Резервная копия' })).toBeVisible();
+  await expect(page.getByTestId('native-archive-original')).toHaveCount(0);
   const backupDownload = page.waitForEvent('download');
   await page.getByTestId('archive-save').click();
   const backup = await readFile((await (await backupDownload).path())!);
+  expect(Buffer.from((await inspectWebArchive(backup)).nativeSource!)).toEqual(originalZip);
+  await expect(page.getByTestId('archive-screen')).toBeVisible();
   const clean = await browser.newContext();
   try {
     const restored = await clean.newPage();
@@ -214,7 +215,8 @@ test('Android diary activates after confirmation and round-trips the original ZI
     await openSettingsCategory(restored, 'data', 'settings-archive');
     await restored.getByTestId('settings-archive').click();
     const transferred = restored.waitForEvent('download');
-    await restored.getByTestId('native-archive-original').click();
-    expect(await readFile((await (await transferred).path())!)).toEqual(originalZip);
+    await restored.getByTestId('archive-save').click();
+    const restoredBackup = await readFile((await (await transferred).path())!);
+    expect(Buffer.from((await inspectWebArchive(restoredBackup)).nativeSource!)).toEqual(originalZip);
   } finally { await clean.close(); }
 });

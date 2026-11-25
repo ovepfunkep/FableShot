@@ -181,11 +181,14 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       </div>
       <div className="report-start-row">
         {start && <time className="report-start" data-testid="report-training-start" dateTime={start.iso}>{start.label}</time>}
-        {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
+        {(onRoomLeaderboard || preferences.showAchievementNotices !== false) && <div className="report-start-actions">
+          {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
+          {onRoomLeaderboard && <button type="button" className="icon-button report-room-action" aria-haspopup="dialog"
+            aria-label={roomFinalized ? 'Итоги комнаты' : 'Таблица комнаты'} onClick={onRoomLeaderboard}><Icon name="group" /></button>}
+        </div>}
       </div>
     </header>
     <div className="report-body" data-testid="report-screen" ref={reportBody}>
-      {onRoomLeaderboard && <button type="button" className="report-resume" onClick={onRoomLeaderboard}>{roomFinalized ? 'Итоги комнаты' : 'Таблица комнаты'}</button>}
       {practice.savedAt === null && (!!focus.length || !!technique?.versionId) && <button type="button" className="report-focus" data-testid="report-technique-focus" onClick={onTechnique}>
         <span aria-hidden="true">☷</span><span>{focus.length ? focus.join(' · ') : technique?.title}</span>
       </button>}

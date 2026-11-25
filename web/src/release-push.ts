@@ -4,6 +4,7 @@ export type ReleasePushStatus = { available: boolean; enabled: boolean; allowed:
 
 export const releasePush = registerPlugin<{
   getStatus(): Promise<ReleasePushStatus>;
+  requestDefaultPermission(): Promise<ReleasePushStatus>;
   setEnabled(options: { enabled: boolean }): Promise<ReleasePushStatus>;
   openSystemSettings(): Promise<void>;
   pendingRelease(): Promise<{ code: number }>;

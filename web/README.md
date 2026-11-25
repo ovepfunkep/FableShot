@@ -28,6 +28,17 @@
 
 Для сборки с уведомлениями передай `-FirebaseConfig` в `web/scripts/build-android.ps1` с локальным файлом `google-services.json` внутри `.tools/`. Он должен содержать конфигурацию для фактического пакета сборки. Основной APK подписывается на `fableshot_stable_updates`, тестовый — на `fableshot_test_updates`. В обычной сборке без конфигурации работает существующая проверка обновлений на Главной.
 
+### Google Диск для резервных копий
+
+В существующем проекте Google Cloud включи Drive API, настрой экран согласия Google и добавь область доступа `https://www.googleapis.com/auth/drive.appdata`. Для тестового статуса экрана согласия добавь Google-аккаунты тестировщиков.
+
+- **PWA.** Создай OAuth-клиент типа Web application. Укажи разрешённый JavaScript origin `https://ovepfunkep.github.io` без пути. Для локальной проверки добавь точный origin запущенного Vite. Передай публичный идентификатор клиента в `VITE_FABLESHOT_GOOGLE_CLIENT_ID` локально и в переменную репозитория `FABLESHOT_GOOGLE_CLIENT_ID` для GitHub Actions.
+- **Android.** В том же проекте создай OAuth-клиент для `app.fableshot.android.react` с SHA-1 сертификата подписи основного APK. Собери его с `-Release -GoogleDriveBackup`.
+
+В обоих случаях открой «Настройки → Данные → Резервная копия» и подключи свой Google Диск. Проверь создание копии и её восстановление с того же аккаунта на другом устройстве. Для восстановления подходит любая из трёх последних подтверждённых версий. Дневник хранится как ZIP в закрытой папке приложения на Диске. Автокопирование работает во время использования приложения. PWA попросит снова подключить Диск после завершения сеанса.
+
+[Данные приложения на Google Диске](https://developers.google.com/workspace/drive/api/guides/appdata) · [Настройка OAuth-клиента PWA](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid) · [Разрешения Google на Android](https://developer.android.com/identity/authorization)
+
 Для задачи `announce-android` нужны переменные репозитория `FABLESHOT_FCM_PROJECT_ID`, `FABLESHOT_FCM_IDENTITY_PROVIDER`, `FABLESHOT_FCM_SERVICE_ACCOUNT` и переключатель `FABLESHOT_FCM_ENABLED=true`. Провайдер Workload Identity должен доверять только `ovepfunkep/FableShot` и утверждённому релизному workflow. У сервисного аккаунта должно быть разрешение `cloudmessaging.messages.create` в проекте FCM. Отправщик использует краткоживущий OAuth-токен, повторно сверяет опубликованный GitHub Release и отправляет данные версии в тему `fableshot_stable_updates`. После ошибки можно перезапустить только упавшую задачу. [Firebase HTTP v1](https://firebase.google.com/docs/cloud-messaging/send/v1-api) · [Аутентификация GitHub Actions в Google Cloud](https://github.com/google-github-actions/auth)
 
 При важном изменении добавь запись в [историю выпусков](src/web-release-history.json) до создания тега. По «Что нового?» Android запрашивает этот файл по тегу доступного релиза и показывает изменения после установленной версии. Веб-клиент активирует новый офлайн-кэш после полной загрузки. При следующем обновлении страницы открывается новая версия.

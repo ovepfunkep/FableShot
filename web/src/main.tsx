@@ -33,7 +33,7 @@ import { ProfileScreen } from './ProfileScreen.tsx';
 import { WebReleaseNotes } from './WebReleaseNotes.tsx';
 import { AboutScreen } from './AboutScreen.tsx';
 import { ReleasePushSettings } from './ReleasePushSettings.tsx';
-import { releasePushSupported } from './release-push.ts';
+import { releasePush, releasePushSupported } from './release-push.ts';
 import { WebOnboarding } from './WebOnboarding.tsx';
 import type { OnboardingChapter } from './WebOnboarding.tsx';
 import { WebThemeSettings } from './WebThemeSettings.tsx';
@@ -72,7 +72,8 @@ import { MyTargetsImport, MyTargetsImportReceipt, clearImportReceipt, readImport
 import { withStorageOwner } from './storage-owner.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
-import { initializeAppStorage } from './app-storage.ts';
+import { initializeAppStorage, onJournalCommit } from './app-storage.ts';
+import { driveBackupAvailable, resumeDriveBackup, scheduleDriveBackup } from './drive-backup.ts';
 import { isDiary, loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
 import { announceRoomEntry, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
@@ -112,6 +113,23 @@ function initialDiary(): { diary: Diary | null; error: string } {
 }
 
 function App() {
+  useEffect(() => {
+    if (!driveBackupAvailable) return;
+    const retry = () => {
+      if (document.visibilityState !== 'visible') return;
+      void resumeDriveBackup();
+      scheduleDriveBackup(0);
+    };
+    const unsubscribe = onJournalCommit(() => scheduleDriveBackup());
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', retry);
+    retry();
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  }, []);
   const { preferences, readable: preferencesReadable, update: updatePreferences } = useTrainingPreferences();
   const [state, setState] = useState(initialDiary);
   const diaryRef = useRef(state.diary);
@@ -960,6 +978,12 @@ function App() {
   const firstOnboarding = page === 'journal' && tab === 'home' && state.diary !== null && entries.length === 0 &&
     preferencesReadable && !preferences.onboardingSeen && !onboardingDismissed;
   const showingOnboarding = firstOnboarding || onboardingRequested || tutorialChapter !== null;
+  const offerDefaultPush = !showingOnboarding && state.diary !== null && (
+    page === 'journal' && tab === 'home' || page === 'conditions' && !entry && conditionsBack === 'journal');
+  useEffect(() => {
+    if (offerDefaultPush && releasePushSupported()) void releasePush.requestDefaultPermission()
+      .catch(() => console.warn('Не удалось открыть системный запрос уведомлений.'));
+  }, [offerDefaultPush]);
   const androidUpdates = useAndroidUpdates(!showingOnboarding && page === 'journal' && tab === 'home');
   async function leaveOnboarding() {
     if (preferencesReadable && !preferences.onboardingSeen) await updatePreferences({ ...preferences, onboardingSeen: true });
@@ -1168,7 +1192,7 @@ function App() {
     </>}
     data={<>
       <div className="settings-actions">
-        <SettingsAction icon="archive" data-testid="settings-archive" onClick={() => { setArchiveBack('settings'); setPage('archive'); }}>Архив и восстановление</SettingsAction>
+        <SettingsAction icon="archive" data-testid="settings-archive" onClick={() => { setArchiveBack('settings'); setPage('archive'); }}>Резервная копия</SettingsAction>
         <SettingsAction icon="download" data-testid="settings-mytargets" aria-haspopup="dialog" onClick={() => setMyTargetsOpen(true)}>Импорт MyTargets</SettingsAction>
       </div>
       <SettingsAction icon="undo" tone="danger" aria-haspopup="dialog" onClick={() => setAchievementResetOpen(true)}

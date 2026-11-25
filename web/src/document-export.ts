@@ -7,11 +7,12 @@ export interface DocumentExport {
   mimeType: DocumentMimeType;
   bytes: Uint8Array;
   share?: boolean;
+  saveOnly?: boolean;
 }
 export interface DocumentExportResult { saved: boolean; opened: boolean }
 
 interface NativeDocumentExport {
-  exportDocument(options: { name: string; mimeType: DocumentMimeType; dataBase64: string; share?: boolean }): Promise<DocumentExportResult>;
+  exportDocument(options: { name: string; mimeType: DocumentMimeType; dataBase64: string; share?: boolean; saveOnly?: boolean }): Promise<DocumentExportResult>;
 }
 const nativeDocumentExport = registerPlugin<NativeDocumentExport>('DocumentExport');
 const extensions: Record<DocumentMimeType, string> = {
@@ -51,7 +52,7 @@ export async function exportDocument(document: DocumentExport): Promise<Document
     if (!Capacitor.isPluginAvailable('DocumentExport')) {
       throw new Error('Сохранение файлов недоступно. Обнови тестовое приложение.');
     }
-    return nativeDocumentExport.exportDocument({ ...documentExportPayload(document), share: document.share });
+    return nativeDocumentExport.exportDocument({ ...documentExportPayload(document), share: document.share, saveOnly: document.saveOnly });
   }
 
   const anchor = window.document.createElement('a');

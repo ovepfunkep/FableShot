@@ -22,8 +22,9 @@ test('only the matching stable release can produce an Android update notificatio
 
 test('the release selects its fixed title and only the first supports background display on the previous app', () => {
   for (const [code, title] of [
-    ['76', 'Не GTA 6, но тоже неплохо'], ['77', 'Как летающая тесла, только круче'],
-    ['78', 'Папа, я в шторке!'], ['79', 'В этот раз без креатива'], ['80', 'В этот раз без креатива'],
+    ['76', 'Не GTA 6, но тоже неплохо'], ['77', 'Не GTA 6, но тоже неплохо'],
+    ['78', 'Не GTA 6, но тоже неплохо'], ['79', 'Как летающая тесла, только круче'],
+    ['80', 'Папа, я в шторке!'], ['81', 'В этот раз без креатива'],
   ]) {
     const tag = `v0.30.${Number(code) - 44}`;
     const name = `FableShot-android-${code}.apk`;

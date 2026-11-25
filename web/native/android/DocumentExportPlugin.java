@@ -339,6 +339,11 @@ public class DocumentExportPlugin extends Plugin {
     }
 
     private void finishSaved(PluginCall call, Uri uri) {
+        if (Boolean.TRUE.equals(call.getBoolean("saveOnly", false))) {
+            exporting.set(false);
+            call.resolve(new JSObject().put("saved", true).put("opened", false));
+            return;
+        }
         getActivity().runOnUiThread(() -> {
             boolean opened = false;
             Intent view = new Intent(Intent.ACTION_VIEW)
