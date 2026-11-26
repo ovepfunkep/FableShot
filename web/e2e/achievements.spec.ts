@@ -59,16 +59,71 @@ test('the first completed barebow series awards a rank-pace group and keeps its 
   await expect(achievements).not.toContainText('Коротко, на мировом');
   await achievements.getByRole('button', { name: /Получено достижений:/ }).click();
   const details = page.getByRole('dialog', { name: 'Достижения тренировки' });
-  const mythic = details.locator('[data-rarity="Mythic"]').filter({ hasText: 'Коротко, на мировом' });
-  await expect(mythic).toContainText('порог 553 из 600');
-  await expect(details.locator('[data-rarity="Legendary"]').filter({ hasText: 'Мастер короткого метра' })).toBeVisible();
+  const mythic = details.locator('.achievement-tier[data-rarity="Mythic"]').filter({ hasText: 'Коротко, на мировом' });
+  await details.getByRole('button', { name: 'Раскрыть младшие награды, 5' }).click();
+  const legendary = details.locator('.achievement-tier[data-rarity="Legendary"]').filter({ hasText: 'Мастер короткого метра' });
+  await expect(legendary).toBeVisible();
   expect(await mythic.evaluate(node => getComputedStyle(node).borderInlineStartColor)).not.toBe(
-    await details.locator('[data-rarity="Legendary"]').first().evaluate(node => getComputedStyle(node).borderInlineStartColor));
+    await legendary.evaluate(node => getComputedStyle(node).borderInlineStartColor));
+  await mythic.getByRole('button', { name: /Коротко, на мировом/ }).click();
+  const tier = page.getByRole('dialog', { name: 'Коротко, на мировом' });
+  const medal = tier.locator('.achievement-medal');
+  await expect.poll(() => medal.evaluate(node => getComputedStyle(node, '::after').animationIterationCount)).toBe('2');
+  const threshold = tier.getByText(/порог 553 из 600/);
+  await expect(threshold).toBeHidden();
+  await tier.getByText('Условия получения', { exact: true }).click();
+  await expect(threshold).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(details).toBeVisible();
   await page.keyboard.press('Escape');
   await page.reload();
   await openHistoryEntry(page);
   await expect(achievements.getByRole('button', { name: /Получено достижений:/ })).toBeVisible();
   expect(await stageAwards()).toHaveLength(6);
+});
+
+test('profile and gallery use compact stacks and keep the locked mystery secret', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.addInitScript(() => {
+    if (localStorage.getItem('app.fableshot.practice-diary.v1')) return;
+    localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({
+      version: 1, entries: [], achievementLedger: { epoch: 'profile-stacks',
+        grants: [
+          ...['START01', 'START05', 'START09', 'APP11'].map(id => ({
+            id, scope: 'global', earnedAt: '2026-11-11T10:00:00Z', nativeSnapshot: true,
+          })),
+          { id: 'HIT05', scope: 'recurve', earnedAt: '2026-11-11T10:00:00Z', nativeSnapshot: true },
+        ] },
+    }));
+  });
+  await page.goto('./');
+  await page.getByTestId('open-profile').click();
+  const profile = page.getByTestId('profile-achievements');
+  const one = profile.getByRole('button', { name: /Ноль целых, сто процентов серьёзно/ });
+  const many = profile.getByRole('button', { name: 'Продолжение следует', exact: true });
+  expect((await one.boundingBox())?.height).toBe((await many.boundingBox())?.height);
+  const expand = profile.getByRole('button', { name: 'Раскрыть младшие награды, 2' });
+  await expand.click();
+  await expect(profile.getByRole('button', { name: 'Начало пути', exact: true })).toBeVisible();
+  await profile.getByRole('button', { name: 'Свернуть младшие награды' }).click();
+  await expect(profile.getByRole('button', { name: 'Начало пути', exact: true })).toHaveCount(0);
+  await profile.getByRole('button', { name: 'X-Men: полный состав' }).click();
+  const details = page.getByRole('dialog', { name: 'X-Men: полный состав' });
+  await expect.poll(() => details.locator('.achievement-medal').evaluate(node => getComputedStyle(node, '::after').animationName)).toBe('none');
+  await expect(details.getByText('Уложите все шесть стрел серии в зону X.')).toBeHidden();
+  await details.getByText('Условия получения', { exact: true }).click();
+  await expect(details.getByText('Уложите все шесть стрел серии в зону X.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await profile.getByRole('button', { name: 'Все достижения' }).click();
+  const gallery = page.getByTestId('achievements-screen');
+  const mystery = gallery.getByTestId('achievement-mystery');
+  await expect(mystery.locator('.achievement-flavor > span')).toHaveText(['Тихий круг дрожит', 'Три следа легли в лупе', 'Центр зовёт назад']);
+  await expect(gallery).not.toContainText('Охотник за пикселями');
+  await expect(gallery).not.toContainText('Краткосрочная память');
+  const group = gallery.getByTestId('achievement-START09');
+  await group.getByRole('button', { name: 'Раскрыть младшие награды, 2' }).click();
+  await group.getByRole('button', { name: /Начало пути/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Начало пути' })).toBeVisible();
 });
 
 test('deleting and restoring achievement evidence updates its status without a second award', async ({ page }) => {
@@ -184,15 +239,16 @@ test('new performance earns grouped notices, persists in report/gallery, and res
   await expect(notice.locator('.achievement-notice-clock')).toBeVisible();
   // A family announces only its best tier; the lower tier remains available in details.
   await expect(notice).toContainText('+');
-  const leading = await notice.locator('strong').innerText();
+  const title = notice.locator('.achievement-stack-leading strong');
+  const leading = await title.innerText();
   await page.clock.fastForward(2500);
-  await expect(notice.locator('strong')).toHaveText(leading);
+  await expect(title).toHaveText(leading);
   const bounds = (await notice.boundingBox())!;
   await page.mouse.move(bounds.x + 200, bounds.y + 30);
   await page.mouse.down();
   await page.mouse.move(bounds.x + 110, bounds.y + 30);
   await page.mouse.up();
-  await expect(notice.locator('strong')).not.toHaveText(leading);
+  await expect(title).not.toHaveText(leading);
   await page.clock.runFor(13_500);
   await expect(notice).toHaveCount(0);
   await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();

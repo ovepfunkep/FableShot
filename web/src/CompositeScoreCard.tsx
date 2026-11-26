@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { Practice } from './practice.ts';
@@ -78,25 +79,14 @@ function GroupScore({ group }: { group: Group }) {
     <details className="cg3-disclosure">
       <summary data-testid="cg3-controls">Настроить общие очки</summary>
       <div className="cg3-fields">
-        <label>Профиль расчёта
-          <select data-testid="cg3-profile" value={profile} onChange={event => setProfile(event.currentTarget.value === SCORE_ONLY_PROFILE ? SCORE_ONLY_PROFILE : STANDARD_PROFILE)}>
-            <option value={STANDARD_PROFILE} data-testid="cg3-profile-Standard">Попадания + кучность + стабильность</option>
-            <option value={SCORE_ONLY_PROFILE} data-testid="cg3-profile-ScoreOnly">Попадания + стабильность</option>
-          </select>
-        </label>
-        <label>Срез
-          <select data-testid="cg3-scope" value={single ? 'single' : 'cumulative'} onChange={event => setSingle(event.currentTarget.value === 'single')}>
-            <option value="cumulative" data-testid="cg3-cumulative">Итог до серии</option>
-            <option value="single" data-testid="cg3-single">За серию</option>
-          </select>
-        </label>
-        <label>Серия
-          <select data-testid="cg3-slice" value={group.ends[slice - 1].id} onChange={event => setRequestedSlice(event.currentTarget.value)}>
-            {group.ends.map(end => <option key={end.id} value={end.id} data-testid={`cg3-slice-${end.number}`}>
-              Раунд {end.roundNumber} · серия {end.seriesNumber}
-            </option>)}
-          </select>
-        </label>
+        <ChoicePicker label="Профиль расчёта" testId="cg3-profile" value={profile}
+          onChange={value => setProfile(value === SCORE_ONLY_PROFILE ? SCORE_ONLY_PROFILE : STANDARD_PROFILE)}
+          options={[{ value: STANDARD_PROFILE, label: 'Попадания + кучность + стабильность' },
+            { value: SCORE_ONLY_PROFILE, label: 'Попадания + стабильность' }]} />
+        <ChoicePicker label="Срез" testId="cg3-scope" value={single ? 'single' : 'cumulative'} onChange={value => setSingle(value === 'single')}
+          options={[{ value: 'cumulative', label: 'Итог до серии' }, { value: 'single', label: 'За серию' }]} />
+        <ChoicePicker label="Серия" testId="cg3-slice" value={String(group.ends[slice - 1].id)} onChange={setRequestedSlice}
+          options={group.ends.map(end => ({ value: String(end.id), label: `Раунд ${end.roundNumber} · серия ${end.seriesNumber}` }))} />
       </div>
     </details>
     <div className="cg3-result"><strong data-testid="cg3-total">{score.total === undefined ? '—' : displayCompositeScore(score.total)}</strong><span>/ 105</span></div>

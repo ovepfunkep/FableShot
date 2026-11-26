@@ -72,7 +72,6 @@ export function SettingsScreen({ section, onSection, onBack, appearance, motion,
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={() => section ? onSection(null) : onBack()}><Icon name="back" /></button>
       <h1>{selected?.title ?? 'Настройки'}</h1>
-      <span className="settings-header-glyph"><SectionGlyph name={selected?.icon ?? 'settings'} /></span>
     </header>
     <div className="conditions-content settings-content" key={section ?? 'root'}>
       {section ? content[section] : <nav className="settings-entries" aria-label="Разделы настроек">

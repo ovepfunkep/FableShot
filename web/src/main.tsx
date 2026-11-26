@@ -1,10 +1,10 @@
-import { lazy, StrictMode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AndroidUpdateCard } from './AndroidUpdateCard.tsx';
 import { useAndroidUpdates } from './android-updates.ts';
 import { createRoot } from 'react-dom/client';
 import { useAppBack } from './app-back.ts';
-import { ReportOverview } from './ReportOverview.tsx';
+import { captureReportPosition, ReportOverview } from './ReportOverview.tsx';
 import type { ReportPosition } from './ReportOverview.tsx';
 import { BottomSheet, ConditionsScreen } from './ConditionsScreen.tsx';
 import { PracticeTimerBadge, PracticeTimerWindow } from './PracticeTimerWindow.tsx';
@@ -73,7 +73,7 @@ import { withStorageOwner } from './storage-owner.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { enableOffline } from './offline.ts';
 import { initializeAppStorage, onJournalCommit } from './app-storage.ts';
-import { driveBackupAvailable, resumeDriveBackup, scheduleDriveBackup } from './drive-backup.ts';
+import { driveBackupAvailable, driveBackupState, resumeDriveBackup, scheduleDriveBackup, subscribeDriveBackup } from './drive-backup.ts';
 import { isDiary, loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
 import { announceRoomEntry, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
@@ -131,6 +131,8 @@ function App() {
     };
   }, []);
   const { preferences, readable: preferencesReadable, update: updatePreferences } = useTrainingPreferences();
+  const googleAccount = useSyncExternalStore(subscribeDriveBackup, driveBackupState).account;
+  const displayName = preferences.displayName || googleAccount?.name;
   const [state, setState] = useState(initialDiary);
   const diaryRef = useRef(state.diary);
   const diaryWrites = useRef(Promise.resolve());
@@ -138,6 +140,9 @@ function App() {
   const [tab, setTab] = useState<JournalTab>('home');
   const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments' | 'group-room'>('journal');
   const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
+  const [tournamentPassportId, setTournamentPassportId] = useState<string | null>(null);
+  const [tournamentSetup, setTournamentSetup] = useState<{ tournamentId: string; startId?: string }>();
+  const [confirmTournament, setConfirmTournament] = useState<typeof tournamentSetup>();
   const [myTargetsOpen, setMyTargetsOpen] = useState(false);
   const [importReceipt, setImportReceipt] = useState(readImportReceipt);
   const [archiveBack, setArchiveBack] = useState<'journal' | 'settings'>('settings');
@@ -181,6 +186,9 @@ function App() {
   const [numberSaveError, setNumberSaveError] = useState(false);
   const [rankScope, setRankScope] = useState<{ kind: 'round' | 'series'; id: number } | null>(null);
   const [rankReference, setRankReference] = useState(false);
+  const [rankProfileOrigin, setRankProfileOrigin] = useState<{
+    page: 'report' | 'training' | 'editor' | 'best-ranks'; scope: typeof rankScope; reference: boolean;
+  } | null>(null);
   const [selection, setSelection] = useState<number | null>(null);
   const editorReturnSelection = useRef<number | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -444,7 +452,7 @@ function App() {
   const setupDefaults = repeatSetup ?? suggested;
   let newConditions = setupDefaults.conditions;
   let needsHomeEquipment = false;
-  if (!ongoing && newConditions.equipment && ((page === 'journal' && tab === 'home') || setup)) {
+  if ((!ongoing || tournamentSetup) && newConditions.equipment && ((page === 'journal' && tab === 'home') || setup)) {
     try {
       const currentKit = equipmentSnapshot(loadEquipment(), newConditions.equipment.id);
       newConditions = { ...newConditions, equipment: currentKit };
@@ -483,7 +491,7 @@ function App() {
   }
 
   async function startPractice(conditions?: Conditions, rule = suggested.rule, numberedArrows = suggested.numberedArrows, tournament?: TournamentChoice, title?: string) {
-    if (ongoing && !roomSetup) { selectEntry(ongoing, 'training'); return true; }
+    if (ongoing && !roomSetup && !tournamentSetup) { selectEntry(ongoing, 'training'); return true; }
     if (!conditions && paused) return resumeEntry(paused);
     const chosen = refreshConditions(conditions ?? suggested.conditions);
     if (!chosen) return false;
@@ -503,8 +511,8 @@ function App() {
       catch { setState(previous => ({ ...previous, error: 'Не удалось сохранить приглашение в комнату.' })); return false; }
     }
     if (!await writeDiary(previous => {
-      // Pause the other practice only when the new group practice is actually saved.
-      const existing = roomSetup && ongoing ? previous.entries.map(candidate => candidate.id === ongoing.id ? {
+      // Pause the previous practice in the same write that creates the new one.
+      const existing = (roomSetup || tournamentSetup) && ongoing ? previous.entries.map(candidate => candidate.id === ongoing.id ? {
         ...candidate, paused: true,
         ...(candidate.trainingTime ? { trainingTime: stopTrainingTime(candidate.trainingTime, Date.parse(startedAt)) } : {}),
       } : candidate) : previous.entries;
@@ -513,6 +521,7 @@ function App() {
       return tournament ? linkTournamentSession(draft, tournament, id) : draft;
     })) return false;
     setSetupMemo(null);
+    setTournamentSetup(undefined);
     setRepeatSetup(null);
     setRoomSetup(null);
     selectEntry(item, 'training');
@@ -681,8 +690,9 @@ function App() {
   const position = seriesIds.indexOf(series.id);
   const previousVolume = !seriesEditor && !past && !completed ? allSeries[position - 1]?.shots.length ?? 0 : 0;
   const hasHits = practice.rounds.some(item => item.series.some(end => end.shots.length));
+  const nextIsRound = !editing && !seriesEditor && !completed && !past && roundFull;
   const mainText = editing || seriesEditor ? 'Сохранить' : completed ? 'К статистике'
-    : !past && roundFull ? 'Следующий раунд' : 'Следующая серия';
+    : nextIsRound ? 'Следующий раунд' : 'Следующая серия';
   const suggestRound = !seriesEditor && roundFull && !canAppend && !past && !editing && !completed;
   useEffect(() => {
     if (!suggestRound) {
@@ -925,10 +935,30 @@ function App() {
       return success;
     }} />;
   const rankWindow = rankReference
-    ? <RankReference initialBow={shownRank?.bow ?? null} initialCategory={rankCategory} onClose={() => setRankReference(false)} />
+    ? <RankReference initialBow={shownRank?.bow ?? null} initialCategory={rankCategory} onClose={() => setRankReference(false)} onProfile={openRankProfile} />
     : shownRank && <RankDetails rank={shownRank} onClose={() => setRankScope(null)}
       onOpenReference={() => setRankReference(true)}
-      onCategory={category => updatePreferences({ ...preferences, rankCategory: category })} />;
+      onProfile={openRankProfile}
+      rankForCategory={category => rankScope ? (rankScope.kind === 'round' ? roundRank : seriesRank)(projectedPractice, rankScope.id, category) : shownRank} />;
+
+  function openRankProfile() {
+    if (page === 'report' || page === 'training' || page === 'editor' || page === 'best-ranks') {
+      if (page === 'report' && sessionId) {
+        reportPosition.current = { id: sessionId, position: captureReportPosition(document.querySelector('.report-body')) };
+      }
+      setRankProfileOrigin({ page, scope: rankScope, reference: rankReference });
+    }
+    setRankReference(false);
+    setRankScope(null);
+    setPage('profile');
+  }
+  function leaveProfile() {
+    if (!rankProfileOrigin) { setPage('journal'); return; }
+    setRankScope(rankProfileOrigin.scope);
+    setRankReference(rankProfileOrigin.reference);
+    setPage(rankProfileOrigin.page);
+    setRankProfileOrigin(null);
+  }
 
   const releaseNotes = <WebReleaseNotes seen={preferencesReadable ? preferences.webReleaseSeen : null}
     onSeen={webReleaseSeen => updatePreferences({ ...preferences, webReleaseSeen })}
@@ -994,9 +1024,14 @@ function App() {
   function leaveConditions() {
     setFutureConditions(false);
     setSetupMemo(null);
+    setTournamentSetup(undefined);
     setRepeatSetup(null);
     setRoomSetup(null);
     setPage(conditionsBack);
+  }
+  function prepareTournament(setup: NonNullable<typeof tournamentSetup>) {
+    setConfirmTournament(undefined); setTournamentSetup(setup); setSetupMemo(null);
+    setSessionId(null); setConditionsBack('journal'); setPage('conditions');
   }
   useAppBack(showingOnboarding || page !== 'journal' || tab !== 'home', () => {
     if (targetGuide) { setTargetGuide(null); return; }
@@ -1029,7 +1064,7 @@ function App() {
       case 'achievements':
       case 'notebook':
       case 'records': setPage('profile'); break;
-      case 'profile': setPage('journal'); break;
+      case 'profile': leaveProfile(); break;
       case 'tournaments': setPage(tournamentsBack); break;
     }
   });
@@ -1047,13 +1082,21 @@ function App() {
   }
 
   if (page === 'journal') return <JournalShell tab={tab} onTab={setTab} onSettings={() => setPage('settings')}
-    displayName={preferences.displayName} onProfile={() => setPage('profile')}>
+    displayName={displayName} avatar={googleAccount?.picture} onProfile={() => { setRankProfileOrigin(null); setPage('profile'); }}>
     {offlineLabel}
     {error}
     {tab === 'home' && <AndroidUpdateCard updates={androidUpdates} />}
     {tab === 'home' && importReceipt && <MyTargetsImportReceipt result={importReceipt} onClose={() => setImportReceipt(null)}
       onHistory={() => { setImportReceipt(null); setTab('history'); }} />}
     {tab === 'home' && state.diary && <JournalHome active={!!ongoing || !!paused} paused={!ongoing && !!paused} recent={recent}
+      tournaments={tournaments} activeId={ongoing?.id ?? paused?.id}
+      onTournament={({ item, days, starts, canContinue }) => {
+        if (days > 0) { setTournamentPassportId(item.id); setTournamentsBack('journal'); setPage('tournaments'); return; }
+        if (canContinue) { void startPractice(); return; }
+        const setup = { tournamentId: item.id, startId: starts.length === 1 ? starts[0].id : undefined };
+        if (ongoing) setConfirmTournament(setup);
+        else prepareTournament(setup);
+      }}
       practiceCount={recent.length} arrowCount={recent.reduce((total, item) => total +
         item.practice.rounds.reduce((count, round) => count + round.series.reduce((sum, end) => sum + end.shots.length, 0), 0), 0)}
       conditions={homeConditions}
@@ -1068,8 +1111,12 @@ function App() {
         else { setSessionId(null); setPage('conditions'); }
       }} />}
     {tab === 'history' && <JournalHistory entries={entries} filters={historyFilters} onFilters={setHistoryFilters} onOpen={openSaved}
-      tournaments={tournaments} onTournaments={() => { setTournamentsBack('journal'); setPage('tournaments'); }} />}
-    {tab === 'progress' && <JournalProgress entries={recent} />}
+      tournaments={tournaments} onTournaments={() => { setTournamentPassportId(null); setTournamentsBack('journal'); setPage('tournaments'); }} />}
+    {confirmTournament && <BottomSheet title="Начать турнир?" onClose={() => setConfirmTournament(undefined)}>
+      <p>Текущая тренировка будет приостановлена, когда ты начнёшь турнир.</p>
+      <button type="button" className="primary" onClick={() => prepareTournament(confirmTournament)}>Перейти к условиям</button>
+    </BottomSheet>}
+    {tab === 'progress' && <JournalProgress entries={recent} onOpen={openSaved} onPractice={() => setTab('home')} />}
     {tab === 'equipment' && <EquipmentCatalog history={recent} />}
     {releaseNotes}
     {notice}
@@ -1085,7 +1132,7 @@ function App() {
     {notice}
   </>;
   if (page === 'best-ranks') return <>
-    <PersonalRanksScreen entries={recent} onBack={() => setPage(ranksBack)} onOpen={id => openRecordReport(id, 'best-ranks')} />
+    <PersonalRanksScreen entries={recent} onBack={() => setPage(ranksBack)} onOpen={id => openRecordReport(id, 'best-ranks')} onProfile={openRankProfile} />
     {notice}
   </>;
   if (page === 'notebook') return <NotebookScreen entries={entries} notes={state.diary?.notes ?? []}
@@ -1100,7 +1147,7 @@ function App() {
     onSaveSession={(id, notes) => writeDiary(previous => ({
       ...previous, entries: previous.entries.map(item => item.id === id ? { ...item, notes } : item),
     }))} />;
-  if (page === 'tournaments') return <TournamentsScreen tournaments={tournaments} entries={entries}
+  if (page === 'tournaments') return <TournamentsScreen tournaments={tournaments} entries={entries} passportId={tournamentPassportId}
     onBack={() => setPage(tournamentsBack)} onSave={item => writeDiary(previous => saveTournament(previous, item))}
     onFinish={id => writeDiary(previous => finishTournament(previous, id))}
     onRemove={id => writeDiary(previous => ({ ...previous, tournaments: previous.tournaments?.filter(item => item.id !== id) }))}
@@ -1111,11 +1158,11 @@ function App() {
     }} />;
   if (page === 'profile') return <><ProfileScreen entries={recent} grants={grants} onAchievements={() => setPage('achievements')}
     tournamentCount={tournaments.filter(item => item.starts.some(start => start.status === 'participated')).length}
-    onTournaments={() => { setTournamentsBack('profile'); setPage('tournaments'); }}
+    onTournaments={() => { setTournamentPassportId(null); setTournamentsBack('profile'); setPage('tournaments'); }}
     onNotebook={() => setPage('notebook')}
     onRecords={() => setPage('records')}
     onAchievement={recordServiceAchievement} onPublication={publication => void recordPublication(publication)}
-    onBack={() => setPage('journal')} onRanks={() => { setRanksBack('profile'); setPage('best-ranks'); }} />{notice}{error}</>;
+    onBack={leaveProfile} focusRankCategory={!!rankProfileOrigin} onRanks={() => { setRanksBack('profile'); setPage('best-ranks'); }} />{notice}{error}</>;
   if (page === 'archive') return <><ArchiveScreen onBack={() => setPage(archiveBack)} restoreFirst={archiveBack === 'journal'} onAchievement={recordServiceAchievement} />{notice}{error}</>;
   if (page === 'group-room') return <main className="conditions-page settings-page">
     <header className="topbar">
@@ -1126,7 +1173,7 @@ function App() {
     <div className="conditions-content settings-content">
       {roomHelpOpen && <RoomHelp onClose={() => setRoomHelpOpen(false)} />}
       <Suspense fallback={<p>Открываем комнаты…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
-        displayName={preferences.displayName}
+        displayName={displayName}
         onTraining={state.diary ? enterRoomTraining : undefined}
         onFinalResults={async () => {
           const snapshot = await roomBridge.finalizeResults();
@@ -1250,6 +1297,7 @@ function App() {
       initialNumbering={setup ? setupDefaults.numberedArrows : practice.numberedArrows ?? null}
       onTechnique={() => setTechniqueOpen(true)} techniqueTitle={technique?.title ?? 'Не выбрана'}
       tournaments={setup ? tournaments : undefined}
+      tournamentSetup={setup ? tournamentSetup : undefined}
       trainingTitles={setup ? frequentTrainingTitles(recent) : undefined}
       onBack={leaveConditions} onApply={async (conditions, rule, numberedArrows, tournament, title) => {
         if (setup) {
@@ -1280,8 +1328,8 @@ function App() {
         return refreshRoomHistory(entry.id, membership, true);
       } : undefined} />}
     <ReportOverview key={sessionId} practice={practice} entries={entries} entryId={sessionId} onBack={leaveReport} onSelectSeries={openSeriesEditor}
-      navigation={reportIndex >= 0 && recent.length > 1 ? {
-        previous: recent[reportIndex + 1]?.id, next: recent[reportIndex - 1]?.id,
+      navigation={(reportIndex >= 0 && recent.length > 1) || reportPosition.current?.id === sessionId ? {
+        previous: reportIndex >= 0 ? recent[reportIndex + 1]?.id : undefined, next: reportIndex >= 0 ? recent[reportIndex - 1]?.id : undefined,
         position: reportPosition.current?.id === sessionId ? reportPosition.current?.position : undefined,
         open: (id, position) => {
           const neighbor = recent.find(item => item.id === id);
@@ -1314,7 +1362,7 @@ function App() {
         if (!entry) return false;
         return writeDiary(previous => setDiaryDeleted(previous, entry.id, deleted), deleted ? entry.id : undefined, deleted);
       }}
-      onRank={id => setRankScope({ kind: 'round', id })} onRankReference={() => setRankReference(true)}
+      onRank={id => setRankScope({ kind: 'round', id })} onRankReference={() => setRankReference(true)} onRankProfile={openRankProfile}
       onTechnique={() => setTechniqueOpen(true)}
       onChange={next => update(() => next)} onOpenMemo={selection => { setMemoSnapshot(selection); setTechniqueOpen(true); }}
       onResume={() => {
@@ -1400,7 +1448,7 @@ function App() {
       removed={activeRemovedMarker}
       onBlockedTap={suggestRound ? pulseNextRound : undefined} />
     {error}
-    <TrainingFooter mainText={mainText} showPrevious={!seriesEditor}
+    <TrainingFooter mainText={mainText} newRound={nextIsRound} showPrevious={!seriesEditor}
       onPrevious={!seriesEditor && !editing && !pendingShot && position > 0 ? () => showSeries(seriesIds[position - 1]) : undefined}
       mainEnabled={!!entry && !pendingShot && (seriesEditor ? dirty : editing !== null || completed || past || shots.length > 0 || roundFull)}
       mainRef={primary} onMain={mainAction} missEnabled={canInput} onMiss={() => mark(miss)}

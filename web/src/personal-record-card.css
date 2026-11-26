@@ -2,7 +2,6 @@
   display: grid;
 }
 
-.personal-record-row,
 .personal-record-link {
   display: flex;
   align-items: center;
@@ -17,14 +16,38 @@
   text-align: start;
 }
 
+.personal-record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 0;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
 .personal-record-row + .personal-record-row { border-top: 1px solid var(--edge); }
-.personal-record-row > span { display: grid; gap: 4px; }
-.personal-record-row > svg { flex: none; color: var(--muted); }
-.personal-record-row small,
+.personal-record-row > svg { width: 16px; height: 16px; color: var(--muted); }
+.personal-record-name { font-size: .95rem; line-height: 1.2; }
+.personal-record-score { color: var(--accent); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.personal-record-context {
+  grid-column: 1 / 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .75rem;
+}
+.personal-record-context,
 .personal-record-details p,
 .personal-record-values dt { color: var(--muted); }
 
 .personal-record-details { display: grid; gap: 12px; }
+.personal-record-detail-title { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.personal-record-detail-title p { font-size: .8rem; }
 .personal-record-details h3,
 .personal-record-details p,
 .personal-record-values,
@@ -89,7 +112,8 @@
   text-align: start;
 }
 
-.personal-record-notice-text { display: grid; gap: 4px; }
+.personal-record-notice-text { display: grid; gap: 4px; min-width: 0; }
+.personal-record-notice-text small { font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .personal-record-notice-text small,
 .personal-record-notice-values del { color: var(--muted); }
 .personal-record-notice-values { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }

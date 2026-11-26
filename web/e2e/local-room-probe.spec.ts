@@ -36,11 +36,11 @@ test('the host can restore a saved room on the current hotspot address', async (
   await page.getByRole('button', { name: 'Найти адрес' }).click();
   await page.getByRole('button', { name: 'Восстановить комнату' }).click();
   await expect(page.getByLabel('Код приглашения')).toHaveValue(invitation);
-  await expect(page.getByText('Принято серий · 7')).toBeVisible();
+  await expect(page.getByText('Серий · 7')).toBeVisible();
   await page.getByRole('button', { name: 'Подвести итоги' }).click();
   await page.getByRole('button', { name: 'Зафиксировать итоги', exact: true }).click();
   const results = page.getByTestId('room-leaderboard');
-  await expect(results).toContainText('Итоги зафиксированы');
+  await expect(results).toContainText('Итоги');
   await expect(results).toContainText('28/30');
   await results.getByRole('button', { name: 'Поделиться итогами' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-shared-file', 'FableShot-итоги-комнаты.png');
@@ -133,14 +133,15 @@ test('Android group training keeps its series queued during an outage and sends 
   await targets.getByRole('button', { name: 'Следующий участник' }).click();
   await expect(targets.getByText('Серия не получена')).toBeVisible();
   await targets.getByRole('button', { name: 'Таблица', exact: true }).click();
-  await expect(page.getByLabel('Серия', { exact: true })).toHaveValue('2');
+  await expect(page.getByRole('button', { name: 'Серия', exact: true })).toHaveText('2⌄');
   await page.getByRole('button', { name: 'До серии', exact: true }).click();
-  await page.getByLabel('Серия', { exact: true }).selectOption('2');
+  await page.getByRole('button', { name: 'Серия', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Серия', exact: true }).getByRole('button', { name: '2', exact: true }).click();
   await expect(alexey.getByTestId('room-score-classic')).toHaveText('47/60');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   await page.context().setOffline(true);
-  await page.locator('.report-start-row').getByRole('button', { name: 'Таблица комнаты' }).click();
+  await page.locator('.report-heading-actions').getByRole('button', { name: 'Таблица комнаты' }).click();
   await expect(page.getByText(/Получено /)).toBeVisible();
   await expect(page.getByText('Новичок')).toBeVisible();
   await page.getByRole('button', { name: 'Только серия' }).click();
@@ -151,7 +152,8 @@ test('Android group training keeps its series queued during an outage and sends 
   await expect(page.getByText(/Не удалось обновить таблицу/)).toBeVisible();
   await expect(page.getByText('Новичок')).toBeVisible();
   await page.getByRole('button', { name: 'Фильтры таблицы' }).click();
-  await page.getByLabel('Условия', { exact: true }).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Условия', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Условия', exact: true }).locator('.choice-picker-options button').nth(1).click();
   await page.getByRole('button', { name: 'Готово' }).click();
   await expect(page.getByText('Новичок')).toHaveCount(0);
   await page.context().setOffline(false);
@@ -231,12 +233,13 @@ test('Android probe exposes a QR and supports retrying a failed invitation', asy
   await expect(page.getByRole('img', { name: 'QR приглашения в комнату' })).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть комнату' }).click();
   await page.getByRole('button', { name: 'Закрыть для всех' }).click();
+  await page.getByRole('button', { name: 'Войти по коду' }).click();
   await page.getByLabel('Код приглашения').fill('expired invitation');
   await page.getByRole('button', { name: 'Проверить связь' }).click();
   await expect(page.getByRole('alert')).toHaveText('Нет ответа от комнаты.');
   await page.getByLabel('Код приглашения').fill(invitation);
   await page.getByRole('button', { name: 'Проверить связь' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Комната ответила' })).toHaveText('Комната ответила за 42 мс.');
+  await expect(page.getByRole('status').filter({ hasText: 'Связь установлена' })).toBeVisible();
 });
 
 test('published web client authenticates the reply without sending the invite secret', async ({ page, baseURL }) => {
@@ -274,8 +277,8 @@ test('published web client authenticates the reply without sending the invite se
   await page.getByRole('button', { name: 'Проверить связь' }).click();
   await expect(page.getByRole('alert')).toContainText('Нет ответа от комнаты');
   await page.getByRole('button', { name: 'Проверить связь' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Комната ответила' })).toBeVisible();
-  await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Связь установлена' })).toBeVisible();
+  await page.getByRole('button', { name: 'Войти в тренировку' }).click();
   await page.getByTestId('start-training').click();
   await expect(page.getByTestId('room-sync-status')).toHaveText('Групповая');
 });

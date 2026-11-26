@@ -69,5 +69,6 @@ test('a new practice keeps its comparison numbers after editing a source and reo
   await expect(page.getByTestId('progress-score-value')).toHaveText('+100%');
   await expect(page.getByTestId('progress-source-changed')).toBeVisible();
   await page.getByTestId('progress-score-value').click();
-  await expect(page.getByTestId('progress-score-help')).toContainText('изменена');
+  await page.getByTestId('progress-score-help').getByText('Формулы и точные правила', { exact: true }).click();
+  await expect(page.getByTestId('progress-score-help').getByText(/изменена/)).toBeVisible();
 });

@@ -1,3 +1,5 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { StatisticRules } from './StatisticRules.tsx';
 import { useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { DiaryEntry } from './persistence.ts';
@@ -45,11 +47,9 @@ export function ProgressScoreCard({ practice, series, entries }: {
       <h3>Прогресс в этих условиях</h3>
       <button type="button" className="training-mean-help" aria-label="О базе сравнения" onClick={() => setOpen(true)}>?</button>
     </header>
-    {samples.length > 1 && <label className="report-metrics-scope">Блок сравнения
-      <select value={sample[0]} onChange={event => setBlockId(Number(event.target.value))}>
-        {samples.map(([id, [first]]) => <option key={id} value={id}>С раунда {first.round} · серии {first.number}</option>)}
-      </select>
-    </label>}
+    {samples.length > 1 && <ChoicePicker label="Блок сравнения" value={String(sample[0])}
+      onChange={value => setBlockId(Number(value))}
+      options={samples.map(([id, [first]]) => ({ value: String(id), label: `С раунда ${first.round} · серии ${first.number}` }))} />}
     <div className="progress-score-summary">
       <button type="button" className="progress-score-value" data-progress-tone={progressTone(result.relativePercent ?? result.rawIncrease ?? 0)} onClick={() => setOpen(true)} data-testid="progress-score-value">
         {!result.fullRankAvailable && <span aria-label="Предварительно">≈ </span>}{value}
@@ -62,10 +62,12 @@ export function ProgressScoreCard({ practice, series, entries }: {
     {changes.length > 0 && <p className="report-metrics-muted" data-testid="progress-source-changed">Часть исходных тренировок изменилась или недоступна. Сравнение использует сохранённые результаты.</p>}
     {open && <BottomSheet title="База сравнения" tag="progress-score-help" onClose={() => setOpen(false)}>
       <div className="progress-score-help">
-        <p>Средний балл был {baselineMean}, сейчас {currentMean}. База сохранена {date.format(new Date(baseline.frozenAt))}.</p>
-        <p>{result.relativePercent !== null
-          ? 'Процент показывает, на сколько изменился средний балл относительно обычного результата.'
-          : 'Средний балл базы равен нулю, поэтому изменение показано в баллах.'}</p>
+        <p>Прогресс показывает, насколько изменился средний балл по сравнению с твоими похожими тренировками.</p>
+        <StatisticRules>
+          <p>Средний балл был {baselineMean}, сейчас {currentMean}. База сохранена {date.format(new Date(baseline.frozenAt))}.</p>
+          <p>{result.relativePercent !== null
+            ? 'Разность текущего среднего и среднего базы делится на среднее базы и умножается на 100%.'
+            : 'Средний балл базы равен нулю, поэтому изменение показано в баллах.'}</p>
         {!result.fullRankAvailable && <p>Оценка предварительная. Для полного результата нужны не менее 12 стрел в закрытых полных сериях.</p>}
         <h3>Тренировки в базе</h3>
         <ul>
@@ -77,6 +79,7 @@ export function ProgressScoreCard({ practice, series, entries }: {
             </li>;
           })}
         </ul>
+        </StatisticRules>
       </div>
     </BottomSheet>}
   </section>;

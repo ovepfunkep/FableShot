@@ -139,9 +139,11 @@ test('series averages use a compact vertical range, including identical results'
   const trend = page.getByTestId('training-mean-trend');
   await expect(trend.locator('.training-mean-axis span').first()).toHaveText('10,0');
   await expect(trend.locator('.training-mean-axis span').last()).toHaveText('9,5');
-  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('tenShare');
+  await trend.getByRole('button', { name: 'Показатель по сериям' }).click();
+  await page.getByRole('dialog', { name: 'Показатель по сериям' }).getByRole('button', { name: 'Доля десяток' }).click();
   await expect(trend.getByTestId('training-mean-value')).toHaveText('100,0 %');
-  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('average');
+  await trend.getByRole('button', { name: 'Показатель по сериям' }).click();
+  await page.getByRole('dialog', { name: 'Показатель по сериям' }).getByRole('button', { name: 'Средний балл' }).click();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('next-end').click();
   await expect(page.getByRole('button', { name: /Серия 2 · разряд/ })).toBeVisible();
@@ -195,7 +197,8 @@ test('map and zone distribution share conditions while the map can isolate one s
   await page.mouse.move(x + 30, y, { steps: 4 });
   await page.mouse.up();
   await expect(target).not.toHaveAttribute('viewBox', centered!);
-  await map.getByTestId('hit-map-series').selectOption('');
+  await map.getByTestId('hit-map-series').click();
+  await page.getByRole('button', { name: 'Все серии', exact: true }).click();
   await expect(map.getByTestId('hit-map-score')).toHaveText('39/50');
   await expect(map.getByTestId('hit-map-mode-points')).toHaveAttribute('aria-pressed', 'true');
   await expect(resetZoom).toHaveText('1,5×');
@@ -218,7 +221,8 @@ test('map and zone distribution share conditions while the map can isolate one s
 
   await map.getByTestId('hit-map-mode-density').click();
   await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
-  await page.getByTestId('report-metrics-scope').selectOption({ index: 1 });
+  await page.getByTestId('report-metrics-scope').click();
+  await page.getByRole('dialog', { name: 'Условия расчёта' }).locator('.choice-picker-options button').nth(1).click();
   await expect(map.getByTestId('hit-map-mode-density')).toHaveAttribute('aria-pressed', 'true');
   await expect(map.getByTestId('hit-map-score')).toHaveText('10/10');
   await expect(page.getByTestId('report-result-score')).toHaveText(/49\s*\/\s*60/);

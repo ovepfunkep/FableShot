@@ -6,10 +6,11 @@ import { observeStageRanks, STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-a
 import type { AchievementGrant } from './achievement-ledger.ts';
 import type { Diary, DiaryEntry } from './persistence.ts';
 import type { RankCategory } from './sport-ranks.ts';
+import { EXERCISE_RANK_VERSION } from './exercise-rank.ts';
 
 export function eligibleForAchievements(diary: Diary): DiaryEntry[] {
   if (!diary.achievementLedger) return [];
-  return diary.entries.filter(entry => !entry.source && !entry.deletedAt && entry.achievementEnrollment?.epoch === diary.achievementLedger?.epoch &&
+  return diary.entries.filter(entry => !entry.source && !entry.nativeArchiveSession && !entry.deletedAt && entry.achievementEnrollment?.epoch === diary.achievementLedger?.epoch &&
     !entry.practice.rounds.some(round => round.series.some(series => series.shots.some(shot => shot.imported))));
 }
 
@@ -45,7 +46,7 @@ export function awardTrainingChange(previous: Diary, proposed: Diary, id: string
   const entry = proposed.entries.find(entry => entry.id === id);
   const ledger = proposed.achievementLedger;
   if (!before || !entry || !ledger || !entry.achievementEnrollment || entry.achievementEnrollment.epoch !== ledger.epoch ||
-    entry.source || entry.deletedAt || before.practice.savedAt !== null) return unchanged;
+    entry.source || entry.nativeArchiveSession || entry.deletedAt || before.practice.savedAt !== null) return unchanged;
   const complete = entry.practice.savedAt !== null;
   const enrollment = entry.achievementEnrollment;
   const stage = enrollment.stageRankVersion === STAGE_RANK_ENROLLMENT_VERSION && !entry.nativeArchiveSession &&
@@ -54,8 +55,9 @@ export function awardTrainingChange(previous: Diary, proposed: Diary, id: string
   const stageEvidence = stage?.observations ?? [];
   const categories = stage?.categories;
   const updateCategories = categories !== undefined && categories !== enrollment.stageRankCategories;
-  const updated = complete || updateCategories ? { ...entry, achievementEnrollment: { ...enrollment,
-    ...(complete ? { rankCategory: category } : {}), ...(updateCategories ? { stageRankCategories: categories } : {}) } } : entry;
+  const updated: DiaryEntry = complete || updateCategories ? { ...entry, achievementEnrollment: { ...enrollment,
+    ...(complete ? { rankCategory: category, exerciseRankVersion: EXERCISE_RANK_VERSION } : {}),
+    ...(updateCategories ? { stageRankCategories: categories } : {}) } } : entry;
   const entries = updated === entry ? proposed.entries : proposed.entries.map(item => item.id === id ? updated : item);
   const priorSeriesId = lastSeriesId(before);
   const movedToAnotherSeries = priorSeriesId !== lastSeriesId(entry);

@@ -1,12 +1,12 @@
 import { useId, useMemo, useState } from 'react';
+import { AchievementConditions, AchievementGrantDetails, AchievementHeading, AchievementStack } from './AchievementStack.tsx';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
 import { ACHIEVEMENT_BOW_LABELS, ACHIEVEMENT_CATALOG, ACHIEVEMENT_RARITY_LABELS, ACHIEVEMENT_RARITY_ORDER,
   achievementRarityFor, achievementScopeBow, achievementScopeLabel, achievementScopesFor, achievementTierOrder, getAchievementDefinition } from './achievement-catalog.ts';
 import type { AchievementBowScope, AchievementDefinition, AchievementRarity, AchievementScope } from './achievement-catalog.ts';
-import { groupAchievementGrants } from './achievement-ledger.ts';
+import { achievementGroupKey, compareAchievementTiers, groupAchievementGrants } from './achievement-ledger.ts';
 import type { AchievementGrant } from './achievement-ledger.ts';
-import { stageRankBasisLabel } from './stage-rank-achievements.ts';
 import './achievement-gallery.css';
 
 export type AchievementGalleryGrant = AchievementGrant;
@@ -48,8 +48,7 @@ function byTier(a: Status, b: Status) {
 }
 
 function byRarity(a: Status, b: Status) {
-  return rarityIndex(b.rarity) - rarityIndex(a.rarity) ||
-    achievementTierOrder(b.rule) - achievementTierOrder(a.rule) || a.rule.id.localeCompare(b.rule.id);
+  return compareAchievementTiers(a, b);
 }
 
 function evidenceMatches(id: string, scope: string): scope is AchievementScope {
@@ -83,7 +82,7 @@ function familiesFor(grants: readonly AchievementGalleryGrant[], progress: reado
     const grant = received.get(key);
     if (rule.hiddenUntilEarned && !grant) continue;
     if (available && !available.has(rule.id) && !grant) continue;
-    const group = evidenceKey(rule.family, scope);
+    const group = achievementGroupKey(rule, scope);
     const status = { rule, scope, rarity: achievementRarityFor(rule, scope), grant, progress: measured.get(key) };
     const statuses = groups.get(group);
     if (statuses) statuses.push(status);
@@ -99,7 +98,6 @@ function familiesFor(grants: readonly AchievementGalleryGrant[], progress: reado
 }
 
 const glyphs = {
-  trophy: 'M8 4h8v8a4 4 0 0 1-8 0V4Zm0 2H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 4v4m-4 0h8',
   lock: 'M7 10V8a5 5 0 0 1 10 0v2M5 10h14v10H5z',
   check: 'm5 12 5 5 9-10',
   next: 'M5 12h14m-6-6 6 6-6 6',
@@ -115,13 +113,6 @@ function Received({ grant, precise = false }: { grant: AchievementGalleryGrant; 
     <Glyph name="check" />
     <span>Получено <time dateTime={grant.earnedAt}>{(precise ? moment : day).format(new Date(grant.earnedAt))}</time>
       {precise && grant.valid === false && <small> · Текущие записи больше не подтверждают условие</small>}</span>
-  </span>;
-}
-
-function StatusHeading({ status, id }: { status: Status; id?: string }) {
-  return <span className="achievement-heading" data-rarity={status.rarity}>
-    <span className="achievement-medal"><Glyph name="trophy" /></span>
-    <span><strong id={id}>{status.rule.title}</strong><small>{ACHIEVEMENT_RARITY_LABELS[status.rarity]}</small></span>
   </span>;
 }
 
@@ -145,46 +136,53 @@ function LockedState() {
   return <span className="achievement-state"><Glyph name="lock" />Закрыто · позже</span>;
 }
 
-function FamilyCard({ family, earnedOnly, onOpen }: { family: Family; earnedOnly: boolean; onOpen: () => void }) {
+function FamilyCard({ family, earnedOnly, onOpen }: { family: Family; earnedOnly: boolean; onOpen: (status: Status) => void }) {
   const id = useId();
   const { main, next, earned, locked, scope } = family;
   if (main.rarity === 'Mystery' && !main.grant) return <div className="achievement-card achievement-mystery"
-    data-rarity="Mystery" aria-label="Тайное достижение"><span className="achievement-heading"><Glyph name="lock" />
-      <span><strong>???</strong><small>Тайное достижение</small></span></span></div>;
-  return <button type="button" className="achievement-card" data-earned={!!main.grant} data-rarity={main.rarity}
-    data-testid={`achievement-${main.rule.id}`} data-scope={scope} aria-labelledby={`${id}-name ${id}-scope`} aria-haspopup="dialog" onClick={onOpen}>
-    <span className="achievement-card-meta">
-      <small id={`${id}-scope`}>{achievementScopeLabel(scope)}</small>
-      {earned.length > 1 && <small className="achievement-earned-count">Получено ступеней: {earned.length}</small>}
-    </span>
-    <StatusHeading status={main} id={`${id}-name`} />
-    {main.grant ? <Received grant={main.grant} /> : <span className="achievement-next-main" data-testid={`achievement-next-${main.rule.id}`}>
-      <NextState status={main} /><Progress status={main} />
-    </span>}
-    <span className="achievement-flavor">{main.rule.flavor}</span>
-    {!earnedOnly && main.grant && next && <span className="achievement-next" data-testid={`achievement-next-${next.rule.id}`}>
+    data-rarity="Mystery" data-testid="achievement-mystery" aria-label="Тайное достижение">
+    <span className="achievement-heading"><Glyph name="lock" /><strong>Тайное достижение</strong></span>
+    {main.rule.mysteryHaiku && <p className="achievement-flavor">{main.rule.mysteryHaiku.map(line => <span key={line}>{line}</span>)}</p>}
+  </div>;
+  const upcoming = !earnedOnly && <>
+    {main.grant && next && <span className="achievement-next" data-testid={`achievement-next-${next.rule.id}`}>
       <NextState status={next} /><strong>{next.rule.title}</strong><Progress status={next} />
     </span>}
-    {!earnedOnly && locked.slice(0, 2).map(status => <span className="achievement-locked" data-testid={`achievement-locked-${status.rule.id}`} key={status.rule.id}>
+    {locked.slice(0, 2).map(status => <span className="achievement-locked" data-testid={`achievement-locked-${status.rule.id}`} key={status.rule.id}>
       <LockedState /><small>{status.rule.title} · {ACHIEVEMENT_RARITY_LABELS[status.rarity]}</small>
     </span>)}
-    {locked.length > 2 && !earnedOnly && <span className="achievement-more">Все ступени <Icon name="right" /></span>}
+    {locked.length > 2 && <span className="achievement-more">Все ступени <Icon name="right" /></span>}
+  </>;
+  if (main.grant) return <div className="achievement-family" data-testid={`achievement-${main.rule.id}`} data-scope={scope}>
+    <AchievementStack group={{ key: family.key, leading: main.grant, additional: earned.flatMap(status => status !== main && status.grant ? [status.grant] : []) }}
+      onOpen={grant => onOpen(earned.find(status => status.grant === grant) ?? main)}
+      leadingContent={<div className="achievement-tier-meta"><small>{achievementScopeLabel(scope)}</small><Received grant={main.grant} /></div>} />
+    {upcoming}
+  </div>;
+  return <button type="button" className="achievement-card" data-earned="false" data-rarity={main.rarity}
+    data-testid={`achievement-${main.rule.id}`} data-scope={scope} aria-labelledby={`${id}-name ${id}-scope`} aria-haspopup="dialog" onClick={() => onOpen(main)}>
+    <span className="achievement-card-meta"><small id={`${id}-scope`}>{achievementScopeLabel(scope)}</small></span>
+    <AchievementHeading rule={main.rule} rarity={main.rarity} id={`${id}-name`} />
+    <span className="achievement-next-main" data-testid={`achievement-next-${main.rule.id}`}>
+      <NextState status={main} /><Progress status={main} />
+    </span>
+    <span className="achievement-flavor">{main.rule.flavor}</span>
+    {upcoming}
   </button>;
 }
 
-function FamilyDetails({ family, onClose }: { family: Family; onClose: () => void }) {
-  const levels = [...family.earned, ...(family.next ? [family.next] : []), ...family.locked];
-  return <BottomSheet title={family.main.rule.title} onClose={onClose} tag="achievement-details">
+function FamilyDetails({ family, selected, onClose }: { family: Family; selected: Status; onClose: () => void }) {
+  const levels = [selected, ...[...family.earned, ...(family.next ? [family.next] : []), ...family.locked].filter(status => status !== selected)];
+  return <BottomSheet title={selected.rule.title} onClose={onClose} tag="achievement-details">
     <div className="achievement-details">
       <p className="achievement-detail-scope">{family.scope === 'global' ? 'Общее достижение' : achievementScopeLabel(family.scope)}</p>
       {levels.map(status => {
         const isNext = status === family.next;
         return <article className="achievement-detail" data-testid={`achievement-detail-${status.rule.id}`} data-state={status.grant ? 'earned' : isNext ? 'next' : 'locked'} key={status.rule.id}>
-          <StatusHeading status={status} />
+          <AchievementHeading rule={status.rule} rarity={status.rarity} shimmer={status === selected && !!status.grant} />
           {status.grant ? <Received grant={status.grant} precise /> : isNext ? <NextState status={status} /> : <LockedState />}
           <p className="achievement-flavor">{status.rule.flavor}</p>
-          <p className="achievement-requirement">{status.rule.description}</p>
-          {status.grant?.stageRank && <small>{stageRankBasisLabel(status.grant.stageRank)}</small>}
+          <AchievementConditions rule={status.rule} scope={status.scope} grant={status.grant} />
           {isNext && <Progress status={status} />}
         </article>;
       })}
@@ -196,34 +194,25 @@ function FamilyDetails({ family, onClose }: { family: Family; onClose: () => voi
 export function ProfileAchievements({ grants, showEarned, onOpen }: {
   grants: readonly AchievementGalleryGrant[]; showEarned: boolean; onOpen: () => void;
 }) {
-  const [opened, setOpened] = useState<Family | null>(null);
+  const [opened, setOpened] = useState<AchievementGalleryGrant | null>(null);
   const groups = showEarned ? groupAchievementGrants(grants).slice(0, 4) : [];
   return <section className="profile-panel profile-achievements" data-testid="profile-achievements">
     <h2 className="profile-achievements-heading"><Icon name="trophy" />Достижения{showEarned && <span>{grants.length}</span>}</h2>
     {showEarned && groups.length === 0 && <p>Пока нет полученных</p>}
-    {groups.map(group => {
-      const earned = [group.leading, ...group.additional];
-      const family = familiesFor(earned, [], 'all', earned.map(grant => grant.id)).find(item => item.key === group.key);
-      if (!family) return null;
-      return <button type="button" className="profile-achievement-row" key={group.key} aria-haspopup="dialog"
-        onClick={() => setOpened(family)}>
-        <StatusHeading status={family.main} />
-        {family.scope !== 'global' && <small>{achievementScopeLabel(family.scope)}</small>}
-        {group.additional.length > 0 && <small>+{group.additional.length}</small>}
-      </button>;
-    })}
+    {groups.map(group => <AchievementStack key={group.key} group={group} variant="profile" onOpen={setOpened} />)}
     <button className="profile-achievements-link" type="button" onClick={onOpen}>Все достижения</button>
-    {opened && <FamilyDetails family={opened} onClose={() => setOpened(null)} />}
+    {opened && <AchievementGrantDetails grant={opened} onClose={() => setOpened(null)} />}
   </section>;
 }
 
 export function AchievementGallery({ grants, progress, availableRuleIds, onBack }: AchievementGalleryProps) {
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [earnedOnly, setEarnedOnly] = useState(false);
-  const [opened, setOpened] = useState<string | null>(null);
+  const [opened, setOpened] = useState<{ key: string; id: string } | null>(null);
   const families = useMemo(() => familiesFor(grants, progress, scope, availableRuleIds), [grants, progress, scope, availableRuleIds]);
   const shown = earnedOnly ? families.filter(family => family.earned.length > 0) : families;
-  const details = families.find(family => family.key === opened);
+  const details = families.find(family => family.key === opened?.key);
+  const selected = details && [details.main, ...details.earned].find(status => status.rule.id === opened?.id);
   return <main className="conditions-page achievement-gallery" data-testid="achievements-screen">
     <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Достижения</h1></header>
     <div className="conditions-content achievement-content">
@@ -239,9 +228,9 @@ export function AchievementGallery({ grants, progress, availableRuleIds, onBack 
         {earnedOnly ? 'В этой категории пока нет полученных достижений.' : 'Для этой категории пока нет доступных достижений.'}
       </p>}
       <div className="achievement-cards">
-        {shown.map(family => <FamilyCard key={family.key} family={family} earnedOnly={earnedOnly} onOpen={() => setOpened(family.key)} />)}
+        {shown.map(family => <FamilyCard key={family.key} family={family} earnedOnly={earnedOnly} onOpen={status => setOpened({ key: family.key, id: status.rule.id })} />)}
       </div>
     </div>
-    {details && <FamilyDetails family={details} onClose={() => setOpened(null)} />}
+    {details && selected && <FamilyDetails family={details} selected={selected} onClose={() => setOpened(null)} />}
   </main>;
 }

@@ -37,8 +37,9 @@ test('personal records filter by conditions and open the series and volume sourc
   await expect(cards.first()).toContainText('30/30');
   await expect(cards.first()).toContainText('02.10.2026');
   await gallery.getByRole('button', { name: 'Класс', exact: true }).click();
-  await gallery.getByRole('combobox', { name: 'Класс рекорда' }).selectOption('recurve');
-  await gallery.getByRole('button', { name: 'История рекорда', exact: true }).click();
+  await gallery.getByRole('button', { name: 'Класс рекорда' }).click();
+  await page.getByRole('dialog', { name: 'Класс рекорда' }).locator('[data-choice-value="recurve"]').click();
+  await gallery.getByRole('button', { name: 'История', exact: true }).click();
   await expect(page.getByTestId('personal-records-history')).toContainText('27 → 30');
   await page.keyboard.press('Escape');
   await cards.first().click();
@@ -47,7 +48,10 @@ test('personal records filter by conditions and open the series and volume sourc
   await expect(gallery).toBeVisible();
   await gallery.getByTestId('records-ranks').click();
   const ranks = page.getByTestId('personal-ranks-screen');
-  await ranks.getByTestId('personal-rank-category-male').click();
+  await ranks.getByRole('button', { name: 'Указать пол в профиле' }).click();
+  const rankProfile = page.getByTestId('profile-screen');
+  await rankProfile.getByRole('button', { name: 'Мужской', exact: true }).click();
+  await rankProfile.getByRole('button', { name: 'Назад', exact: true }).click();
   const bestRank = ranks.locator('[data-testid^="personal-best-"]');
   await expect(bestRank).toContainText('540/600');
   await ranks.getByTestId('personal-rank-grid').click();

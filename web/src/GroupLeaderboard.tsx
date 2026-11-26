@@ -11,6 +11,7 @@ import { RoomHelp, RoomHelpButton } from './RoomHelp.tsx';
 import { shareReport } from './share-report.ts';
 import { roomResultCard } from './room-result-card.ts';
 import { RoomTargetViewer } from './RoomTargetViewer.tsx';
+import { ChoicePicker } from './ChoicePicker.tsx';
 import './room-leaderboard.css';
 
 const scoring = [
@@ -128,8 +129,8 @@ export function GroupLeaderboard({ entryId, mySeries, myOpenSeries, onClose, sav
     <section className="room-leaderboard" aria-label="Результаты участников">
       <div className="room-toolbar">
         <div className="room-status" role="status" data-offline={!!error}>
-          <Icon name="group" /><span>{finalizedAt ? 'Итоги зафиксированы' : error ? 'Нет связи' : archived ? 'Сохранённая таблица'
-            : history ? 'Участники · ' + count : 'Подключаемся…'}</span>
+          <Icon name="group" /><span>{history ? count + ' · ' : ''}{finalizedAt ? 'Итоги' : error ? 'Нет связи' : archived ? 'Сохранённая таблица'
+            : history ? 'В комнате' : 'Подключаемся…'}</span>
         </div>
         {canShare && <button type="button" className="room-pill" disabled={sharing} onClick={async () => {
           setSharing(true);
@@ -165,10 +166,9 @@ export function GroupLeaderboard({ entryId, mySeries, myOpenSeries, onClose, sav
         <div className="room-ordinal">
           <button type="button" className="icon-button" aria-label="Предыдущая серия" disabled={before === undefined}
             onClick={() => setSelected(before!)}><Icon name="left" /></button>
-          <select aria-label="Серия" value={selected ?? ''} onChange={event => setSelected(event.target.value ? Number(event.target.value) : null)}>
-            <option value="">{automatic || '—'} · авто</option>
-            {choices.map(value => <option value={value} key={value}>{value}</option>)}
-          </select>
+          <ChoicePicker label="Серия" value={selected === null ? '' : String(selected)}
+            options={[{ value: '', label: `${automatic || '—'} · авто` }, ...choices.map(value => ({ value: String(value), label: String(value) }))]}
+            onChange={value => setSelected(value ? Number(value) : null)} />
           <button type="button" className="icon-button" aria-label="Следующая серия" disabled={after === undefined}
             onClick={() => setSelected(after)}><Icon name="right" /></button>
         </div>
@@ -182,15 +182,10 @@ export function GroupLeaderboard({ entryId, mySeries, myOpenSeries, onClose, sav
       </div>
       {filtersOpen && <BottomSheet title="Фильтры таблицы" onClose={() => setFiltersOpen(false)}>
         <div className="room-leaderboard-filters">
-          <label>Лук<select aria-label="Лук" value={category} onChange={event => setCategory(event.target.value)}>
-            <option value="all">Все луки</option><option value="unknown">Без категории</option>
-            {BOW_CATEGORIES.map(item => <option value={item.value} key={item.value}>{item.label}</option>)}
-          </select></label>
-          {conditions.size > 0 && <label>Условия<select aria-label="Условия"
-            value={conditionFilter ?? ''} onChange={event => setCondition(event.target.value)}>
-            <option value="">Все условия</option>
-            {[...conditions].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select></label>}
+          <ChoicePicker label="Лук" value={category} onChange={setCategory}
+            options={[{ value: 'all', label: 'Все луки' }, { value: 'unknown', label: 'Без категории' }, ...BOW_CATEGORIES]} />
+          {conditions.size > 0 && <ChoicePicker label="Условия" value={conditionFilter ?? ''} onChange={setCondition}
+            options={[{ value: '', label: 'Все условия' }, ...[...conditions].map(([value, label]) => ({ value, label }))]} />}
           {filtersActive && <button type="button" className="room-pill" onClick={() => { setCategory('all'); setCondition(''); }}>Сбросить</button>}
           <button type="button" className="primary" onClick={() => setFiltersOpen(false)}>Готово</button>
         </div>
@@ -220,16 +215,17 @@ export function GroupLeaderboard({ entryId, mySeries, myOpenSeries, onClose, sav
                       ...participants.map(person => person.entryId), ...series.map(end => end.entryId)])] });
                   } else setOpenMember(opened ? undefined : row.id);
                 }}>
-                <span><strong>{name(row)}</strong>{own && row.name && <small>Вы</small>}</span>
-                <span>{state ?? bowName(row.bow)}<Icon name={scope === 'single' ? 'target' : opened ? 'up' : 'down'} /></span>
+                <span><strong>{name(row)}</strong>{own && row.name && <small>Вы</small>}<small className="room-bow-class">{bowName(row.bow)}</small></span>
+                <span>{state}<Icon name={scope === 'single' ? 'target' : opened ? 'up' : 'down'} /></span>
               </button>
               {scope === 'single' && row.current?.scores && <SeriesShots scores={row.current.scores} />}
               <div className="room-metric-row">
                 {scoring.map(({ id, label }) => {
                   const measurement = row.metrics[id];
-                  return <div key={id} data-testid={'room-score-' + id} aria-label={label} data-preliminary={measurement.preliminary || undefined}>
+                  return <div key={id} data-testid={'room-score-' + id} aria-label={label} data-current={mode === id || undefined} data-preliminary={measurement.preliminary || undefined}>
                     <span className="room-reading"><strong>{scoreLabel(row, id)}</strong>
-                      {measurement.place !== null && <span className="room-place" data-place={Math.min(4, measurement.place)} aria-label={'Место ' + measurement.place}>{measurement.place}</span>}
+                      {measurement.place !== null && <span className="room-place" data-place={Math.min(4, measurement.place)} aria-label={'Место ' + measurement.place}>
+                        {measurement.place <= 3 && <Icon name="trophy" />}{measurement.place}</span>}
                     </span>
                     {measurement.hint && <small>{measurement.preliminary ? 'Предварительно' : measurement.hint}</small>}
                   </div>;

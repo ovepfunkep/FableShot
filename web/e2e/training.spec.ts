@@ -107,7 +107,7 @@ test('finishing highlights a first clean series once even with system motion red
   await expect(highlight).toHaveCount(0);
 });
 
-test('six scoring chips fit at 360px and the series values align with their headings', async ({ page }) => {
+test('six scoring chips fit at 360px with labelled metrics and no separate headings', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('./');
   await openTraining(page);
@@ -130,7 +130,9 @@ test('six scoring chips fit at 360px and the series values align with their head
       headings: centers('.report-series-columns > span'), values: centers('.report-series-summary > *') };
   });
   expect(layout.lines).toBe(1);
-  expect(layout.headings).toEqual(layout.values);
+  expect(layout.headings).toEqual([]);
+  expect(layout.values).toHaveLength(3);
+  await expect(round.getByRole('button', { name: /Очки 60\/60.*Средний балл.*Сумма с начала раунда 60 очков/ })).toBeVisible();
 });
 
 test('the shot strip stays the same height through 3, 6 and 12 slots and pages to the newest shot', async ({ page }) => {

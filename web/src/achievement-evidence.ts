@@ -2,7 +2,7 @@ import { ACHIEVEMENT_BOW_LABELS } from './achievement-catalog.ts';
 import type { AchievementBowScope, AchievementScope } from './achievement-catalog.ts';
 import type { AchievementObservation } from './achievement-ledger.ts';
 import { calculateCompositeScore, conditionsKey, displayCompositeScore, SCORE_ONLY_PROFILE, STANDARD_PROFILE } from './composite-scoring.ts';
-import { exerciseRank } from './exercise-rank.ts';
+import { confirmedExerciseRanks, legacyExerciseRank } from './exercise-rank.ts';
 import { hitGeometry } from './hit-map.ts';
 import type { DiaryEntry } from './persistence.ts';
 import type { Series } from './practice.ts';
@@ -296,7 +296,7 @@ function gearTraining(series: readonly Series[]) {
 
 /** The caller supplies sessions enrolled in achievements. Imported and trashed evidence is excluded here as well. */
 export function evaluateAchievementEvidence(entries: readonly DiaryEntry[],
-  rankCategoryFor?: (entry: DiaryEntry) => RankCategory | null): AchievementEvidence[] {
+  rankCategoryFor?: (entry: DiaryEntry) => RankCategory | null, legacyRankOnly = false): AchievementEvidence[] {
   const evidence = new Map<string, AchievementEvidence>();
   const repeatedStability = new Map<string, RepeatedEvidence>();
   const repeatedProgress = new Map<string, RepeatedEvidence>();
@@ -357,8 +357,10 @@ export function evaluateAchievementEvidence(entries: readonly DiaryEntry[],
     evaluateSeriesStories(ends, complete, record);
     const category = complete ? rankCategoryFor?.(entry) : null;
     if (category) {
-      const rank = exerciseRank(practice, category);
-      if (rank.finalResult && rank.evaluation && rank.bow) {
+      const ranks = !legacyRankOnly && entry.achievementEnrollment?.exerciseRankVersion
+        ? confirmedExerciseRanks(practice, category) : [legacyExerciseRank(practice, category)];
+      for (const rank of ranks) {
+        if (!rank.finalResult || !rank.evaluation || !rank.bow) continue;
         for (const threshold of rank.evaluation.exercise.thresholds) {
           const id = rankIds[threshold.label];
           if (id && rank.evaluation.points >= threshold.score) record(id, rank.bow);

@@ -8,6 +8,8 @@
 .equipment-catalog-tabs button[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
 .equipment-catalog-tabs small { font-variant-numeric: tabular-nums; }
 .equipment-catalog-search, .equipment-catalog-form label { display: grid; gap: 6px; font-size: 13px; }
+.equipment-catalog-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.equipment-catalog-search-row > button { grid-column: 2; min-height: 44px; }
 .equipment-catalog-search input, .equipment-catalog-form input, .equipment-catalog-form select, .equipment-field textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 14px; background: var(--surface); color: inherit; font: inherit; font-size: 16px; }
 .equipment-field textarea { resize: vertical; }
 .equipment-catalog-items { display: grid; gap: 12px; }

@@ -24,8 +24,11 @@ test('first completion freezes record comparisons and continuing the session doe
   }
   await finish();
   const records = page.getByTestId('personal-record-report');
-  await expect(records).toContainText('Было 27 → Стало 30');
-  await expect(records).toContainText('Было 3 → Стало 4');
+  const seriesRecord = records.getByRole('button', { name: /Лучший результат серии/ });
+  const volumeRecord = records.getByRole('button', { name: /Стрел за тренировку/ });
+  await expect(seriesRecord).toContainText('30 очк.');
+  await expect(seriesRecord.locator('small')).toContainText('3 в серии');
+  await expect(volumeRecord).toContainText('4 стр.');
   await records.screenshot({ path: '../artifacts/web-0.22.0-record-card.png' });
   const banner = page.getByTestId('personal-record-banner');
   await expect(banner).toBeVisible({ timeout: 9000 });
@@ -33,7 +36,10 @@ test('first completion freezes record comparisons and continuing the session doe
   await page.getByTestId('record-banner-dismiss').click();
   await expect(banner.getByTestId('record-banner-values')).toContainText('4');
   await page.getByTestId('record-banner-dismiss').click();
-  await records.getByRole('button').first().click();
+  await seriesRecord.click();
+  const comparison = page.getByTestId('personal-record-comparison');
+  await expect(comparison).toContainText('Было27 очк.');
+  await expect(comparison).toContainText('Стало30 очк.');
   await page.getByTestId('personal-record-previous-session').click();
   await expect(page.getByText('Прежний результат', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
@@ -43,9 +49,9 @@ test('first completion freezes record comparisons and continuing the session doe
   await page.getByRole('button', { name: 'Отметить промах', exact: true }).click();
   await finish();
   await expect(records.getByRole('button')).toHaveCount(2);
-  await expect(records).toContainText('Было 3 → Стало 4');
+  await expect(volumeRecord).toContainText('4 стр.');
   await page.reload();
   await openHistoryEntry(page);
-  await expect(records).toContainText('Было 27 → Стало 30');
+  await expect(seriesRecord).toContainText('30 очк.');
   await expect(banner).toHaveCount(0);
 });

@@ -131,6 +131,17 @@ export function isTournamentList(value: unknown, sessions: ReadonlySet<string>):
 
 export const tournamentTitle = (item: Tournament) => item.title || `Турнир · ${item.from.split('-').reverse().join('.')}`;
 
+export function upcomingTournament(tournaments: readonly Tournament[], today: string, activeId?: string) {
+  const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86_400_000;
+  return tournaments.flatMap(item => {
+    if (item.completed || (item.to ?? item.from) < today) return [];
+    const starts = item.starts.filter(start => start.status === 'planned' || (activeId && start.sessionIds.includes(activeId)));
+    if (!starts.length) return [];
+    return [{ item, starts, days: Math.max(0, day(item.from) - day(today)),
+      canContinue: !!activeId && starts.some(start => start.sessionIds.includes(activeId)) }];
+  }).sort((a, b) => a.days - b.days || a.item.from.localeCompare(b.item.from) || a.item.id.localeCompare(b.item.id))[0];
+}
+
 export function tournamentLinks(tournaments: readonly Tournament[]) {
   return new Map(tournaments.flatMap(tournament => tournament.starts.flatMap(start => start.sessionIds.map(id => [id, { tournament, start }] as const))));
 }

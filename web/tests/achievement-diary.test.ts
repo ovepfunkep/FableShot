@@ -149,7 +149,7 @@ test('a newly enrolled completed training earns once and captures the completion
   const original = structuredClone({ previous, proposed });
   const result = awardTrainingChange(previous, proposed, active.id, 'female', now);
   assert.deepEqual(result.added, [{ id: 'START01', scope: 'global', earnedAt: now, sessionId: active.id }]);
-  assert.deepEqual(result.diary.entries[0].achievementEnrollment, { epoch, rankCategory: 'female' });
+  assert.deepEqual(result.diary.entries[0].achievementEnrollment, { epoch, rankCategory: 'female', exerciseRankVersion: 1 });
   assert.ok(isDiary(result.diary));
   assert.deepEqual({ previous, proposed }, original);
   const retried = awardTrainingChange(previous, result.diary, active.id, 'female', later);

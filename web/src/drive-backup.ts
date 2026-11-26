@@ -1,8 +1,10 @@
-import { archiveDigest, captureArchiveRecords, createWebArchive, inspectWebArchive, validateArchiveRecords, MAX_ARCHIVE_BYTES } from './web-archive.ts';
+import { archiveDigest, captureArchiveRecords, createWebArchive, inspectWebArchive, projectArchiveRecords, validateArchiveRecords, MAX_ARCHIVE_BYTES } from './web-archive.ts';
 import packageInfo from '../package.json';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 const scope = 'https://www.googleapis.com/auth/drive.appdata';
+const profileScope = 'https://www.googleapis.com/auth/userinfo.profile';
+const userInfo = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const files = 'https://www.googleapis.com/drive/v3/files';
 const uploads = 'https://www.googleapis.com/upload/drive/v3/files';
 const selection = 'id,size,createdTime,sha256Checksum,appProperties';
@@ -10,6 +12,8 @@ const clientId = import.meta.env.VITE_FABLESHOT_GOOGLE_CLIENT_ID?.trim();
 const preferenceKey = 'app.fableshot.drive-backup.enabled';
 const deviceKey = 'app.fableshot.drive-backup.device';
 const connectedKey = 'app.fableshot.drive-backup.connected';
+const accountKey = 'app.fableshot.google-account.v1';
+const archivePreferenceKey = 'app.fableshot.backup.include-archived';
 const backupWait = 60_000;
 const backupInterval = 10 * 60_000;
 
@@ -20,8 +24,29 @@ type IdentityServices = { accounts: { oauth2: { initTokenClient: (options: {
   callback: (reply: TokenResponse) => void; error_callback: () => void;
 }) => TokenClient } } };
 type DriveFile = { id: string; size: string; createdTime: string; sha256Checksum?: string;
-  appProperties: { revision: string; device: string; trainings: string; arrows: string } };
+  appProperties: { revision: string; device: string; trainings: string; arrows: string; archives?: 'included' | 'excluded' } };
 type Connection = { token: string; expires: number };
+type GoogleAccount = { id: string; name?: string; picture?: string };
+
+function googleAccount(id: unknown, name: unknown, picture: unknown): GoogleAccount | undefined {
+  if (typeof id !== 'string' || !id.trim() || id.length > 255) return;
+  let avatar: string | undefined;
+  if (typeof picture === 'string' && picture.length <= 2048) {
+    try {
+      const url = new URL(picture);
+      if (url.protocol === 'https:' && !url.username && !url.password &&
+          (url.hostname === 'googleusercontent.com' || url.hostname.endsWith('.googleusercontent.com'))) avatar = url.href;
+    } catch { /* Accounts without a usable photo use the FableShot avatar. */ }
+  }
+  return { id, name: typeof name === 'string' ? name.trim().slice(0, 120) || undefined : undefined, picture: avatar };
+}
+
+function loadGoogleAccount() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(accountKey) ?? 'null');
+    return saved ? googleAccount(saved.id, saved.name, saved.picture) : undefined;
+  } catch { return undefined; }
+}
 
 const nativeAuthorization = registerPlugin<{ authorize(options: { interactive: boolean }): Promise<{ token?: string }> }>('DriveAuthorization');
 const nativeDrive = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('DriveAuthorization');
@@ -35,17 +60,33 @@ let lastAttempt = 0;
 let inFlight: Promise<void> | undefined;
 let controller: AbortController | undefined;
 let reconnecting = false;
-let state = { connected: false, busy: false, last: undefined as DriveFile | undefined, message: '' };
+let authorization: Promise<void> | undefined;
+let generation = 0;
+let state = { connected: false, account: loadGoogleAccount(), autoBackup: readAutoBackup(), busy: false, last: undefined as DriveFile | undefined, message: '' };
 const listeners = new Set<() => void>();
 export const subscribeDriveBackup = (update: () => void) => { listeners.add(update); return () => { listeners.delete(update); }; };
 export const driveBackupState = () => state;
 const updateState = (patch: Partial<typeof state>) => { state = { ...state, ...patch }; listeners.forEach(listener => listener()); };
-export const autoBackupEnabled = () => localStorage.getItem(preferenceKey) !== 'false';
+function readAutoBackup() {
+  try { return localStorage.getItem(preferenceKey) !== 'false'; }
+  catch { return true; }
+}
+export const autoBackupEnabled = () => state.autoBackup;
+export function backupIncludesArchived() {
+  try { return localStorage.getItem(archivePreferenceKey) === 'true'; }
+  catch { return false; }
+}
+
+export function setBackupIncludesArchived(enabled: boolean) {
+  localStorage.setItem(archivePreferenceKey, String(enabled));
+  scheduleDriveBackup();
+}
+
 export function setAutoBackup(enabled: boolean) {
   localStorage.setItem(preferenceKey, String(enabled));
+  updateState({ autoBackup: enabled, message: '' });
   if (enabled) scheduleDriveBackup(0);
   else { clearTimeout(timer); controller?.abort(); }
-  updateState({ message: '' });
 }
 
 function disconnect() {
@@ -54,6 +95,14 @@ function disconnect() {
   clearTimeout(expiration);
   controller?.abort();
   updateState({ connected: false, last: undefined, message: '' });
+}
+
+export function signOutGoogle() {
+  ++generation;
+  localStorage.removeItem(connectedKey);
+  localStorage.removeItem(accountKey);
+  disconnect();
+  updateState({ account: undefined });
 }
 
 export function loadDriveAuthorization() {
@@ -74,7 +123,15 @@ export function loadDriveAuthorization() {
   return scriptLoad.then(() => {});
 }
 
-function openConnection(token: string, lifetime: number) {
+async function openConnection(token: string, lifetime: number, requestGeneration: number, interactive: boolean) {
+  const response = await fetch(userInfo, { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error('Не удалось загрузить профиль Google.');
+  const profile = await response.json();
+  const account = googleAccount(profile?.sub, profile?.name, profile?.picture);
+  if (!account) throw new Error('Google не вернул данные профиля.');
+  if (requestGeneration !== generation || (!interactive && state.account && state.account.id !== account.id)) return;
+  localStorage.setItem(accountKey, JSON.stringify(account));
+  if (nativeDrive) localStorage.setItem(connectedKey, 'true');
   clearTimeout(expiration);
   connection = { token, expires: Date.now() + lifetime };
   expiration = setTimeout(() => {
@@ -82,34 +139,40 @@ function openConnection(token: string, lifetime: number) {
     void resumeDriveBackup();
   }, lifetime);
   lastAttempt = 0;
-  updateState({ connected: true, last: undefined, message: '' });
+  updateState({ connected: true, account, last: undefined, message: '' });
   scheduleDriveBackup(0);
 }
 
 export async function resumeDriveBackup() {
-  if (!nativeDrive || connection || reconnecting || !autoBackupEnabled() ||
+  if (!nativeDrive || connection || authorization || reconnecting ||
     !navigator.onLine || document.visibilityState !== 'visible' || localStorage.getItem(connectedKey) !== 'true') return;
+  const requestGeneration = generation;
   reconnecting = true;
   try {
     const { token } = await nativeAuthorization.authorize({ interactive: false });
-    if (token && autoBackupEnabled()) openConnection(token, 50 * 60_000);
+    if (token) await openConnection(token, 50 * 60_000, requestGeneration, false);
   } catch {
     // Keep the previous connection preference so a transient network error can be retried.
   } finally { reconnecting = false; }
 }
 
 /** Call from a click after preloading the Google library. Keep the short-lived token in memory. */
-export async function connectDrive() {
+export function connectDrive() {
+  if (authorization) return authorization;
+  authorization = authorizeGoogle(++generation).finally(() => { authorization = undefined; });
+  return authorization;
+}
+
+async function authorizeGoogle(requestGeneration: number) {
   if (nativeDrive) {
     const { token } = await nativeAuthorization.authorize({ interactive: true });
     if (!token) throw new Error('Google не выдал доступ к папке резервных копий.');
-    localStorage.setItem(connectedKey, 'true');
-    openConnection(token, 50 * 60_000);
+    await openConnection(token, 50 * 60_000, requestGeneration, true);
     return;
   }
   if (!provider || !clientId) return Promise.reject(new Error('Вход Google ещё загружается.'));
   return new Promise<void>((resolve, reject) => provider!.accounts.oauth2.initTokenClient({
-    client_id: clientId, scope, include_granted_scopes: false,
+    client_id: clientId, scope: `openid ${profileScope} ${scope}`, include_granted_scopes: false,
     error_callback: () => reject(new Error('Подключение Google Диска не завершено.')),
     callback: reply => {
       if (reply.error === 'access_denied') {
@@ -121,8 +184,7 @@ export async function connectDrive() {
         return;
       }
       const lifetime = Math.max(0, Number(reply.expires_in) * 1000 - 30_000);
-      openConnection(reply.access_token, lifetime);
-      resolve();
+      void openConnection(reply.access_token, lifetime, requestGeneration, true).then(resolve, reject);
     },
   }).requestAccessToken());
 }
@@ -192,16 +254,19 @@ export function backupToDrive(takeOver = false) {
   updateState({ busy: true, message: '' });
   lastAttempt = Date.now();
   inFlight = (async () => {
-    const records = captureArchiveRecords();
+    const local = captureArchiveRecords();
+    const localSummary = validateArchiveRecords(local);
+    const includeArchived = backupIncludesArchived();
+    const records = projectArchiveRecords(local, includeArchived);
     const summary = validateArchiveRecords(records);
     const catalog = await list(session);
     const head = catalog[0];
     if (connection !== session) return;
     updateState({ last: head });
-    if (!summary.trainings && head && Number(head.appProperties.trainings)) {
+    const id = deviceId();
+    if (!localSummary.trainings && head && (Number(head.appProperties.trainings) || head.appProperties.device !== id)) {
       updateState({ message: 'На Диске есть дневник. Сначала восстанови его из копии.' }); return;
     }
-    const id = deviceId();
     if (head && head.appProperties.device !== id && !takeOver) {
       updateState({ message: 'Копии создаются на другом устройстве.' }); return;
     }
@@ -212,7 +277,7 @@ export function backupToDrive(takeOver = false) {
     if ((await list(session))[0]?.id !== head?.id) throw new Error('На Диске появилась более свежая копия. Повтори действие.');
     abort.signal.throwIfAborted();
     const copy = await upload(session, bytes, { kind: 'fableshot-backup-v1', revision, device: id,
-      trainings: String(summary.trainings), arrows: String(summary.arrows) }, abort.signal);
+      trainings: String(summary.trainings), arrows: String(summary.arrows), archives: includeArchived ? 'included' : 'excluded' }, abort.signal);
     if (connection === session) updateState({ last: copy });
     // Only prune known versions after a newer archive has passed checksum verification.
     for (const old of catalog.slice(2)) {

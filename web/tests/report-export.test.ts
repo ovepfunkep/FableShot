@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { appendShot, advanceSeries, emptyPractice, startRound, completePractice } from '../src/practice.ts';
 import { reportCsv, reportCsvCell, reportSnapshot, REPORT_CSV_COLUMNS } from '../src/report-export.ts';
-import { posterCards } from '../src/report-poster.ts';
+import { posterCards, posterTablePages } from '../src/report-poster.ts';
 
 const hit = { code: '9', points: 9, point: { x: .15, y: -.03 } };
 function fixture() {
@@ -60,4 +60,24 @@ test('poster uses entered maxima and every shot exactly once across round-card p
   assert.equal(split.columns, 1);
   assert.equal(split.cards.flatMap(card => card.rows).flatMap(row => row.codes).length, 202);
   assert.ok(split.cards.some(card => card.rows.some(row => row.continuation)));
+});
+
+test('four ten-series rounds fit on a compact page and overflow keeps the same order', () => {
+  const entry = fixture();
+  const initialRound = entry.practice.rounds[0];
+  const initialSeries = initialRound.series[0];
+  entry.practice.rounds = Array.from({ length: 4 }, (_, round) => ({
+    ...initialRound, id: round + 1,
+    series: Array.from({ length: 10 }, (_, index) => ({
+      ...initialSeries, id: round * 10 + index + 1, shots: [hit, hit, hit],
+    })),
+  }));
+  const { cards, columns } = posterCards(reportSnapshot(entry, null, false));
+  const first = posterTablePages(cards, columns, 410);
+  assert.equal(first.length, 1);
+  assert.deepEqual(first[0].map(row => row.cards.map(card => card.round.number)), [[1, 2], [3, 4]]);
+  assert.equal(first[0].flatMap(row => row.cards).flatMap(card => card.rows).flatMap(row => row.codes).length, 120);
+  const overflow = posterTablePages(cards, columns, 610);
+  assert.deepEqual(overflow.map(page => page.flatMap(row => row.cards.map(card => card.round.number))), [[1, 2], [3, 4]]);
+  assert.deepEqual(cards[0].rows.slice(-2).map(row => row.total), ['243', '270']);
 });

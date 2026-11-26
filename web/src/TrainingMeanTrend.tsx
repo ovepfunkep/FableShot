@@ -10,6 +10,9 @@ import type { RankEvaluation } from './sport-ranks.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './training-mean-trend.css';
 import { statisticVisible } from './statistics-visibility.ts';
+import { conditionsKey } from './composite-scoring.ts';
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { StatisticRules } from './StatisticRules.tsx';
 
 const width = 300, top = 8, bottom = 152;
 const metrics = [
@@ -24,7 +27,9 @@ const metrics = [
   { key: 'missShare', label: 'Доля промахов', unit: '%', feature: 'zone_trend' },
 ] as const;
 
-export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practice: Practice; initialSeriesPosition?: number }) {
+export type TrendSeriesPosition = { round: number; series: number };
+
+export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practice: Practice; initialSeriesPosition?: TrendSeriesPosition }) {
   const { preferences, update } = useTrainingPreferences();
   const restoredSeries = useRef(initialSeriesPosition);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -32,8 +37,9 @@ export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practic
   const choices = metrics.filter(item => statisticVisible(preferences, item.feature));
   const metric = choices.find(item => item.key === preferences.statisticsView?.seriesMetric) ?? choices[0];
   const points = useMemo(() => {
-    let scoreSum = 0;
-    let arrowCount = 0;
+    let sum = 0;
+    let count = 0;
+    let lastKey = '';
     return practice.rounds.flatMap((round, r) =>
     round.series.flatMap((series, s) => {
       const { shots, conditions } = series;
@@ -41,14 +47,10 @@ export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practic
       const geometry = ['spread', 'rms', 'shift'].includes(metric.key) ? hitGeometry(shots, conditions.targetDiameterMm) : null;
       let value: number | null = null;
       let rank: RankEvaluation | null = null;
-      let runningAverage: number | null = null;
       switch (metric.key) {
         case 'average': {
           const summary = summarize(shots);
           value = summary.average;
-          scoreSum += summary.points;
-          arrowCount += shots.length;
-          runningAverage = scoreSum / arrowCount;
           break;
         }
         case 'rank':
@@ -64,49 +66,66 @@ export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practic
         case 'goldShare': value = 100 * shots.filter(shot => shot.points >= 9).length / shots.length; break;
         case 'missShare': value = 100 * shots.filter(shot => shot.points === 0).length / shots.length; break;
       }
-      return [{ id: series.id, round: r + 1, series: s + 1, count: shots.length, value, rank, runningAverage }];
+      const key = JSON.stringify([conditionsKey(conditions), rank?.exercise.id]);
+      if (key !== lastKey || value === null) { sum = 0; count = 0; }
+      lastKey = key;
+      const weight = metric.key === 'average' || metric.key === 'rank' || metric.key.endsWith('Share') ? shots.length : 1;
+      if (value !== null) { sum += value * weight; count += weight; }
+      return [{ id: series.id, round: r + 1, series: s + 1, count: shots.length, value, rank, key,
+        runningAverage: count ? sum / count : null }];
     }));
   }, [practice, metric, preferences.maximumSpread, preferences.rankCategory]);
   if (!metric || !points.length) return null;
   const usable = points.flatMap((point, index) => point.value === null ? [] : [index]);
-  const index = usable.find(i => points[i].id === selectedId) ??
-    (restoredSeries.current === undefined ? usable.at(-1) : usable[Math.min(restoredSeries.current, usable.length - 1)]);
+  const requested = restoredSeries.current;
+  const nearest = requested && usable.reduce<number | undefined>((best, i) => {
+    if (best === undefined) return i;
+    const current = points[i], previous = points[best];
+    const roundDistance = Math.abs(current.round - requested.round) - Math.abs(previous.round - requested.round);
+    const seriesDistance = Math.abs(current.series - requested.series) - Math.abs(previous.series - requested.series);
+    return roundDistance < 0 || (roundDistance === 0 && seriesDistance < 0) ? i : best;
+  }, undefined);
+  const index = usable.find(i => points[i].id === selectedId) ?? nearest ?? usable.at(-1);
   const selected = index === undefined ? null : points[index];
   const select = (i: number | undefined) => { if (i !== undefined) setSelectedId(points[i].id); };
   const selectedPosition = index === undefined ? -1 : usable.indexOf(index);
   const x = (i: number) => points.length === 1 ? width / 2 : top + i * (width - 2 * top) / (points.length - 1);
-  const values = usable.map(i => points[i].value!);
+  const values = usable.flatMap(i => [points[i].value!, points[i].runningAverage!]);
   const exercises = new Map(points.flatMap(point => point.rank ? [[point.rank.exercise.id, point.rank.exercise] as const] : []));
   const rankAxis = metric.key === 'rank' ? rankAverageScale(values, exercises.size === 1 ? exercises.values().next().value : undefined) : null;
   const { lower, upper, ticks } = rankAxis ?? chartScale(values, metric.key);
+  const displayedTicks = ticks.length > 5
+    ? ticks.filter((_, i) => i === 0 || i === ticks.length - 1 || i % Math.ceil(ticks.length / 4) === 0)
+    : ticks;
   const y = (value: number) => bottom - (value - lower) * (bottom - top) / (upper - lower);
   const seriesLabel = selected ? `Раунд ${selected.round} · серия ${selected.series}` : '';
   const valueLabel = selected?.value == null ? '' : rankAxis ? selected.rank?.pace?.label ?? '—'
     : chartLabel(metric.key, selected.value, metric.key === 'average' && preferences.averageHundredths);
   const path = usable.map(i => {
-    const connected = i > 0 && points[i - 1].value !== null && points[i - 1].rank?.exercise.id === points[i].rank?.exercise.id;
+    const connected = i > 0 && points[i - 1].value !== null && points[i - 1].key === points[i].key;
     return `${connected ? 'L' : 'M'} ${x(i)} ${y(points[i].value!)}`;
   }).join(' ');
-  const guide = metric.key === 'average' && points.length > 1 ? points.reduce((line, point, i) => {
+  const guide = usable.length > 1 ? usable.map(i => {
+    const point = points[i], previous = points[i - 1];
     const current = y(point.runningAverage!);
-    if (!i) return `M ${x(i)} ${current}`;
+    if (previous?.runningAverage == null || previous.key !== point.key) return `M ${x(i)} ${current}`;
     const midpoint = (x(i - 1) + x(i)) / 2;
-    return `${line} C ${midpoint} ${y(points[i - 1].runningAverage!)} ${midpoint} ${current} ${x(i)} ${current}`;
-  }, '') : null;
+    return `C ${midpoint} ${y(previous.runningAverage)} ${midpoint} ${current} ${x(i)} ${current}`;
+  }).join(' ') : null;
 
   return <section className="training-mean" aria-labelledby="training-mean-title" data-testid="training-mean-trend"
-    data-series-position={selectedPosition < 0 ? undefined : selectedPosition}>
+    data-trend-round={selected?.round} data-trend-series={selected?.series}>
     <header>
       <Icon name="stats" /><h3 id="training-mean-title">По сериям</h3>
-      <select className="report-scope-select" aria-label="Показатель по сериям" value={metric.key} onChange={event => {
-        void update({ ...preferences, statisticsView: { ...preferences.statisticsView, seriesMetric: event.currentTarget.value } });
-      }}>{choices.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>
+      <ChoicePicker label="Показатель по сериям" variant="ghost" value={metric.key}
+        options={choices.map(item => ({ value: item.key, label: item.label }))}
+        onChange={seriesMetric => { void update({ ...preferences, statisticsView: { ...preferences.statisticsView, seriesMetric } }); }} />
       <button type="button" className="training-mean-help" aria-label="О графике по сериям" onClick={() => setHelp(true)}>?</button>
     </header>
     {index === undefined ? <p>Нет данных для этого показателя.</p> : <>
-      <div className="training-mean-chart">
+      <div className="training-mean-chart" data-rank={!!rankAxis}>
         <div className="training-mean-axis" aria-hidden="true">
-          {[...ticks].reverse().map(value => <span key={value} style={{ top: `${y(value) / 160 * 100}%` }}>
+          {[...displayedTicks].reverse().map(value => <span key={value} style={{ top: `${y(value) / 160 * 100}%` }}>
             {rankAxis?.thresholds.find(item => item.average === value)?.label ?? chartLabel(rankAxis ? 'average' : metric.key, value)}
           </span>)}
         </div>
@@ -135,12 +154,19 @@ export function TrainingMeanTrend({ practice, initialSeriesPosition }: { practic
         <span>{seriesLabel}</span>
         <span data-testid="training-mean-value"><strong>{valueLabel}</strong> {metric.unit}</span>
         {rankAxis && selected?.value != null && <span>ср. {chartLabel('average', selected.value, preferences.averageHundredths)}</span>}
-        {guide && selected?.runningAverage != null && <span>Накопительное среднее {chartLabel('average', selected.runningAverage, preferences.averageHundredths)}</span>}
+        {guide && selected?.runningAverage != null && <span className="training-mean-running-label">
+          {['spread', 'rms', 'shift'].includes(metric.key) ? 'Среднее по сериям' : 'Накопительное среднее'}{' '}
+          {chartLabel(rankAxis ? 'average' : metric.key, selected.runningAverage, preferences.averageHundredths)} {rankAxis ? '/ 10' : metric.unit}
+        </span>}
         {selected && statisticVisible(preferences, 'volume') && <span>Стрел: {selected.count}</span>}
       </div>
     </>}
     {help && <BottomSheet title="График по сериям" onClose={() => setHelp(false)}>
-      <p>Каждая точка соответствует серии. Шкала автоматически подстраивается под выбранный показатель. Пунктир разделяет раунды.</p>
+      <p>Каждая точка — результат серии. Синяя линия помогает увидеть, как менялся результат по ходу тренировки.</p>
+      <StatisticRules>
+        <p>Средний балл, темп норматива и доли считаются по всем отмеченным стрелам. Показатели в миллиметрах усредняются по сериям, где они доступны.</p>
+        <p>Пропущенные данные и смена условий прерывают линию. Пунктир отмечает границы раундов. Шкала подстраивается под результаты.</p>
+      </StatisticRules>
     </BottomSheet>}
   </section>;
 }

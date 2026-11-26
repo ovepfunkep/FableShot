@@ -21,6 +21,7 @@ import { statisticVisible } from './statistics-visibility.ts';
 import './journal-tabs.css';
 import { Icon } from './TrainingChrome.tsx';
 import { tournamentLinks, tournamentTitle } from './tournaments.ts';
+import { ChoicePicker } from './ChoicePicker.tsx';
 import type { Tournament } from './tournaments.ts';
 
 type JournalEntry = DiaryEntry;
@@ -74,27 +75,29 @@ function HistoryCard({ entry, hundredths, onOpen, tournament }: {
   const rank = statisticVisible(preferences, 'norms') ? exerciseRank(practice, preferences.rankCategory ?? null) : null;
   const rankDisplay = rank && exerciseRankDisplay(rank);
   const progress = statisticVisible(preferences, 'progress_score') ? compactProgress(practice) : null;
-  const outline = scoreOutline(shots, !!preferences.colorTrainingBorders && !preferences.hideScores && showResult && !draft);
+  const outline = scoreOutline(shots, preferences.colorTrainingBorders !== false && !preferences.hideScores && showResult && !draft);
 
   return <button type="button" className={`journal-tab-history-card${entry.deletedAt ? ' is-deleted' : ''}${tournament ? ' is-tournament' : ''}`} onClick={onOpen} data-testid={`session-${entry.id}`}
     data-score-outline={outline !== undefined || undefined}
     style={outline ? { '--score-outline': outline } as CSSProperties : undefined}>
-    <span className="journal-tab-card-title"><strong>{entry.title || (entry.paused ? 'Приостановленная тренировка' : draft ? 'Черновик тренировки' : 'Тренировка')}</strong><TabIcon name="next" /></span>
-    {entry.groupRoomName && <span className="journal-tab-icon-value" aria-label={`Групповая тренировка · ${entry.groupRoomName}`}>
-      <Icon name="group" />{entry.groupRoomName}
-    </span>}
-    {tournament && <span className="history-tournament-badge"><Icon name="trophy" />Турнир · {tournamentTitle(tournament.tournament)}
-      {tournament.start.place !== null && ` · ${tournament.start.place} место`}</span>}
-    {maximum > 0 && (showResult || showAverage || progress) && <span className="journal-tab-card-result">
+    <span className="journal-tab-card-title">
+      <strong>{entry.title || (entry.paused ? 'Приостановленная тренировка' : draft ? 'Черновик тренировки' : 'Тренировка')}</strong>
+      {entry.groupRoomName && <span title={entry.groupRoomName} aria-label={`Групповая тренировка · ${entry.groupRoomName}`}><Icon name="group" /></span>}
+      {tournament && <span title={tournamentTitle(tournament.tournament)}
+        aria-label={`Турнир · ${tournamentTitle(tournament.tournament)}${tournament.start.place === null ? '' : ` · ${tournament.start.place} место`}`}>
+        <Icon name="trophy" /></span>}
+      <TabIcon name="next" />
+    </span>
+    {maximum > 0 && (showResult || showAverage || progress || rankDisplay?.label) && <span className="journal-tab-card-result">
       {showResult && <span aria-label={`${points} из ${maximum} очков`}><strong>{number.format(points)}</strong><span> / {number.format(maximum)}</span></span>}
       {showAverage && <span className="journal-tab-icon-value" aria-label={`Средний балл ${formatAverage(average, hundredths)}`}>
         <TabIcon name="progress" /><strong>{formatAverage(average, hundredths)}</strong>
       </span>}
       {progress && <span className="history-progress" data-progress-tone={progress.tone} aria-label={`Прогресс относительно похожих тренировок ${progress.text}`}>{progress.text}</span>}
-    </span>}
-    {rankDisplay?.label && <span className="rank-tag" data-testid={`history-rank-${entry.id}`}>
-      <strong>{rankDisplay.forecast && rankDisplay.label !== '—' ? 'Темп ' : ''}{rankDisplay.label}</strong>
-      <span>{rankDisplay.actual ?? rank?.classLabel}</span>
+      {rankDisplay?.label && <span className="history-rank" data-testid={`history-rank-${entry.id}`}
+        aria-label={`${rankDisplay.forecast ? 'Темп' : 'Разряд'} ${rankDisplay.label}`} title={rankDisplay.actual ?? rank?.classLabel ?? undefined}>
+        {rankDisplay.label}
+      </span>}
     </span>}
     <span className="journal-tab-conditions">
       {mixed ? <span className="journal-tab-icon-value"><TabIcon name="target" />Разные условия</span> : first && <>
@@ -134,17 +137,12 @@ export function JournalHistory({ entries, filters, onFilters, onOpen, tournament
     <div className="history-tools">
       <input type="search" aria-label="Найти тренировку" placeholder="Поиск" value={filters.query}
         onChange={event => onFilters({ ...filters, query: event.target.value })} />
-      <button type="button" className="icon-button" aria-label="Фильтры истории" data-testid="history-filters" onClick={() => setFilterOpen(true)}>
+      <button type="button" className="icon-button" aria-label="Фильтры истории" data-testid="history-filters"
+        data-has-filters={!!(filters.tournament || filters.from || filters.to || filters.bow || filters.distance || filters.deleted) || undefined}
+        onClick={() => setFilterOpen(true)}>
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true"><path d="M3 6h18M6 12h12m-8 6h4" /></svg>
       </button>
       {filters.deleted && <span className="history-trash-label">Корзина</span>}
-    </div>
-    <div className="history-tournament-actions">
-      <button type="button" onClick={onTournaments}><Icon name="trophy" />Турниры</button>
-      {(links.size > 0 || filters.tournament) && <select aria-label="Тип записи" value={filters.tournament ?? ''} onChange={event => {
-        const selected = event.currentTarget.value;
-        onFilters({ ...filters, tournament: selected === 'linked' || selected === 'ordinary' ? selected : undefined });
-      }}><option value="">Все записи</option><option value="ordinary">Только тренировки</option><option value="linked">Только турниры</option></select>}
     </div>
     {groups.size === 0 && <EmptyState icon="history" title={filters.deleted ? 'Корзина пуста' : entries.length ? 'Тренировки не найдены' : 'История пока пуста'}>
       {filters.deleted ? 'Здесь появятся удалённые тренировки.' : entries.length ? 'Попробуй изменить фильтры.' : 'Начни тренировку на главной — она появится здесь.'}
@@ -162,15 +160,17 @@ export function JournalHistory({ entries, filters, onFilters, onOpen, tournament
     </section>)}
     {filterOpen && <BottomSheet title="Фильтры истории" tag="history-filter-sheet" onClose={() => setFilterOpen(false)}>
       <div className="history-filter-fields">
+        <div className="history-record-filter"><ChoicePicker label="Тип записи" value={filters.tournament ?? 'all'}
+          options={[{ value: 'all', label: 'Все записи' }, { value: 'ordinary', label: 'Только тренировки' }, { value: 'linked', label: 'Только турниры' }]}
+          onChange={selected => onFilters({ ...filters, tournament: selected === 'linked' || selected === 'ordinary' ? selected : undefined })} />
+          <button className="text-action" type="button" onClick={() => { setFilterOpen(false); onTournaments(); }}><Icon name="trophy" />Турниры</button>
+        </div>
         <label>С даты<input type="date" value={filters.from} onChange={event => onFilters({ ...filters, from: event.target.value })} /></label>
         <label>По дату<input type="date" value={filters.to} onChange={event => onFilters({ ...filters, to: event.target.value })} /></label>
-        <label>Дистанция<select value={filters.distance} onChange={event => onFilters({ ...filters, distance: event.target.value })}>
-          <option value="">Любая</option>{distances.map(distance => <option key={distance} value={distance}>{distance} м</option>)}
-        </select></label>
-        <label>Класс лука<select value={filters.bow} onChange={event => onFilters({ ...filters, bow: event.target.value })}>
-          <option value="">Любой</option>{BOW_CATEGORIES.map(category => <option key={category.value} value={category.value}>{category.label}</option>)}
-          <option value="unknown">Не указан</option>
-        </select></label>
+        <ChoicePicker label="Дистанция" value={filters.distance} options={[{ value: '', label: 'Любая' }, ...distances.map(distance => ({ value: String(distance), label: `${distance} м` }))]}
+          onChange={distance => onFilters({ ...filters, distance })} />
+        <ChoicePicker label="Класс лука" value={filters.bow} options={[{ value: '', label: 'Любой' }, ...BOW_CATEGORIES, { value: 'unknown', label: 'Не указан' }]}
+          onChange={bow => onFilters({ ...filters, bow })} />
         <label className="history-trash-toggle"><input type="checkbox" checked={filters.deleted} onChange={event => onFilters({ ...filters, deleted: event.target.checked })} /> Корзина</label>
         <button className="text-action" type="button" onClick={() => onFilters(DEFAULT_HISTORY_FILTERS)}>Сбросить фильтры</button>
       </div>
@@ -178,7 +178,7 @@ export function JournalHistory({ entries, filters, onFilters, onOpen, tournament
   </section>;
 }
 
-export function JournalProgress({ entries }: { entries: readonly JournalEntry[] }) {
+export function JournalProgress({ entries, onOpen, onPractice }: { entries: readonly JournalEntry[]; onOpen: (id: string) => void; onPractice: () => void }) {
   const { preferences } = useTrainingPreferences();
   const [filters, setFilters] = useState<ProgressFilters>(DEFAULT_PROGRESS_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -210,14 +210,17 @@ export function JournalProgress({ entries }: { entries: readonly JournalEntry[] 
     </div>}
     {sessions.length === 0 ? <EmptyState icon="progress" title={activeFilters && hasResults ? 'По этим критериям результатов нет' : 'Пока нет результатов'}>
       {activeFilters && hasResults ? <button className="text-action" type="button" onClick={() => setFilters(DEFAULT_PROGRESS_FILTERS)}>Сбросить фильтры</button>
-        : 'Здесь появятся баллы и объём завершённых тренировок.'}
+        : <button className="text-action" type="button" onClick={onPractice}>Перейти к тренировке</button>}
     </EmptyState> : <>
-      {(showAverage || showVolume) && <dl className="journal-tab-panel journal-tab-metrics">
+      {(showAverage || showVolume) && <section className="journal-tab-panel progress-period-result" aria-labelledby="progress-period-title">
+        <h2 id="progress-period-title"><Icon name="stats" />Итог периода</h2>
+        <dl className="journal-tab-metrics">
         {showAverage && <div><dt>Средний балл</dt><dd>{formatAverage(totals.points / totals.arrows, preferences.averageHundredths)}</dd></div>}
         {showVolume && <><div><dt>Тренировки</dt><dd>{number.format(sessions.length)}</dd></div>
           <div><dt>Стрелы</dt><dd>{number.format(totals.arrows)}</dd></div></>}
-      </dl>}
-      <ProgressTimeline groups={groups} history={history} comparisonKey={comparisonKey} onCompare={setComparisonKey} />
+        </dl>
+      </section>}
+      <ProgressTimeline groups={groups} history={history} comparisonKey={comparisonKey} onCompare={setComparisonKey} onOpen={onOpen} />
       {comparison && <GeometryTrend group={comparison} />}
     </>}
     {filterOpen && <ProgressFiltersSheet entries={entries} value={filters} onClose={() => setFilterOpen(false)}

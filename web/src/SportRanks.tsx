@@ -6,6 +6,8 @@ import { rankDisplayLabel, RANK_CATEGORIES, RANK_DOCUMENT, RANK_LABELS, RANK_REF
 import type { RankBow, RankCategory, RankEvaluation, RankGroup, StageRank } from './sport-ranks.ts';
 import { getTargetProfile } from './target.ts';
 import { ExerciseThresholdTable } from './ExerciseThresholdTable.tsx';
+import { exerciseRankCoverage } from './exercise-rank.ts';
+import type { ExerciseRank } from './exercise-rank.ts';
 import './sport-ranks.css';
 
 export function RankMedal() {
@@ -48,13 +50,15 @@ function RankDialog({ title, testId, onClose, children }: {
   </dialog>;
 }
 
-function CategoryButtons({ category, onCategory, testId }: {
+export function RankCategoryPreview({ category, profileCategory, onCategory, testId, onProfile }: {
   category: RankCategory | null; onCategory: (category: RankCategory) => void; testId: string;
+  profileCategory: RankCategory | null; onProfile: () => void;
 }) {
-  return <div className="rank-filters" role="group" aria-label="Категория сравнения">
+  if (profileCategory === null) return <button type="button" className="rank-open-reference" onClick={onProfile}>Указать пол в профиле</button>;
+  return <><div className="rank-filters" role="group" aria-label="Категория сравнения">
     {(['male', 'female'] as const).map(id => <button type="button" key={id} aria-pressed={category === id}
-      data-testid={`${testId}-${id}`} onClick={() => onCategory(id)}>{RANK_CATEGORIES[id]}</button>)}
-  </div>;
+      data-testid={`${testId}-${id}`} onClick={() => onCategory(id)}>{id === 'male' ? 'М' : 'Ж'}</button>)}
+  </div>{category && category !== profileCategory && <p role="status">Предпросмотр · {RANK_CATEGORIES[category]}</p>}</>;
 }
 
 function RankSource() {
@@ -64,10 +68,16 @@ function RankSource() {
   </div>;
 }
 
-export function RankDetails({ rank, forecast, onClose, onOpenReference, onCategory }: {
-  rank: StageRank; forecast?: RankEvaluation | null; onClose: () => void; onOpenReference: () => void; onCategory?: (category: RankCategory) => void;
+export function RankDetails({ rank: profileRank, forecast, onClose, onOpenReference, rankForCategory, onProfile }: {
+  rank: StageRank | ExerciseRank; forecast?: RankEvaluation | null; onClose: () => void; onOpenReference: () => void;
+  rankForCategory: (category: RankCategory) => StageRank | ExerciseRank; onProfile: () => void;
 }) {
-  const [changingCategory, setChangingCategory] = useState(false);
+  const [preview, setPreview] = useState<RankCategory | null>(null);
+  const rank = preview && profileRank.category ? rankForCategory(preview) : profileRank;
+  const exercise = 'forecast' in rank && 'coverage' in rank ? rank as ExerciseRank : null;
+  const coverage = exercise ? exerciseRankCoverage(exercise) : null;
+  const previewForecast = exercise?.forecast?.pace?.label !== rank.label ? exercise?.forecast : null;
+  const pace = preview ? previewForecast : forecast;
   const { evaluation, conditions } = rank;
   return <RankDialog title={`${rank.scopeLabel} · нормативы`} testId="rank-details" onClose={onClose}>
     <div className="rank-detail">
@@ -77,7 +87,9 @@ export function RankDetails({ rank, forecast, onClose, onOpenReference, onCatego
             <h3 data-testid="rank-headline">{rank.label && rankDisplayLabel(rank.label) !== '—' && <RankMedal />}{rankDisplayLabel(rank.label) ?? '—'}</h3></div>
           <div className="rank-summary-average"><span>Средний балл</span><strong>{formatAverage(evaluation.entered ? evaluation.points / evaluation.entered : null, true)}</strong></div>
         </div>
-        {forecast?.pace && <p>Темп {forecast.pace.label} · сетка на {forecast.exercise.arrows} стрел</p>}
+        {pace?.pace && <p>Темп {pace.pace.label} · сетка на {pace.exercise.arrows} стрел</p>}
+        {coverage && <p data-testid="rank-coverage">{coverage.label}</p>}
+        {coverage?.explanation && <p>{coverage.explanation}</p>}
         <dl className="rank-context">
           <div><dt>Лук</dt><dd>{bowCategoryName(evaluation.exercise.bow)}</dd></div>
           <div><dt>Дистанция</dt><dd>{evaluation.exercise.distance} м</dd></div>
@@ -89,19 +101,14 @@ export function RankDetails({ rank, forecast, onClose, onOpenReference, onCatego
         </div>
         <ExerciseThresholdTable key={evaluation.exercise.id} evaluation={evaluation} finalResult={rank.finalResult}
           saved={rank.finalResult} showAverage showVolume={false} />
-      </> : <p className="rank-reason" data-testid="rank-unavailable">{rank.reason}</p>}
+      </> : rank.category && <p className="rank-reason" data-testid="rank-unavailable">{rank.reason}</p>}
       <div className="rank-detail-actions">
-        {onCategory && rank.category !== null && !changingCategory &&
-          <button type="button" className="rank-link" aria-label={`Изменить категорию · ${RANK_CATEGORIES[rank.category]}`}
-            data-testid="rank-change-category" onClick={() => setChangingCategory(true)}>
-            {RANK_CATEGORIES[rank.category]} <span aria-hidden="true">✎</span>
-          </button>}
+        <RankCategoryPreview profileCategory={profileRank.category} category={rank.category} testId="rank-category"
+          onCategory={setPreview} onProfile={onProfile} />
         <button type="button" className="rank-open-reference" data-testid="rank-open-reference" onClick={onOpenReference}>Вся сетка <span aria-hidden="true">›</span></button>
       </div>
-      {onCategory && (rank.category === null || changingCategory) && <CategoryButtons category={rank.category} testId="rank-category"
-        onCategory={category => { onCategory(category); setChangingCategory(false); }} />}
       <details className="rank-calculation">
-        <summary data-testid="rank-help">Расчёт и источник</summary>
+        <summary data-testid="rank-help">Формулы и точные правила</summary>
         {conditions && <p data-testid="rank-target-conditions">{conditions.targetDiameterMm / 10} см · {getTargetProfile(conditions.targetProfileId)?.title}</p>}
         {!rank.finalResult && evaluation?.projected != null && <p>Прогноз при сохранении среднего: {formatAverage(evaluation.projected, true)} очков.</p>}
         <p>Для официального разряда также учитываются возраст и условия соревнований.</p>
@@ -113,11 +120,12 @@ export function RankDetails({ rank, forecast, onClose, onOpenReference, onCatego
 
 const groups = [['recurve', 'КЛ'], ['barebow', 'КЛб'], ['compound', 'БЛ'], ['3d', '3Д']] as const;
 
-export function RankReference({ initialBow, initialCategory, onClose }: {
-  initialBow?: RankBow | null; initialCategory?: RankCategory | null; onClose: () => void;
+export function RankReference({ initialBow, initialCategory = null, onClose, onProfile }: {
+  initialBow?: RankBow | null; initialCategory?: RankCategory | null; onClose: () => void; onProfile: () => void;
 }) {
   const [group, setGroup] = useState<RankGroup>(initialBow ?? 'barebow');
-  const [category, setCategory] = useState<RankCategory>(initialCategory ?? 'male');
+  const [preview, setPreview] = useState<RankCategory | null>(null);
+  const category = initialCategory && (preview ?? initialCategory);
   const scroll = useRef<HTMLDivElement>(null);
   return <RankDialog title="Разрядная сетка" testId="rank-reference" onClose={onClose}>
     <div className="rank-reference">
@@ -125,8 +133,8 @@ export function RankReference({ initialBow, initialCategory, onClose }: {
         {groups.map(([id, label]) => <button type="button" key={id} aria-pressed={group === id}
           data-testid={`rank-grid-bow-${id}`} onClick={() => { setGroup(id); if (scroll.current) scroll.current.scrollTop = 0; }}>{label}</button>)}
       </div>
-      <CategoryButtons category={category} onCategory={setCategory} testId="rank-grid-category" />
-      <div ref={scroll} className="rank-reference__scroll" data-testid="rank-grid-scroll" tabIndex={0} role="region" aria-label="Таблица нормативов">
+      <RankCategoryPreview category={category} profileCategory={initialCategory} onCategory={setPreview} testId="rank-grid-category" onProfile={onProfile} />
+      {category && <div ref={scroll} className="rank-reference__scroll" data-testid="rank-grid-scroll" tabIndex={0} role="region" aria-label="Таблица нормативов">
         <table>
           <caption className="sr-only">Нормы в очках · {RANK_CATEGORIES[category]}</caption>
           <thead><tr><th scope="col">Дисциплина / упражнение</th>
@@ -137,7 +145,7 @@ export function RankReference({ initialBow, initialCategory, onClose }: {
             {row[category].map((score, index) => <td key={RANK_LABELS[index]} data-testid={`rank-grid-cell-${row.sourceRow}-${index}`}>{score ?? '—'}</td>)}
           </tr>)}</tbody>
         </table>
-      </div>
+      </div>}
       <RankSource />
     </div>
   </RankDialog>;

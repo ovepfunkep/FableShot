@@ -22,7 +22,8 @@ test('first launch previews quick settings, saves them and lets the user revisit
   await expect(quick.getByTestId('onboard-achievement-example')).toBeVisible();
   await quick.getByRole('switch', { name: 'Достижения при отметке попаданий' }).click();
   await expect(quick.getByTestId('onboard-achievement-example')).toHaveCount(0);
-  await quick.getByLabel('Категория нормативов').selectOption('female');
+  await quick.getByRole('button', { name: 'Категория нормативов' }).click();
+  await page.getByRole('dialog', { name: 'Категория нормативов' }).locator('[data-choice-value="female"]').click();
   await quick.getByTestId('onboard-save-preferences').click();
   await expect(page.getByTestId('start-training')).toBeVisible();
   const { records, diary } = await readStoredJournal(page);
@@ -74,7 +75,8 @@ test('first launch offers an isolated example and lets the user reopen it from s
   await page.getByTestId('tutorial-open-report').click();
   const report = page.getByTestId('tutorial-report');
   await expect(report.getByTestId('hit-map-hit')).toHaveCount(6);
-  await report.getByTestId('hit-map-series').selectOption('2');
+  await report.getByTestId('hit-map-series').click();
+  await page.getByRole('dialog', { name: 'Серия на карте' }).locator('[data-choice-value="2"]').click();
   await expect(report.getByTestId('hit-map-hit')).toHaveCount(3);
   await report.getByRole('button', { name: 'Распределение', exact: true }).click();
   await report.getByTestId('report-zone-10').locator('[data-zone="10"]').first().click();

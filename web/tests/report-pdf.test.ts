@@ -47,13 +47,16 @@ async function extract(bytes: Uint8Array) {
 
 test('detailed PDF is a standalone vector report with rounds, awards, records, norms and numbered-arrow analysis', async () => {
   const entry = fixture(), original = JSON.stringify(entry);
-  const snapshot = reportSnapshot(entry, 'male', true, { grants: [{ id: 'START01', scope: 'all', earnedAt: '2026-11-11T11:00:00Z', sessionId: 'pdf' }] });
+  const grants = ['START01', 'START05', 'START09'].map(id => ({ id, scope: 'global', earnedAt: '2026-11-11T11:00:00Z', sessionId: 'pdf' }));
+  const snapshot = reportSnapshot(entry, 'male', true, { grants });
   const bytes = await createReportPdf(snapshot, await fonts);
   const { pages, firstPageHasRaster } = await extract(bytes);
   assert.equal(firstPageHasRaster, false);
   assert.match(pages[0], /ПОДРОБНЫЙ ОТЧЁТ/);
   assert.match(pages[0], /Клубный вечер/);
   const text = pages.join(' ');
+  assert.match(text, /Продолжение следует.*• Это уже не разовая акция.*• Начало пути/);
+  assert.equal((text.match(/Продолжение следует/g) ?? []).length, 1);
   for (const title of ['Нормативы', 'Личные рекорды', 'Новый рекорд серии', 'Начало пути', 'Раунд 1', 'Раунд 2',
     'Общие очки', 'Карта попаданий', 'Плотность', 'Распределение попаданий', 'Сравнение попаданий']) assert.ok(text.includes(title), title);
   assert.match(text, /162\s*\/\s*180/);
@@ -90,4 +93,7 @@ test('export composition keeps only selected blocks and can summarize series wit
   const distribution = await extract(await createReportPdf(snapshot, await fonts, { sections: ['distribution'], showShots: false }));
   assert.match(distribution.pages.join(' '), /Распределение попаданий/);
   assert.doesNotMatch(distribution.pages.join(' '), /Раунд 1|РЕЗУЛЬТАТ|Карта попаданий/);
+  const reordered = await extract(await createReportPdf(snapshot, await fonts, { sections: ['distribution', 'hit_map'], showShots: false }));
+  const reorderedText = reordered.pages.join(' ');
+  assert.match(reorderedText, /Распределение попаданий[\s\S]*Карта попаданий/);
 });

@@ -1,9 +1,11 @@
 import { readStoredJournal } from './stored-journal.ts';
-import { openSettingsCategory } from './journal-navigation.ts';
+import { openSettingsCategory, openTraining } from './journal-navigation.ts';
 import { expect, test } from '@playwright/test';
 import initSqlJs from 'sql.js';
 import { zipSync } from 'fflate';
 import { MYTARGETS_HEADERS } from '../src/mytargets-import.ts';
+import { readFile } from 'node:fs/promises';
+import { inspectWebArchive } from '../src/web-archive.ts';
 
 const csv = [MYTARGETS_HEADERS.join(';'),
   'Synthetic import;2025-01-02;;Indoor;CSV recurve;CSV carbon;1;18 m;WA Full (40 cm);1;12:00:00;9;;;',
@@ -55,7 +57,7 @@ test('MyTargets CSV preview adds confirmed measured arrows and repeated import a
   await expect(page.getByTestId('mytargets-apply')).toBeDisabled();
 });
 
-test('MyTargets SQLite ZIP imports offline with original Y coordinates and complete equipment after reload', async ({ page, context }) => {
+test('MyTargets SQLite ZIP and a new FableShot training survive backup and restoration', async ({ page, context, browser }) => {
   const sqlite = await initSqlJs();
   const db = new sqlite.Database();
   let zip: Uint8Array;
@@ -114,4 +116,50 @@ test('MyTargets SQLite ZIP imports offline with original Y coordinates and compl
   await page.getByTestId('mytargets-file').setInputFiles(file);
   await expect(page.getByTestId('mytargets-result')).toContainText('тренировок: 0, стрел: 0. Пропущено стрел: 2');
   await expect(page.getByTestId('mytargets-apply')).toBeDisabled();
+
+  await page.reload();
+  await openTraining(page);
+  await page.getByTestId('target').click();
+  await page.getByRole('button', { name: 'Стрела №1', exact: true }).click();
+  await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
+  await page.getByTestId('training-confirm').click();
+  await expect(page.getByTestId('report-screen')).toBeVisible();
+  const mixed = await readStoredJournal(page);
+  const imported = mixed.diary!.entries.find(entry => entry.source?.kind === 'mytargets');
+  const fresh = mixed.diary!.entries.find(entry => !entry.source);
+  expect(mixed.diary!.entries).toHaveLength(2);
+  expect(imported).toEqual(persisted.diary.entries[0]);
+  expect(fresh?.practice.rounds[0].series[0].shots).toHaveLength(1);
+
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByTestId('open-settings').click();
+  await openSettingsCategory(page, 'data', 'settings-archive');
+  await page.getByTestId('settings-archive').click();
+  const download = page.waitForEvent('download');
+  await page.getByTestId('archive-save').click();
+  const backup = await readFile((await (await download).path())!);
+  expect((await inspectWebArchive(backup)).summary).toMatchObject({ trainings: 2, arrows: 3 });
+
+  const clean = await browser.newContext({ baseURL: page.url() });
+  try {
+    const restored = await clean.newPage();
+    await restored.goto('./');
+    await restored.getByTestId('open-settings').click();
+    expect((await readStoredJournal(restored)).diary?.entries ?? []).toHaveLength(0);
+    await openSettingsCategory(restored, 'data', 'settings-archive');
+    await restored.getByTestId('settings-archive').click();
+    await restored.getByTestId('archive-file').setInputFiles({ name: 'fableshot.zip', mimeType: 'application/zip', buffer: backup });
+    await expect(restored.getByTestId('archive-preview')).toBeVisible();
+    await restored.getByTestId('archive-restore').click();
+    await restored.getByTestId('archive-confirm-apply').click();
+    await expect(restored.getByTestId('home-screen')).toBeVisible();
+    await restored.getByTestId('nav-history').click();
+    await expect(restored.getByTestId(`session-${imported!.id}`)).toBeVisible();
+    await expect(restored.getByTestId(`session-${fresh!.id}`)).toBeVisible();
+    const savedCopy = await readStoredJournal(restored);
+    expect(savedCopy.diary!.entries).toEqual(mixed.diary!.entries);
+    expect(savedCopy.records['app.fableshot.equipment.v1']).toBe(mixed.records['app.fableshot.equipment.v1']);
+  } finally {
+    await clean.close();
+  }
 });

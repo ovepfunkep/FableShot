@@ -1,6 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EquipmentPicker } from './EquipmentPicker.tsx';
+import { BottomSheet } from './BottomSheet.tsx';
 import { equipmentSnapshot, loadEquipment } from './equipment.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { TargetPreview } from './TargetBoard.tsx';
@@ -16,106 +18,7 @@ import { TrainingTitleSuggestions } from './TrainingTitleSuggestions.tsx';
 import { TripleTargetControls } from './TripleTargetControls.tsx';
 import './conditions.css';
 
-export function BottomSheet({ title, onClose, children, tag, headerAction, headerLeading, startAtTop, onDismissRequest, className }: {
-  title: string; onClose: () => void; children: ReactNode; tag?: string; headerAction?: ReactNode; startAtTop?: boolean;
-  onDismissRequest?: () => boolean;
-  className?: string;
-  headerLeading?: ReactNode;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const drag = useRef<{ pointerId: number; startY: number; height: number } | null>(null);
-  const backdropPress = useRef(false);
-  const closeTimer = useRef<number | undefined>(undefined);
-  const close = useRef(onClose);
-  useLayoutEffect(() => { close.current = onClose; }, [onClose]);
-  useLayoutEffect(() => {
-    dialog.current?.showModal();
-    return () => window.clearTimeout(closeTimer.current);
-  }, []);
-  useLayoutEffect(() => {
-    const panel = dialog.current;
-    if (!startAtTop || !panel) return;
-    panel.focus({ preventScroll: true });
-    panel.scrollTop = 0;
-  }, [startAtTop]);
-
-  function resetDrag(panel: HTMLDialogElement) {
-    drag.current = null;
-    delete panel.dataset.sheetDragging;
-    panel.style.removeProperty('--sheet-shift');
-    panel.style.removeProperty('--sheet-scrim-opacity');
-  }
-
-  function finishDismiss() {
-    const panel = dialog.current;
-    if (!panel?.hasAttribute('data-sheet-closing')) return;
-    window.clearTimeout(closeTimer.current);
-    delete panel.dataset.sheetClosing;
-    close.current();
-  }
-
-  function dismiss() {
-    const panel = dialog.current;
-    if (!panel?.open || panel.hasAttribute('data-sheet-closing')) return;
-    resetDrag(panel);
-    if (onDismissRequest && !onDismissRequest()) return;
-    if (document.documentElement.dataset.motion === 'off' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      close.current();
-      return;
-    }
-    panel.dataset.sheetClosing = '';
-    // A hidden document can interrupt the transition without delivering transitionend.
-    closeTimer.current = window.setTimeout(finishDismiss, 260);
-  }
-
-  return <dialog ref={dialog} className={className ? `condition-sheet ${className}` : 'condition-sheet'} aria-label={title} data-testid={tag} tabIndex={startAtTop ? -1 : undefined}
-    onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); dismiss(); }}
-    onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === 'transform') finishDismiss(); }}
-    onPointerDown={event => { backdropPress.current = event.target === event.currentTarget; }}
-    onClickCapture={event => {
-      if (event.currentTarget.hasAttribute('data-sheet-closing')) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    }}
-    onClick={event => {
-      if (backdropPress.current && event.target === event.currentTarget) dismiss();
-      backdropPress.current = false;
-    }}>
-    <div className="condition-sheet-body">
-      <header onPointerDown={event => {
-        const panel = dialog.current;
-        if (!event.isPrimary || event.button !== 0 || !panel || panel.hasAttribute('data-sheet-closing') ||
-          event.target instanceof Element && event.target.closest('button, a, input, select')) return;
-        drag.current = { pointerId: event.pointerId, startY: event.clientY, height: panel.offsetHeight };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-        onPointerMove={event => {
-          const panel = dialog.current, current = drag.current;
-          if (!panel || current?.pointerId !== event.pointerId) return;
-          const distance = Math.min(current.height, Math.max(0, event.clientY - current.startY));
-          if (distance === 0 && !panel.hasAttribute('data-sheet-dragging')) return;
-          panel.dataset.sheetDragging = '';
-          panel.style.setProperty('--sheet-shift', `${distance}px`);
-          panel.style.setProperty('--sheet-scrim-opacity', String(1 - distance / current.height));
-        }}
-        onPointerUp={event => {
-          const panel = dialog.current, current = drag.current;
-          if (!panel || current?.pointerId !== event.pointerId) return;
-          if (event.clientY - current.startY > 65) dismiss();
-          else resetDrag(panel);
-        }}
-        onLostPointerCapture={event => {
-          const panel = dialog.current;
-          if (panel && drag.current?.pointerId === event.pointerId) resetDrag(panel);
-        }}>
-        <span className="sheet-handle" aria-hidden="true" />
-        {headerAction || headerLeading ? <div className="sheet-title-actions">{headerLeading ?? <h2>{title}</h2>}{headerAction}</div> : <h2>{title}</h2>}
-      </header>
-      {children}
-    </div>
-  </dialog>;
-}
+export { BottomSheet } from './BottomSheet.tsx';
 
 function ConditionNumber({ title, unit, value, choices, tag, invalid, onChange }: {
   title: string; unit?: string; value: string; choices: readonly number[]; tag: string; invalid: boolean;
@@ -166,13 +69,14 @@ function readPresets() {
   catch (error) { return { presets: [] as TrainingPreset[], error: error instanceof Error ? error.message : 'Не удалось прочитать избранное.' }; }
 }
 
-export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, achievementPreference,
+export function ConditionsScreen({ initial, rule, editableRule, initialNumbering, onApply, onBack, onTechnique, techniqueTitle, tournaments, tournamentSetup, achievementPreference,
   correction, onFuture, onCorrection, trainingTitles }: {
   initial: Conditions; rule: RoundRule; editableRule: boolean;
   initialNumbering: boolean | null;
   onApply: (conditions: Conditions, rule: RoundRule, numberedArrows: boolean | null, tournament?: TournamentChoice, title?: string) => Promise<boolean>; onBack: () => void;
   trainingTitles?: readonly string[];
   tournaments?: readonly Tournament[];
+  tournamentSetup?: { tournamentId: string; startId?: string };
   achievementPreference?: ReactNode;
   onTechnique: () => void; techniqueTitle: string;
   correction?: Practice;
@@ -184,11 +88,12 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
   const [profileId, setProfileId] = useState(initial.targetProfileId);
   const [equipment, setEquipment] = useState(initial.equipment);
   const [numberedArrows, setNumberedArrows] = useState(initialNumbering);
-  const [tournamentKey, setTournamentKey] = useState('');
+  const [tournamentKey, setTournamentKey] = useState(() => tournamentSetup?.startId
+    ? JSON.stringify({ tournamentId: tournamentSetup.tournamentId, startId: tournamentSetup.startId }) : '');
   const [trainingTitle, setTrainingTitle] = useState('');
-  const tournamentOptions = (tournaments ?? []).filter(item => !item.completed).flatMap(item =>
+  const tournamentOptions = (tournaments ?? []).filter(item => !item.completed && (!tournamentSetup || item.id === tournamentSetup.tournamentId)).flatMap(item =>
     item.starts.flatMap((start, index) => {
-      if (start.status === 'absent') return [];
+      if (start.status === 'absent' || (tournamentSetup && start.status !== 'planned')) return [];
       const choice = { tournamentId: item.id, startId: start.id };
       return [{ key: JSON.stringify(choice), choice, label: `${tournamentTitle(item)} · ${start.category || `Старт ${index + 1}`}` }];
     }));
@@ -327,20 +232,19 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
         onEdit={equipment && !correction ? () => { setEditEquipment(true); setSheet('equipment'); } : undefined} />
       <ConditionRow title="Раунд" value={ruleText(nextRule)} icon="round" tag="conditions-options"
         onClick={editableRule ? () => setSheet('round') : undefined} />
-      {(!correction || correction.savedAt === null) && <details className="conditions-advanced">
+      {(!correction || correction.savedAt === null) && <details className="conditions-advanced" open={tournamentSetup ? true : undefined}>
         <summary data-testid="conditions-advanced"><Icon name="settings" /><span>Дополнительно</span><Icon name="right" /></summary>
         <div className="conditions-advanced-content">
           {profile.vertical && <TripleTargetControls />}
           <button type="button" className="technique-condition-link" data-testid="conditions-technique" onClick={onTechnique}>
             <Icon name="notes" /><span><strong>Памятка и фокус</strong><small>{techniqueTitle}</small></span><Icon name="right" />
           </button>
-          {tournamentOptions.length > 0 && <label className="conditions-tournament">
+          {tournamentOptions.length > 0 && <div className="conditions-tournament">
             <Icon name="trophy" /><span>Турнир</span>
-            <select aria-label="Турнирный старт" value={tournamentKey} onChange={event => setTournamentKey(event.target.value)}>
-              <option value="">Обычная тренировка</option>
-              {tournamentOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
-            </select>
-          </label>}
+            <ChoicePicker label="Турнирный старт" value={tournamentKey} onChange={setTournamentKey} placeholder="Выбрать старт"
+              options={[...(!tournamentSetup ? [{ value: '', label: 'Обычная тренировка' }] : []),
+                ...tournamentOptions.map(option => ({ value: option.key, label: option.label }))]} />
+          </div>}
           <div className="conditions-display-options">
             {hasNumberedSet && <div className="preference-row">
               <span className="preference-title">Нумерация стрел</span>
@@ -361,6 +265,7 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
           else onBack();
           return;
         }
+        if (tournamentSetup && !tournamentKey) { setError('Выбери турнирный старт в разделе «Дополнительно».'); return; }
         if (tournamentKey && !tournamentChoice) { setError('Этот турнирный старт больше недоступен. Выбери другой.'); return; }
         if (!await onApply(nextConditions, nextRule, numberedArrows, tournamentChoice, trainingTitle.trim() || undefined)) setError('Не удалось применить условия. Повтори действие.');
       }}>{correction ? correctionChanged ? 'Проверить изменения' : 'Готово' : editableRule ? 'Начать тренировку' : 'Применить условия'}</button>
@@ -369,11 +274,10 @@ export function ConditionsScreen({ initial, rule, editableRule, initialNumbering
       {review.choices.some(choice => choice.inOrder !== undefined) && <button type="button" className="text-action" onClick={() => setAnswers(previous => ({ ...previous,
         ...Object.fromEntries(review.choices.filter(choice => choice.inOrder !== undefined).map(choice => [choice.key, String(choice.inOrder! + 1)])) }))}>Пятна 1–2–3 по порядку стрел</button>}
       <div className="correction-review">
-        {review.choices.map(choice => <label key={choice.key}>{choice.label}
-          <select value={answers[choice.key] ?? ''} onChange={event => setAnswers({ ...answers, [choice.key]: event.target.value })}>
-            <option value="">Выбрать</option>{choice.codes.map(code => <option key={code} value={code}>{code}</option>)}
-          </select>
-        </label>)}
+        {review.choices.map(choice => <div key={choice.key}><span>{choice.label}</span>
+          <ChoicePicker label={choice.label} value={answers[choice.key] ?? ''} onChange={value => setAnswers({ ...answers, [choice.key]: value })}
+            options={[{ value: '', label: 'Выбрать' }, ...choice.codes.map(code => ({ value: code, label: code }))]} />
+        </div>)}
       </div>
       <button type="button" className="primary" disabled={review.choices.some(choice => !answers[choice.key])}
         onClick={() => showCorrectionPreview(answers)}>Проверить изменения</button>

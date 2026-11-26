@@ -27,6 +27,8 @@ export type AchievementDefinition = Readonly<{
   id: string;
   title: string;
   flavor: string;
+  plainCondition: string;
+  mysteryHaiku?: readonly [string, string, string];
   description: string;
   family: string;
   rarity: AchievementRarity;
@@ -57,6 +59,7 @@ export const STAGE_RANK_RULES: readonly AchievementDefinition[] = stageRankNames
   const tier = index % 6;
   return {
     id: `${series ? 'SNR' : 'RNR'}0${tier + 1}`, title, flavor,
+    plainCondition: `Покажите средний балл уровня ${STAGE_RANK_LABELS[tier]} в ${series ? 'одной полной серии' : 'одном полном раунде'}.`,
     description: `Впервые завершите ${series ? 'полную серию от 3 стрел' : 'полный раунд от 30 стрел'} со средним уровня ${STAGE_RANK_LABELS[tier]} или выше.`,
     family: series ? 'rank.first-series' : 'rank.first-round',
     rarity: ACHIEVEMENT_RARITY_ORDER[tier], target: 1, categorySpecific: true, performanceFormat: false, priority: tier + 1,
@@ -68,6 +71,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START01", title: "Начало пути",
     flavor: "Осторожно: «я только попробую» обычно начинается именно так",
+    plainCondition: "Запишите и завершите первую тренировку.",
     description: "Завершите первую тренировку хотя бы с одним выстрелом. Подходит и учёт количества стрел без очков.",
     family: "journey.sessions", rarity: 'Common', target: 1, priority: 1,
     categorySpecific: false, performanceFormat: false,
@@ -75,6 +79,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START05", title: "Это уже не разовая акция",
     flavor: "Пять тренировок. Фраза «случайно зашёл» больше не работает",
+    plainCondition: "Завершите пять тренировок с выстрелами.",
     description: "Завершите 5 тренировок хотя бы с одним выстрелом в каждой. Они не обязаны идти подряд; учёт количества стрел без очков тоже подходит.",
     family: "journey.sessions", rarity: 'Uncommon', target: 5, priority: 5,
     categorySpecific: false, performanceFormat: false,
@@ -82,6 +87,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START06", title: "Колчан одобряет",
     flavor: "Первая сотня. Колчан делает вид, что совсем не устал",
+    plainCondition: "Запишите первые 100 выстрелов в дневник.",
     description: "Запишите 100 выстрелов суммарно за все тренировки. Подходит и учёт количества стрел без очков.",
     family: "journey.volume", rarity: 'Common', target: 100, priority: 6,
     categorySpecific: false, performanceFormat: false,
@@ -89,6 +95,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START07", title: "Я только попробовать",
     flavor: "Пятьсот стрел спустя это звучит особенно убедительно",
+    plainCondition: "Доведите общее число выстрелов в дневнике до 500.",
     description: "Запишите 500 выстрелов суммарно за все тренировки. Подходит и учёт количества стрел без очков.",
     family: "journey.volume", rarity: 'Uncommon', target: 500, priority: 7,
     categorySpecific: false, performanceFormat: false,
@@ -96,6 +103,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START08", title: "Это уже франшиза",
     flavor: "У первой сотни появилось слишком много продолжений",
+    plainCondition: "Запишите в дневник тысячу выстрелов.",
     description: "Запишите 1000 выстрелов суммарно за все тренировки. Подходит и учёт количества стрел без очков.",
     family: "journey.volume", rarity: 'Rare', target: 1000, priority: 8,
     categorySpecific: false, performanceFormat: false,
@@ -103,6 +111,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START09", title: "Продолжение следует",
     flavor: "Второй сезон заказан. Мишень пока не в курсе",
+    plainCondition: "Проведите двадцать тренировок с выстрелами.",
     description: "Завершите 20 тренировок хотя бы с одним выстрелом в каждой. Перерывы между занятиями не мешают; учёт количества стрел без очков тоже подходит.",
     family: "journey.sessions", rarity: 'Rare', target: 20, priority: 9,
     categorySpecific: false, performanceFormat: false,
@@ -110,6 +119,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START10", title: "Местный фольклор",
     flavor: "Тебя уже могут узнавать по звуку попадания",
+    plainCondition: "Проведите сто тренировок с выстрелами.",
     description: "Завершите 100 тренировок хотя бы с одним выстрелом в каждой. Ежедневная стрельба не требуется; учёт количества стрел без очков тоже подходит.",
     family: "journey.sessions", rarity: 'Epic', target: 100, priority: 10,
     categorySpecific: false, performanceFormat: false,
@@ -117,6 +127,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START02", title: "Десятка, мы знакомы?",
     flavor: "Знакомство вышло прямо в точку",
+    plainCondition: "Впервые попадите в десятку или X.",
     description: "Сохраните первое попадание в десятку или X на десятиочковой мишени.",
     family: "hits.ten", rarity: 'Common', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: false,
@@ -124,6 +135,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "START03", title: "Мимо не проходили",
     flavor: "Все стрелы пришли по адресу. Даже без навигатора",
+    plainCondition: "Попадите в зачётные зоны всеми стрелами полной серии.",
     description: "Сохраните полную зачётную серию минимум из 3 стрел без промахов: каждая стрела приносит очки.",
     family: "hits.no-miss", rarity: 'Common', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: false,
@@ -131,6 +143,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT01", title: "Тройной эспрессо",
     flavor: "Три десятки. Бодрит даже без кофеина",
+    plainCondition: "Отстреляйте три стрелы подряд в десятку или X за одну серию.",
     description: "Сохраните полную серию из 3 стрел, каждая из которых попала в десятку или X.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: true,
@@ -138,6 +151,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT02", title: "Колчан единогласен",
     flavor: "Шесть голосов за десятку. Воздержавшихся нет",
+    plainCondition: "Соберите шесть десяток или X за одну серию.",
     description: "Сохраните полную серию из 6 стрел, каждая из которых попала в десятку или X. Нужна одна серия из шести стрел.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Rare', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: true,
@@ -145,6 +159,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT03", title: "X-фактор",
     flavor: "Ничего лишнего. Даже девятка не понадобилась",
+    plainCondition: "Попадите в самую маленькую зону X и закончите серию.",
     description: "Сохраните X в полной серии на мишени, где есть зона X.\n18 м · мишень 40 см.",
     family: "hits.x", rarity: 'Uncommon', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: true,
@@ -152,6 +167,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT04", title: "Три крестика — не партия в крестики",
     flavor: "Мишень пока не поняла, кто ходит следующим",
+    plainCondition: "Уложите все три стрелы серии в зону X.",
     description: "Сохраните полную серию из 3 стрел, все попадания — X.\n18 м · мишень 40 см.",
     family: "hits.x", rarity: 'Epic', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: true,
@@ -159,6 +175,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT05", title: "X-Men: полный состав",
     flavor: "Все шестеро с одной суперспособностью — попадать в X",
+    plainCondition: "Уложите все шесть стрел серии в зону X.",
     description: "Сохраните полную серию из 6 стрел, все попадания — X.\n18 м · мишень 40 см.",
     family: "hits.x", rarity: 'Legendary', target: 1, priority: 5,
     categorySpecific: true, performanceFormat: true,
@@ -166,6 +183,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT06", title: "Без права на филлер",
     flavor: "Три серии подряд. Ни одной проходной сцены",
+    plainCondition: "Отстреляйте три серии подряд без попаданий ниже десятки.",
     description: "Сохраните 3 полные серии подряд, все попадания — десятки или X. В них должно быть суммарно не меньше 9 стрел при одинаковых условиях.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Rare', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: true,
@@ -173,6 +191,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT07", title: "Матрица дала сбой",
     flavor: "Пять идеальных серий. Мишень проверяет настройки сложности",
+    plainCondition: "Отстреляйте пять серий подряд без попаданий ниже десятки.",
     description: "Сохраните 5 полных серий подряд, все попадания — десятки или X. В них должно быть суммарно не меньше 15 стрел при одинаковых условиях.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Epic', target: 1, priority: 7,
     categorySpecific: true, performanceFormat: true,
@@ -180,6 +199,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT08", title: "Режиссёрская версия",
     flavor: "Десять серий. Плохие дубли в эту версию не вошли",
+    plainCondition: "Отстреляйте десять серий подряд без попаданий ниже десятки.",
     description: "Сохраните 10 полных серий подряд, все попадания — десятки или X. В них должно быть суммарно не меньше 30 стрел при одинаковых условиях.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Legendary', target: 1, priority: 8,
     categorySpecific: true, performanceFormat: true,
@@ -187,6 +207,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT09", title: "Жёлтая пресса",
     flavor: "Местные издания сообщают: жёлтому кругу сегодня досталось",
+    plainCondition: "Пусть не меньше четырёх стрел из пяти попадут в жёлтый круг.",
     description: "Завершите тренировку минимум на 30 стрел, попав в жёлтые зоны 9–10 не менее чем 80% стрел. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Rare', target: 1, priority: 9,
     categorySpecific: true, performanceFormat: true,
@@ -194,6 +215,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "HIT10", title: "Монтаж не найден",
     flavor: "Шестьдесят стрел. Проверили: плохих кадров действительно нет",
+    plainCondition: "Отстреляйте полное упражнение на 60 стрел, каждую отправив в десятку или X.",
     description: "Завершите полное поддерживаемое упражнение на 60 стрел: каждое попадание — десятка или X. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "hits.ten", rarity: 'Mythic', target: 1, priority: 10,
     categorySpecific: true, performanceFormat: true,
@@ -201,6 +223,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE01", title: "Половина царства",
     flavor: "Половину очков забрал. С мишенью пока договорились",
+    plainCondition: "Доведите средний балл за тренировку до 5 или выше.",
     description: "Завершите тренировку минимум на 30 стрел со средним не ниже 5,0 из 10. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: true,
@@ -208,6 +231,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE02", title: "Семь раз попал",
     flavor: "Отмерять можно реже. Попадать — как сейчас",
+    plainCondition: "Доведите средний балл за тренировку до 7 или выше.",
     description: "Завершите тренировку минимум на 30 стрел со средним не ниже 7,0 из 10. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Rare', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: true,
@@ -215,6 +239,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE03", title: "Восьмёрка бесконечности",
     flavor: "Знак бесконечности пока лежит набок от впечатления",
+    plainCondition: "Доведите средний балл за тренировку до 8 или выше.",
     description: "Завершите тренировку минимум на 30 стрел со средним не ниже 8,0 из 10. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Rare', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: true,
@@ -222,6 +247,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE04", title: "Почти неприлично метко",
     flavor: "Мишени есть что обсудить после твоего ухода",
+    plainCondition: "Доведите средний балл за длинную тренировку до 9 или выше.",
     description: "Завершите тренировку минимум на 60 стрел со средним не ниже 9,0 из 10. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Epic', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: true,
@@ -229,6 +255,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE05", title: "Мишень подаст жалобу",
     flavor: "Ей обещали кружок по интересам, а не такую меткость",
+    plainCondition: "Доведите средний балл за длинную тренировку до 9,5 или выше.",
     description: "Завершите тренировку минимум на 60 стрел со средним не ниже 9,5 из 10. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "score.average", rarity: 'Legendary', target: 1, priority: 5,
     categorySpecific: true, performanceFormat: true,
@@ -236,6 +263,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SCORE06", title: "Промах взял отпуск",
     flavor: "И за всю тренировку так и не вышел на связь",
+    plainCondition: "Отстреляйте тренировку без промахов.",
     description: "Завершите тренировку минимум на 30 стрел без промахов. Все зачётные серии должны быть полными, условия — одинаковыми.\n18 м · мишень 40 см.",
     family: "hits.no-miss", rarity: 'Rare', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: true,
@@ -243,6 +271,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP01", title: "Стрелы спелись",
     flavor: "Решили держаться вместе. Вполне убедительный ансамбль",
+    plainCondition: "Отметьте попадания на мишени и соберите стрелы близко друг к другу.",
     description: "Сохраните плотную группу в полной серии минимум из 3 стрел: средний разброс от центра группы (RMS) не больше 30 мм, средний балл не ниже 5. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: true,
@@ -250,6 +279,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP02", title: "Коммуналка",
     flavor: "Всем тесно. Всем нравится",
+    plainCondition: "Соберите ещё более плотную группу с хорошими очками.",
     description: "Сохраните плотную группу в полной серии минимум из 3 стрел: средний разброс от центра группы (RMS) не больше 15 мм, средний балл не ниже 7. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Rare', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: true,
@@ -257,6 +287,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP03", title: "Личное пространство? Нет",
     flavor: "У стрел на этот вопрос своё мнение",
+    plainCondition: "Уложите стрелы близко друг к другу и сохраните высокий средний балл.",
     description: "Сохраните плотную группу в полной серии минимум из 3 стрел: средний разброс от центра группы (RMS) не больше 8 мм, средний балл не ниже 8. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Epic', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: true,
@@ -264,6 +295,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP04", title: "Шесть в квартире-студии",
     flavor: "Почтальон благодарен за один компактный адрес",
+    plainCondition: "Соберите плотную группу хотя бы из шести стрел.",
     description: "Сохраните плотную группу в полной серии минимум из 6 стрел: средний разброс от центра группы (RMS) не больше 12 мм, средний балл не ниже 8. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Legendary', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: true,
@@ -271,6 +303,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP05", title: "Тесно, зато свои",
     flavor: "Эта компания приходит вместе подозрительно регулярно",
+    plainCondition: "Соберите плотные группы в пяти сериях подряд.",
     description: "Закройте пять полных серий подряд в одинаковых условиях. Нужно минимум 15 стрел с координатами, кучность Q не ниже 0,50 в каждой серии и средний балл окна от 7.",
     family: "group", rarity: 'Rare', target: 1, priority: 5,
     categorySpecific: true, performanceFormat: true,
@@ -278,6 +311,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP06", title: "Адресом ошиблись",
     flavor: "Все вместе. Просто вечеринка оказалась не в центре",
+    plainCondition: "Соберите очень плотную группу в стороне от центра мишени.",
     description: "Сохраните полную серию минимум из 3 стрел без промахов: средний разброс от центра группы (RMS) не больше 6 мм, а центр группы дальше 30 мм от центра мишени. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Uncommon', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: true,
@@ -285,6 +319,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GROUP08", title: "Робин, только без счёта за стрелы",
     flavor: "Плотно. Очень плотно. Но расколотые стрелы мы не требуем",
+    plainCondition: "Соберите три стрелы очень близко друг к другу с высоким средним баллом.",
     description: "Сохраните плотную группу в полной серии ровно из 3 стрел: средний разброс от центра группы (RMS) не больше 6 мм, средний балл не ниже 9. Все попадания отмечены на мишени.\n18 м · мишень 40 см.",
     family: "group", rarity: 'Legendary', target: 1, priority: 8,
     categorySpecific: true, performanceFormat: true,
@@ -292,6 +327,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY01", title: "Кажется, нащупал",
     flavor: "Тот самый момент, когда «повезло» уже не объяснение",
+    plainCondition: "Удерживайте близкие результаты от серии к серии на протяжении тренировки.",
     description: "Завершите тренировку минимум из 10 полных серий и 30 стрел: стабильность CG3 не ниже 85%, средний балл не ниже 6. Условия одинаковы, учитывается вся тренировка.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Rare', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: true,
@@ -299,6 +335,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY02", title: "День сурка. Хороший",
     flavor: "Опять хорошо. И опять хорошо. Можно ещё раз",
+    plainCondition: "Наберите одинаковую сумму в пяти сериях подряд.",
     description: "Сохраните 5 полных серий подряд с одинаковым числом стрел и одинаковой суммой очков. Вместе в них не меньше 15 стрел, средний балл не ниже 6, условия одинаковы.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Uncommon', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: true,
@@ -306,6 +343,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY03", title: "Метроном попросил автограф",
     flavor: "Серии настолько ровные, что ему немного неловко",
+    plainCondition: "Сохраните очень ровный высокий результат за длинную тренировку.",
     description: "Завершите тренировку минимум из 15 полных серий: стабильность CG3 не ниже 95%, средний балл не ниже 8. Условия одинаковы, учитывается вся тренировка.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Epic', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: true,
@@ -313,6 +351,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY04", title: "Американские горки закрыты",
     flavor: "Сегодня результатам разрешили спокойно постоять на месте",
+    plainCondition: "Удержите средние баллы лучшей и худшей серий в пределах одного очка.",
     description: "Завершите тренировку минимум из 10 полных серий. Средние баллы лучшей и худшей серии различаются не больше чем на 1 очко, общий средний не ниже 7. Условия одинаковы.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Rare', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: true,
@@ -320,6 +359,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY05", title: "Поймал волну",
     flavor: "Сёрф без доски. Зато с очень хорошими сериями",
+    plainCondition: "Стреляйте ровно и результативно в последних пяти сериях.",
     description: "Последние 5 полных серий одной тренировки имеют стабильность CG3 не ниже 90% и средний балл не ниже 7. До них уже записаны первые 3 полные серии; условия одинаковы.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Uncommon', target: 1, priority: 5,
     categorySpecific: true, performanceFormat: true,
@@ -327,6 +367,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY06", title: "Сценарист передумал",
     flavor: "Начинали как драму. Закончили совсем другим жанром",
+    plainCondition: "Стреляй заметно лучше и ровнее в конце тренировки, чем в начале.",
     description: "В одной тренировке средний балл последних 5 полных серий выше среднего первых 3 полных серий хотя бы на 1 очко. Стабильность последних пяти не ниже 90% по CG3, условия одинаковы. Промахи тоже учитываются.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Rare', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: true,
@@ -334,6 +375,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STEADY08", title: "Это уже не удача",
     flavor: "Увёз домой. Вернулся. Повторил. Ещё раз",
+    plainCondition: "Проведите три ровные тренировки с одним комплектом.",
     description: "Завершите 3 тренировки со стабильностью CG3 не ниже 90% в каждой. В каждой минимум 8 полных серий; условия и комплект одинаковы во всех трёх тренировках. Перерывы между занятиями не мешают.\n18 м · мишень 40 см.",
     family: "stability", rarity: 'Epic', target: 1, priority: 8,
     categorySpecific: true, performanceFormat: true,
@@ -341,6 +383,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK04", title: "Обезьяна с гранатой",
     flavor: "Точнее, уже с луком. И, между прочим, попадает",
+    plainCondition: "Наберите очки уровня III разряда.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива III разряда для своей категории. Присвоенный разряд в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Rare', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: false,
@@ -348,6 +391,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK05", title: "Мерида бы кивнула",
     flavor: "Характер есть. Мишень подтверждает",
+    plainCondition: "Наберите очки уровня II разряда.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива II разряда для своей категории. Присвоенный разряд в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Rare', target: 1, priority: 5,
     categorySpecific: true, performanceFormat: false,
@@ -355,6 +399,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK06", title: "Кэтнисс, подвинься",
     flavor: "В районе появился ещё один очень убедительный лучник",
+    plainCondition: "Наберите очки уровня I разряда.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива I разряда для своей категории. Присвоенный разряд в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Epic', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: false,
@@ -362,6 +407,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK07", title: "Леголас на минималках",
     flavor: "Минималки выглядят подозрительно серьёзно",
+    plainCondition: "Наберите очки уровня кандидата в мастера спорта.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива КМС для своей категории. Присвоенный разряд в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Epic', target: 1, priority: 7,
     categorySpecific: true, performanceFormat: false,
@@ -369,6 +415,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK08", title: "Робин Гуд своего района",
     flavor: "Легенды обычно начинаются с чего-то такого",
+    plainCondition: "Наберите очки уровня мастера спорта.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива МС для своей категории. Присвоенное звание в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Legendary', target: 1, priority: 8,
     categorySpecific: true, performanceFormat: false,
@@ -376,6 +423,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "RANK09", title: "Артемида одобряет",
     flavor: "Олимп просил передать: было красиво",
+    plainCondition: "Наберите очки уровня мастера спорта международного класса.",
     description: "В завершённом поддерживаемом упражнении наберите не меньше норматива МСМК для своей категории. Присвоенное звание в профиле сохраняется отдельно.",
     family: "norms", rarity: 'Mythic', target: 1, priority: 9,
     categorySpecific: true, performanceFormat: false,
@@ -383,6 +431,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS01", title: "Вчерашний я, извини",
     flavor: "Сегодня ты в личном протоколе чуть ниже",
+    plainCondition: "Поднимите свой обычный средний хотя бы на десятую балла за стрелу.",
     description: "Поднимите обычный средний минимум на 0,1 балла за стрелу. Нужна готовая база похожих тренировок и минимум 12 стрел в полных закрытых сериях.",
     family: "progress", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: false,
@@ -390,6 +439,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS02", title: "Прошлый я просит реванш",
     flavor: "Кажется, соперник начал воспринимать всё всерьёз",
+    plainCondition: "Поднимите свой обычный средний хотя бы на полбалла за стрелу.",
     description: "Добавьте минимум 0,5 балла к обычному среднему за стрелу. Нужна готовая база похожих тренировок и минимум 12 стрел в полных закрытых сериях.",
     family: "progress", rarity: 'Rare', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: false,
@@ -397,6 +447,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS03", title: "Прошлая версия устарела",
     flavor: "Обновление установилось прямо в мишень",
+    plainCondition: "Поднимите свой обычный средний хотя бы на балл за стрелу.",
     description: "Добавьте минимум 1 балл к обычному среднему за стрелу, внеся минимум 30 стрел в полных закрытых сериях при готовой базе похожих тренировок.",
     family: "progress", rarity: 'Epic', target: 1, priority: 3,
     categorySpecific: true, performanceFormat: false,
@@ -404,6 +455,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS04", title: "Личный босс повержен",
     flavor: "На одного босса меньше. На один повод улыбнуться больше",
+    plainCondition: "Превзойдите свой прежний рекорд в полной серии.",
     description: "Побейте существующий личный рекорд полной серии: больше очков при том же числе стрел, условиях и комплекте. Первый результат и повтор рекорда не подходят. Прежняя и импортированная история может быть базой сравнения.",
     family: "records", rarity: 'Rare', target: 1, priority: 4,
     categorySpecific: true, performanceFormat: false,
@@ -411,6 +463,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS06", title: "Старый рекорд уволен",
     flavor: "Без отработки. Спасибо за службу",
+    plainCondition: "Превзойдите свой прежний рекорд в полном упражнении.",
     description: "Побейте существующий личный рекорд полного поддерживаемого упражнения минимум на 30 стрел. Нужны тот же формат, число стрел, условия и комплект. Первый результат и повтор рекорда не подходят. Прежняя и импортированная история может быть базой сравнения.",
     family: "records", rarity: 'Epic', target: 1, priority: 6,
     categorySpecific: true, performanceFormat: false,
@@ -418,6 +471,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS08", title: "Везение так долго не длится",
     flavor: "Три тренировки уже тянут на убедительное алиби",
+    plainCondition: "Превзойдите привычный уровень в трёх отдельных тренировках.",
     description: "Завершите три разные тренировки в сопоставимых условиях с положительным прогрессом PG1. Для каждой нужна готовая база сравнения.",
     family: "progress", rarity: 'Epic', target: 3, priority: 8,
     categorySpecific: true, performanceFormat: false,
@@ -425,6 +479,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "PROGRESS10", title: "Ну наконец-то",
     flavor: "Рекорд продержался месяц. Держался как мог",
+    plainCondition: "Улучшите личный рекорд, который продержался как минимум месяц.",
     description: "Побейте рекорд полной серии или поддерживаемого упражнения, который держался минимум календарный месяц с последнего улучшения. Нужны известная дата рекорда, тот же формат, число стрел, условия и комплект. Прежняя и импортированная история может быть базой сравнения.",
     family: "records", rarity: 'Rare', target: 1, priority: 10,
     categorySpecific: true, performanceFormat: false,
@@ -432,6 +487,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "STORY01", title: "Финальные титры в золоте",
     flavor: "Последняя серия такая, что хочется пересмотреть",
+    plainCondition: "Закончите тренировку серией из одних десяток.",
     description: "Завершите тренировку полной серией, в которой все стрелы попали в десятку. До неё должно быть ещё минимум пять полных зачётных серий.",
     family: "story.finish", rarity: 'Rare', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: true,
@@ -439,6 +495,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SWING01", title: "Краткосрочная память",
     flavor: "Плечи помнят. Кто-то другой забыл",
+    plainCondition: "После сильной серии резко потеряйте очки в следующей.",
     description: "После серии со средним от 7,5 сохраните следующую со средним от 2,5 до 4,5 и падением минимум на 4 балла за стрелу. Обе серии полные, при одинаковых условиях и с одинаковым количеством стрел, от 3.",
     family: "story.swing-drop", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: false, hiddenUntilEarned: true,
@@ -446,6 +503,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SWING02", title: "Наверное, повезло",
     flavor: "Официальная версия пока такая",
+    plainCondition: "После слабой серии резко улучшите результат в следующей.",
     description: "После серии со средним от 2,5 до 4,5 сохраните следующую со средним от 7,5 и ростом минимум на 4 балла за стрелу. Обе серии полные, при одинаковых условиях и с одинаковым количеством стрел, от 3.",
     family: "story.swing-rebound", rarity: 'Uncommon', target: 1, priority: 1,
     categorySpecific: true, performanceFormat: false,
@@ -453,6 +511,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "SWING03", title: "Нет, не повезло",
     flavor: "Официальная версия меняется",
+    plainCondition: "После резкого скачка результата повторите сильную серию.",
     description: "Сразу после перепада из «Наверное, повезло» сохраните ещё одну полную серию со средним от 7,5. Он может быть ниже предыдущего максимум на 0,5 балла за стрелу. Условия и количество стрел те же.",
     family: "story.swing-rebound", rarity: 'Rare', target: 1, priority: 2,
     categorySpecific: true, performanceFormat: false,
@@ -460,6 +519,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GEAR02", title: "Самурай одного лука",
     flavor: "С рукояткой уже можно здороваться без представлений",
+    plainCondition: "Запишите десять тренировок с одним луком.",
     description: "Завершите 10 непустых тренировок с одним и тем же луком. Переименование лука сохраняет прогресс.",
     family: "gear.loyalty", rarity: 'Rare', target: 10, priority: 2,
     categorySpecific: false, performanceFormat: false,
@@ -467,6 +527,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GEAR03", title: "Гастроли по дистанциям",
     flavor: "Мишень переехала. Ты остался убедительным",
+    plainCondition: "Отстреляйте зачётные стрелы на трёх разных дистанциях.",
     description: "Отстреляйте минимум 12 зачётных стрел подряд на каждой из трёх дистанций в завершённых тренировках.",
     family: "gear.distance", rarity: 'Uncommon', target: 3, priority: 3,
     categorySpecific: false, performanceFormat: false,
@@ -474,6 +535,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "GEAR06", title: "Вместе состаримся",
     flavor: "Пятьдесят тренировок — это уже отношения",
+    plainCondition: "Запишите пятьдесят тренировок с одним комплектом.",
     description: "Завершите 50 непустых тренировок с одним и тем же комплектом. Переименование комплекта сохраняет прогресс.",
     family: "gear.loyalty", rarity: 'Rare', target: 50, priority: 6,
     categorySpecific: false, performanceFormat: false,
@@ -481,6 +543,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "MIND03", title: "Гэндальф записал",
     flavor: "Теперь «ты не пройдёшь» относится только к забытым подсказкам",
+    plainCondition: "Опубликуйте первую памятку по технике.",
     description: "Опубликуйте свою первую памятку с описанием или шагами техники.",
     family: "technique.publication", rarity: 'Common', target: 1, priority: 3,
     categorySpecific: false, performanceFormat: false,
@@ -488,6 +551,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "MIND04", title: "Режиссёрские правки",
     flavor: "Первая версия была хороша. Пока не появилась эта",
+    plainCondition: "Обновите содержание опубликованной памятки и опубликуйте новую версию.",
     description: "Опубликуйте две версии одной своей памятки с разным содержанием.",
     family: "technique.publication", rarity: 'Uncommon', target: 1, priority: 4,
     categorySpecific: false, performanceFormat: false,
@@ -495,6 +559,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "APP01", title: "Правильный выбор",
     flavor: "Стрелы переехали. Мишени можно оставить на месте",
+    plainCondition: "Добавьте в дневник новые данные из MyTargets.",
     description: "Успешно перенесите данные из MyTargets, добавив хотя бы одну новую тренировку или стрелу. Файл из одних дублей, отмена и ошибка не считаются переносом. Импорт не даёт спортивных достижений и не увеличивает их прогресс.",
     family: "import", rarity: 'Common', target: 1, priority: 1,
     categorySpecific: false, performanceFormat: false,
@@ -502,6 +567,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "APP04", title: "В рамку",
     flavor: "Маме можно показать. В чат лучников — тоже",
+    plainCondition: "Сохраните PNG-карточку своей тренировки.",
     description: "Создайте PNG-карточку своей непустой тренировки. Отправлять её кому-либо не обязательно.",
     family: "share", rarity: 'Common', target: 1, priority: 4,
     categorySpecific: false, performanceFormat: false,
@@ -509,6 +575,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "APP08", title: "У героя есть имя",
     flavor: "Даже если это Пельмень 3000",
+    plainCondition: "Запишите в профиле имя или псевдоним.",
     description: "Сохраните непустое имя профиля. Можно выбрать любое имя или псевдоним; завершать тренировку не нужно. Уже сохранённое имя само по себе не выдаёт знак.",
     family: "profile", rarity: 'Common', target: 1, priority: 8,
     categorySpecific: false, performanceFormat: false,
@@ -516,29 +583,38 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "MIND08", title: "Передам по наследству",
     flavor: "История переживёт больше одного телефона",
+    plainCondition: "Сохраните полную резервную копию дневника.",
     description: "Создайте и сохраните полный архив своего дневника. Приложение должно успешно проверить архив; восстановление готового архива само по себе не выдаёт знак.",
     family: "archive", rarity: 'Uncommon', target: 1, priority: 8,
     categorySpecific: false, performanceFormat: false,
   },
   { id: 'APP11', title: 'Ноль целых, сто процентов серьёзно', flavor: 'Теперь каждая сотая при исполнении.',
+    plainCondition: "Включите показ среднего балла до сотых.",
     description: 'Впервые включить показ среднего балла до сотых.', family: 'app.precision',
     rarity: 'Common', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'APP12', title: 'Пилот-испытатель', flavor: 'Лупа прошла лётные испытания.',
+    plainCondition: "Настройте лупу и проверьте её на тестовой мишени.",
     description: 'Настроить скорость или увеличение и сделать пробное попадание в тестовую мишень.',
     family: 'app.aim-test', rarity: 'Uncommon', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'APP13', title: 'Семейное фото', flavor: 'Весь комплект в сборе. И даже на рубеже.',
+    plainCondition: "Завершите тренировку с комплектом, который создали в приложении.",
     description: 'Завершить первую тренировку с комплектом, который ты создал в FableShot.',
     family: 'app.kit', rarity: 'Uncommon', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'APP14', title: 'Охотник за пикселями', flavor: 'Три пробных выстрела. Один подозрительно точный эксперимент.',
+    plainCondition: "Повторите нужный рисунок попаданий на тестовой мишени.",
+    mysteryHaiku: ['Тихий круг дрожит', 'Три следа легли в лупе', 'Центр зовёт назад'],
     description: 'Попасть 10–9–10 подряд на тестовой мишени.', family: 'app.easter-aim',
     rarity: 'Mystery', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'ROOM01', title: 'Свои на рубеже', flavor: 'Наконец-то есть кому сказать «это была пристрелка»',
+    plainCondition: "Завершите тренировку, где вы и ещё один стрелок записали по полной серии.",
     description: 'Завершите групповую тренировку, в которой комната приняла хотя бы одну вашу полную серию и одну полную серию другого стрелка.',
     family: 'room.participation', rarity: 'Common', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'ROOM02', title: 'Собрались пострелять', flavor: 'Третий раз — уже клубная традиция',
+    plainCondition: "Завершите три групповые тренировки в разные дни.",
     description: 'Завершите три такие групповые тренировки в разные дни.',
     family: 'room.participation', rarity: 'Uncommon', target: 3, priority: 2, categorySpecific: false, performanceFormat: false },
   { id: 'ROOM03', title: 'Догнал себя при свидетелях', flavor: 'Прошлый ты просит реванш. Есть свидетели',
+    plainCondition: "Заметьте подтверждённый рост результата в групповой тренировке.",
     description: 'Завершите групповую тренировку с подтверждённым улучшением от +5% по PG1. Нужны готовая база, от 12 стрел и ещё один стрелок на сопоставимом срезе.',
     family: 'room.progress', rarity: 'Rare', target: 5, priority: 1, categorySpecific: true, performanceFormat: false },
   ...STAGE_RANK_RULES,

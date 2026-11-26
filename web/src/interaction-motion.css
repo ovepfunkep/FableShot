@@ -6,7 +6,10 @@
   border: 1px solid color-mix(in srgb, #b98613 52%, var(--edge)); border-radius: 12px; color: var(--ink);
 }
 .training-finish-highlight strong { font-variant-numeric: tabular-nums; }
-.training-finish-record-conditions { flex-basis: 100%; overflow-wrap: anywhere; color: var(--muted); }
+.training-finish-record-conditions {
+  flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: .75rem; font-weight: 400;
+}
 .training-finish-highlight[data-celebrate="true"] { animation: finish-emphasis 1000ms ease-out both; }
 .training-finish-highlight[data-celebrate="true"]::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -121,4 +124,13 @@ html[data-motion="off"] .journal-timeline-frame::before, html[data-motion="off"]
 @keyframes training-new-round {
   from { box-shadow: 0 0 18px var(--accent-line), inset 0 0 0 2px var(--accent); }
   to { box-shadow: 0 0 0 transparent, inset 0 0 0 transparent; }
+}
+.training-actions [data-testid="next-end"] { transition: background 200ms ease, color 200ms ease; }
+.training-actions [data-testid="next-end"][data-new-round="true"] {
+  background: var(--raised); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent);
+}
+.training-actions [data-testid="next-end"] > svg { width: 16px; height: 16px; margin-inline-end: 4px; vertical-align: middle; }
+[data-motion="off"] .training-actions [data-testid="next-end"] { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .training-actions [data-testid="next-end"] { transition: none; }
 }

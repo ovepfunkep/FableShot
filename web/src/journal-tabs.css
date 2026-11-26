@@ -73,9 +73,12 @@
   font-weight: 750;
 }
 
-.journal-tab-history-card { display: grid; gap: 8px; min-width: 0; padding: 11px 13px; text-align: left; }
+.journal-tab-history-card { display: grid; gap: 5px; min-width: 0; padding: 9px 12px; text-align: left; }
 .journal-tab-history-card:active { background: var(--raised); }
-.journal-tab-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .875rem; }
+.journal-tab-card-title { display: flex; align-items: center; gap: 6px; font-size: .875rem; }
+.journal-tab-card-title > strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journal-tab-card-title > span { display: inline-flex; color: var(--accent); }
+.journal-tab-card-title > span > svg { width: 16px; height: 16px; }
 .journal-tab-card-title > svg { flex: none; color: var(--muted); }
 .journal-tab-card-result { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; font-variant-numeric: tabular-nums; }
 .journal-tab-card-result > span:first-child { color: var(--muted); font-size: .8125rem; }
@@ -83,13 +86,13 @@
 .journal-tab-card-result > .journal-tab-icon-value { align-self: center; }
 .journal-tab-card-result > .history-progress { color: var(--accent); font-size: .8125rem; font-weight: 700; }
 
-.journal-tab-conditions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 10px;
-  color: var(--muted);
-  font-size: .8125rem;
-}
+.journal-tab-conditions { display: flex; gap: 4px 10px; min-width: 0; color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.journal-tab-conditions > span > span { overflow: hidden; text-overflow: ellipsis; }
+.history-rank { padding: 2px 7px; border-radius: 7px; background: var(--raised); color: var(--accent); font-size: .75rem; font-weight: 700; }
+.history-record-filter { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; grid-column: 1 / -1; }
+.history-record-filter > button:last-child { display: inline-flex; align-items: center; gap: 6px; }
+.history-tools [data-has-filters] { position: relative; }
+.history-tools [data-has-filters]::after { position: absolute; inset: 5px 5px auto auto; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); content: ''; }
 
 .journal-tab-icon-value { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .journal-tab-icon-value svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
@@ -101,6 +104,9 @@
 .journal-tab-metrics dt { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: .75rem; }
 .journal-tab-metrics dt svg { flex: none; width: 15px; height: 15px; }
 .journal-tab-metrics dd { margin: 0; font-size: 1.4rem; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.progress-period-result { display: grid; gap: 12px; }
+.progress-period-result h2 { display: flex; align-items: center; gap: 8px; }
+.progress-period-result h2 svg { width: 18px; height: 18px; color: var(--accent); }
 
 .journal-tab-chart figure { margin: 8px 0 0; }
 .journal-tab-chart svg { display: block; width: 100%; height: auto; overflow: visible; }

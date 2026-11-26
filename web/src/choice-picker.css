@@ -1,0 +1,13 @@
+.choice-picker-trigger, .choice-picker-options button {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-width: 0; min-height: 44px; padding: 7px 11px;
+  border: 1px solid var(--edge); border-radius: 12px;
+  color: var(--ink); background: var(--raised); font: inherit; text-align: start;
+}
+.choice-picker-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choice-picker-trigger[data-variant="ghost"] { background: transparent; }
+.choice-picker-trigger:disabled, .choice-picker-options button:disabled { opacity: .5; }
+.choice-picker-options { display: grid; gap: 6px; }
+.choice-picker-options button { width: 100%; overflow-wrap: anywhere; }
+.choice-picker-options button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.choice-picker-trigger:focus-visible, .choice-picker-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

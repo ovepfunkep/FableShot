@@ -1,7 +1,7 @@
 import { ACHIEVEMENT_BOW_LABELS } from './achievement-catalog.ts';
 import type { AchievementBowScope } from './achievement-catalog.ts';
 import { conditionsKey } from './composite-scoring.ts';
-import { exerciseRank } from './exercise-rank.ts';
+import { confirmedExerciseRanks, legacyExerciseRank } from './exercise-rank.ts';
 import { isLocalDate } from './import-source.ts';
 import type { DiaryEntry } from './persistence.ts';
 import type { Series } from './practice.ts';
@@ -106,7 +106,24 @@ export function evaluateAchievementRecords(candidate: DiaryEntry, previousHistor
     record('PROGRESS04', scope, fact.points, scores);
   }
 
-  const rank = exerciseRank(practice, rankCategory ?? 'male');
+  if (candidate.achievementEnrollment.exerciseRankVersion) {
+    const ranks = confirmedExerciseRanks(practice, rankCategory);
+    if (!ranks.length) return [...output.values()];
+    const scoresByFormat = new Map<string, DatedScore[]>();
+    for (const { entry } of previous) {
+      for (const { evaluation: { exercise, points } } of confirmedExerciseRanks(entry.practice, rankCategory)) {
+        const scores = scoresByFormat.get(exercise.id) ?? [];
+        scores.push({ points, date: localDate(entry) });
+        scoresByFormat.set(exercise.id, scores);
+      }
+    }
+    for (const { bow, evaluation } of ranks) {
+      record('PROGRESS06', bow, evaluation.points, scoresByFormat.get(evaluation.exercise.id) ?? []);
+    }
+    return [...output.values()];
+  }
+
+  const rank = legacyExerciseRank(practice, rankCategory ?? 'male');
   const key = scopes.size === 1 ? scopes.keys().next().value : undefined;
   if (rank.finalResult && rank.evaluation && rank.bow && key !== undefined) {
     const volume = rank.evaluation.exercise.arrows;

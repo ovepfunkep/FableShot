@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useId, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { BOW_CATEGORIES, MAX_NUMBERED_ARROWS, bowCategoryName, editEquipment, equipmentSnapshot, kitAvailable, loadEquipment, saveEquipment, validNumberedCount, validShaftDiameter } from './equipment.ts';
@@ -143,9 +144,11 @@ export function EquipmentCatalog({ onBack, onSelect, history = [] }: {
     </div>
     {state.error && !draft && <div className="equipment-catalog-error" role="alert"><p>{state.error}</p><button type="button" onClick={() => setState(readLibrary())}>Обновить список</button></div>}
     {library && <>
-      <button type="button" className="equipment-catalog-archive-filter" aria-pressed={archived} data-testid="equipment-catalog-show-archive"
-        onClick={() => { setArchived(value => !value); setQuery(''); setVisible(40); }}><CatalogIcon kind="archive" />Архив</button>
-      {library[kind].length > 0 && <label className="equipment-catalog-search">Найти по названию<input type="search" value={query} placeholder={labels[kind]} onChange={event => { setQuery(event.target.value); setVisible(40); }} /></label>}
+      <div className="equipment-catalog-search-row">
+        {library[kind].length > 0 && <label className="equipment-catalog-search"><span className="sr-only">Найти по названию</span><input type="search" value={query} placeholder={labels[kind]} onChange={event => { setQuery(event.target.value); setVisible(40); }} /></label>}
+        <button type="button" className="equipment-catalog-archive-filter" aria-pressed={archived} data-testid="equipment-catalog-show-archive"
+          onClick={() => { setArchived(value => !value); setQuery(''); setVisible(40); }}><CatalogIcon kind="archive" />Архив</button>
+      </div>
       {!values.length && <div className="equipment-catalog-empty"><CatalogIcon kind={kind} /><p>{query.trim() ? 'По этому названию ничего не найдено.' : archived ? 'В архиве пока ничего нет.' : `Здесь пока нет снаряжения. Добавьте ${singular[kind]} кнопкой «+».`}</p></div>}
       <div className="equipment-catalog-items">
         {values.slice(0, visible).map(item => {
@@ -181,21 +184,23 @@ export function EquipmentCatalog({ onBack, onSelect, history = [] }: {
     {draft && library && <BottomSheet title={editorTitle} onClose={dismiss} tag="equipment-catalog-editor">
       <form className="equipment-catalog-form" onSubmit={event => { event.preventDefault(); save(event.currentTarget); }}>
         <label>Название<input autoFocus maxLength={100} value={draft.value.name} data-testid="equipment-catalog-name" onChange={event => setDraft({ ...draft, value: { ...draft.value, name: event.target.value } } as Draft)} /></label>
-        {draft.kind === 'bows' && <label>Тип лука<select value={draft.value.category ?? ''} data-testid="equipment-catalog-category" onChange={event => setDraft({ ...draft, value: { ...draft.value, category: event.target.value || null } })}>
-          <option value="">Не указан</option>{BOW_CATEGORIES.map(category => <option key={category.value} value={category.value}>{category.label}</option>)}
-        </select></label>}
+        {draft.kind === 'bows' && <ChoicePicker label="Тип лука" value={draft.value.category ?? ''} testId="equipment-catalog-category"
+          onChange={value => setDraft({ ...draft, value: { ...draft.value, category: value || null } })}
+          options={[{ value: '', label: 'Не указан' }, ...BOW_CATEGORIES]} />}
         {draft.kind === 'arrows' && <>
           <label htmlFor={`${fieldId}-diameter`}>Диаметр стрелы, мм<input id={`${fieldId}-diameter`} inputMode="decimal" value={diameter} aria-invalid={!diameterValid} data-testid="equipment-catalog-diameter" onChange={event => setDiameter(event.target.value)} /><small>1–20 мм. Оставьте пустым, если неизвестен.</small></label>
           <label htmlFor={`${fieldId}-count`}>Номерных стрел, шт.<input id={`${fieldId}-count`} inputMode="numeric" value={numberedCount} aria-invalid={!countValid} data-testid="equipment-catalog-numbered-count" onChange={event => setNumberedCount(event.target.value)} /><small>1–{MAX_NUMBERED_ARROWS}. Пустое поле — нумерация не задана.</small></label>
           {(!diameterValid || !countValid) && <p role="alert">Проверьте диаметр и целое количество номерных стрел.</p>}
         </>}
         {draft.kind === 'kits' && <>
-          <label>Лук<select value={draft.value.bowId ?? ''} data-testid="equipment-catalog-kit-bow" onChange={event => setDraft({ ...draft, value: { ...draft.value, bowId: event.target.value || null } })}>
-            <option value="">Без выбора</option>{library.bows.filter(bow => !bow.archived || bow.id === (draft.value as EquipmentKit).bowId).map(bow => <option value={bow.id} key={bow.id}>{bow.name}{bow.archived ? ' (архив)' : ''}</option>)}
-          </select></label>
-          <label>Стрелы<select value={draft.value.arrowsId ?? ''} data-testid="equipment-catalog-kit-arrows" onChange={event => setDraft({ ...draft, value: { ...draft.value, arrowsId: event.target.value || null } })}>
-            <option value="">Без выбора</option>{library.arrows.filter(arrows => !arrows.archived || arrows.id === (draft.value as EquipmentKit).arrowsId).map(arrows => <option value={arrows.id} key={arrows.id}>{arrows.name}{arrows.archived ? ' (архив)' : ''}</option>)}
-          </select></label>
+          <ChoicePicker label="Лук" value={draft.value.bowId ?? ''} testId="equipment-catalog-kit-bow"
+            onChange={value => setDraft({ ...draft, value: { ...draft.value, bowId: value || null } })}
+            options={[{ value: '', label: 'Лук · без выбора' }, ...library.bows.filter(bow => !bow.archived || bow.id === (draft.value as EquipmentKit).bowId)
+              .map(bow => ({ value: bow.id, label: bow.name + (bow.archived ? ' (архив)' : '') }))]} />
+          <ChoicePicker label="Стрелы" value={draft.value.arrowsId ?? ''} testId="equipment-catalog-kit-arrows"
+            onChange={value => setDraft({ ...draft, value: { ...draft.value, arrowsId: value || null } })}
+            options={[{ value: '', label: 'Стрелы · без выбора' }, ...library.arrows.filter(arrows => !arrows.archived || arrows.id === (draft.value as EquipmentKit).arrowsId)
+              .map(arrows => ({ value: arrows.id, label: arrows.name + (arrows.archived ? ' (архив)' : '') }))]} />
         </>}
         <EquipmentDetailFields kind={draft.kind} value={draft.value} />
         {state.error && <p role="alert">{state.error}</p>}

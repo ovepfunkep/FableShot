@@ -1,6 +1,6 @@
 import type { Conditions } from './conditions.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
-import { exerciseRank } from './exercise-rank.ts';
+import { confirmedExerciseRanks } from './exercise-rank.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { timelineDate } from './progress-timeline.ts';
 import type { RankCategory } from './sport-ranks.ts';
@@ -21,7 +21,11 @@ export type PersonalRecordEvent = {
 };
 
 export function personalRecordTitle(kind: PersonalRecordEvent['kind']) {
-  return { series: 'Рекорд серии', round: 'Рекорд раунда', volume: 'Рекорд по числу стрел', rank: 'Рекорд упражнения' }[kind];
+  return { series: 'Лучший результат серии', round: 'Лучший результат раунда', volume: 'Стрел за тренировку', rank: 'Лучший результат упражнения' }[kind];
+}
+
+export function personalRecordContext(kind: PersonalRecordEvent['kind'], label: string) {
+  return kind === 'volume' ? '' : label.replace(/^Раунд · /, '').replace(/ · Комплект не указан$/, '');
 }
 
 export function personalRecordValue(kind: PersonalRecordEvent['kind'], value: number) {
@@ -291,18 +295,19 @@ export function calculatePersonalRecordEvents(candidate: DiaryEntry, history: re
     }
   }
 
-  const rank = exerciseRank(candidate.practice, category);
-  if (!rank.finalResult || !rank.evaluation) return events;
-  const exercise = rank.evaluation.exercise;
-  let bestRank: { entry: DiaryEntry; points: number } | null = null;
+  const ranks = confirmedExerciseRanks(candidate.practice, category);
+  if (!ranks.length) return events;
+  const bestRanks = new Map<string, { entry: DiaryEntry; points: number }>();
   for (const entry of previous) {
-    const old = exerciseRank(entry.practice, category);
-    if (!old.finalResult || old.evaluation?.exercise.id !== exercise.id) continue;
-    const points = old.evaluation.points;
-    if (!bestRank || (bestRank.points - points || rankOrder(entry) - rankOrder(bestRank.entry) ||
-      compareText(entry.id, bestRank.entry.id)) < 0) bestRank = { entry, points };
+    for (const { evaluation: { exercise, points } } of confirmedExerciseRanks(entry.practice, category)) {
+      const bestRank = bestRanks.get(exercise.id);
+      if (!bestRank || (bestRank.points - points || rankOrder(entry) - rankOrder(bestRank.entry) ||
+        compareText(entry.id, bestRank.entry.id)) < 0) bestRanks.set(exercise.id, { entry, points });
+    }
   }
-  if (bestRank) improve('rank', `${rank.classLabel} · ${exercise.distance} м · ${exercise.arrows} стрел`,
-    rank.evaluation.points, bestRank.points, bestRank.entry.id);
+  for (const { classLabel, evaluation: { exercise, points } } of ranks) {
+    const best = bestRanks.get(exercise.id);
+    if (best) improve('rank', `${classLabel} · ${exercise.distance} м · ${exercise.arrows} стрел`, points, best.points, best.entry.id);
+  }
   return events;
 }

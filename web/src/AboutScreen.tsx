@@ -21,7 +21,8 @@ export function AboutScreen({ onReleaseNotes, updates }: { onReleaseNotes: () =>
     <div className="settings-actions">
       <SettingsAction icon="code" href="https://github.com/ovepfunkep/FableShot">GitHub</SettingsAction>
       <SettingsAction icon="send" href="https://t.me/IncludeIntelligence">Telegram</SettingsAction>
-      <SettingsAction icon="heart" href="https://boosty.to/ivantyabin/donate?forPost=send">Поддержать на Boosty</SettingsAction>
+      <SettingsAction icon="about" href={`${import.meta.env.BASE_URL}privacy.html`}>Политика конфиденциальности</SettingsAction>
+      <SettingsAction icon="heart" href="https://www.sberbank.ru/ru/choise_bank?requisiteNumber=79134749515&bankCode=100000000111">Поддержать через СБП</SettingsAction>
     </div>
     <details className="about-credits">
       <summary><span className="settings-glyph"><Icon name="trophy" /></span><span>Благодарности</span><Icon name="right" /></summary>

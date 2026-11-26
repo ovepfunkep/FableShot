@@ -19,9 +19,8 @@
 }
 .room-scope button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .room-ordinal { flex: 0 0 auto; }
-.room-ordinal button { width: 36px; min-width: 36px; min-height: 44px; }
-.room-ordinal select { max-width: 92px; border: 0; color: var(--text); background: transparent; font: inherit; font-size: .82rem; min-height: 44px; }
-.room-ordinal select option { background: var(--surface); }
+.room-ordinal > .icon-button { width: 36px; min-width: 36px; min-height: 44px; }
+.room-ordinal > .choice-picker-trigger { max-width: 110px; border: 0; background: transparent; font-size: .82rem; }
 .room-conditions-toggle { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0; border: 0; background: transparent; font: inherit; }
 .room-conditions-toggle[aria-checked="true"] .preference-switch { background: var(--accent); border-color: var(--accent); justify-content: flex-end; padding: 2px; }
 .room-conditions-toggle[aria-checked="true"] .preference-switch span { background: var(--on-accent); width: 24px; height: 24px; }
@@ -36,7 +35,7 @@
 .room-standing-cards li[data-own="true"] { border-color: var(--accent); }
 .room-standing-person { display: flex; align-items: center; justify-content: space-between; text-align: start; gap: 8px;
   width: 100%; padding: 2px 4px; min-height: 36px; border: 0; background: transparent; font: inherit; overflow-wrap: anywhere; }
-.room-standing-person > span:first-child { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.room-standing-person > span:first-child { display: grid; grid-template-columns: minmax(0, auto) auto; align-items: center; gap: 2px 6px; min-width: 0; }
 .room-standing-person > span:last-child { display: flex; align-items: center; gap: 3px; color: var(--muted); font-size: .74rem; text-align: end; }
 .room-standing-person small { color: var(--accent); }
 .room-metric-row { text-align: center; }
@@ -83,3 +82,7 @@
 .room-help p { margin: 5px 0 0; color: var(--muted); line-height: 1.5; }
 .sheet-title-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sheet-title-actions h2 { min-width: 0; overflow-wrap: anywhere; }
+.room-standing-person strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-standing-person .room-bow-class { grid-column: 1 / -1; color: var(--muted); }
+.room-metric-row > [data-current] { background: var(--accent-wash); border-radius: 8px; }
+.room-place svg { width: 13px; height: 13px; flex: none; }

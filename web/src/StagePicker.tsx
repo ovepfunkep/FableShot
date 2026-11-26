@@ -1,3 +1,4 @@
+import { useSheetDismiss, useSheetTouchDismiss } from './BottomSheet.tsx';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { currentSeries, roundShots } from './practice.ts';
@@ -81,12 +82,14 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
   const canStartRound = (currentSeries(practice)?.round.series ?? []).some(series => series.shots.length > 0);
   const roundNumber = practice.rounds.findIndex(round => round.id === roundId) + 1;
   const totalShots = keepOneShot ? practice.rounds.reduce((sum, round) => sum + roundShots(round).length, 0) : 0;
+  const dismiss = useSheetDismiss(sheet, onClose);
+  useSheetTouchDismiss(sheet, dismiss);
 
   useLayoutEffect(() => openModal(sheet.current), []);
   useLayoutEffect(() => openModal(confirm.current), [confirmation]);
 
   function startDrag(event: PointerEvent<HTMLElement>) {
-    if (event.button !== 0) return;
+    if (event.pointerType === 'touch' || event.button !== 0) return;
     drag.current = { id: event.pointerId, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -94,7 +97,7 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
   function endDrag(event: PointerEvent<HTMLElement>) {
     const start = drag.current;
     drag.current = null;
-    if (start?.id === event.pointerId && event.clientY - start.y >= 60) onClose();
+    if (start?.id === event.pointerId && event.clientY - start.y >= 65) dismiss();
   }
 
   async function finishConfirmation() {
@@ -115,9 +118,9 @@ export function StagePicker({ kind, practice, roundId, seriesId, onChoose, onClo
     : 'Внесённые попадания останутся в текущем раунде. Пропущенные стрелы и серии не добавятся. Новый раунд начнётся с первой серии.';
 
   return <>
-    <dialog ref={sheet} className="stage-picker" aria-labelledby={titleId} data-testid="stage-picker"
-      onCancel={event => { event.preventDefault(); onClose(); }}
-      onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <dialog ref={sheet} className="stage-picker" aria-labelledby={titleId} data-testid="stage-picker" data-gesture-sheet
+      onCancel={event => { event.preventDefault(); dismiss(); }}
+      onClick={event => { if (event.target === event.currentTarget) dismiss(); }}>
       <div className="stage-picker__content" data-testid={`training-${isRound ? 'rounds' : 'series'}-sheet`}>
         <header className="stage-picker__header" onPointerDown={startDrag} onPointerUp={endDrag}
           onPointerCancel={() => { drag.current = null; }}>

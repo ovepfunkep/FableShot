@@ -1,9 +1,11 @@
 import { achievementRarityFor, achievementScopesFor, achievementTierOrder, ACHIEVEMENT_RARITY_ORDER, getAchievementDefinition } from './achievement-catalog.ts';
+import type { AchievementDefinition } from './achievement-catalog.ts';
 import type { RankCategory } from './sport-ranks.ts';
 import type { StageRankBasis } from './stage-rank-achievements.ts';
+import { EXERCISE_RANK_VERSION } from './exercise-rank.ts';
 
 export type AchievementEnrollment = { epoch: string; rankCategory: RankCategory | null; stageRankVersion?: 1; roomAwards?: true; seriesStories?: true;
-  stageRankCategories?: Record<string, RankCategory | null> };
+  stageRankCategories?: Record<string, RankCategory | null>; exerciseRankVersion?: typeof EXERCISE_RANK_VERSION };
 export type SeriesSwing = { seriesIds: number[]; points: number[]; arrows: number };
 export type AchievementGrant = { id: string; scope: string; earnedAt: string; sessionId?: string; notifiedAt?: string; noticeMoment?: string; valid?: boolean; nativeSnapshot?: true; stageRank?: StageRankBasis; seriesSwing?: SeriesSwing };
 export type AchievementLedger = { epoch: string; grants: AchievementGrant[]; publications?: { documentId: string; fingerprint: string }[] };
@@ -18,6 +20,7 @@ export function isAchievementEnrollment(value: unknown): value is AchievementEnr
   return identity(enrollment.epoch) && (enrollment.roomAwards === undefined || enrollment.roomAwards === true) &&
     (enrollment.seriesStories === undefined || enrollment.seriesStories === true) &&
     (enrollment.rankCategory === null || enrollment.rankCategory === 'male' || enrollment.rankCategory === 'female') &&
+    (enrollment.exerciseRankVersion === undefined || enrollment.exerciseRankVersion === EXERCISE_RANK_VERSION) &&
     (enrollment.stageRankVersion === undefined || enrollment.stageRankVersion === 1) &&
     (categories === undefined || (enrollment.stageRankVersion === 1 && !!categories && typeof categories === 'object' &&
       !Array.isArray(categories) && Object.entries(categories).every(([id, category]) =>
@@ -96,6 +99,17 @@ export function earnAchievements(ledger: AchievementLedger, observations: readon
 export type AchievementGroup = { key: string; leading: AchievementGrant; additional: AchievementGrant[] };
 export type AchievementMoment = { id: string; grants: AchievementGrant[] };
 export const achievementReceiptKey = (grant: AchievementGrant) => JSON.stringify([grant.id, grant.scope, grant.noticeMoment, grant.earnedAt]);
+export const achievementGroupKey = (rule: { family: string }, scope: string) => `${rule.family}:${scope}`;
+
+function compareAchievementLevels(left: { rule: AchievementDefinition; scope: string }, right: typeof left) {
+  return ACHIEVEMENT_RARITY_ORDER.indexOf(achievementRarityFor(right.rule, right.scope)) -
+    ACHIEVEMENT_RARITY_ORDER.indexOf(achievementRarityFor(left.rule, left.scope)) ||
+    achievementTierOrder(right.rule) - achievementTierOrder(left.rule);
+}
+
+export function compareAchievementTiers(left: Parameters<typeof compareAchievementLevels>[0], right: typeof left) {
+  return compareAchievementLevels(left, right) || left.rule.id.localeCompare(right.rule.id);
+}
 
 export function recentAchievementNotices(ledger: AchievementLedger | undefined, nowMs = Date.now()): AchievementMoment[] {
   const moments = new Map<string, AchievementMoment>();
@@ -115,19 +129,14 @@ export function groupAchievementGrants(grants: readonly AchievementGrant[]): Ach
   for (const grant of grants) {
     const rule = getAchievementDefinition(grant.id);
     if (!rule) continue;
-    const key = `${rule.family}:${grant.scope}`;
+    const key = achievementGroupKey(rule, grant.scope);
     const items = groups.get(key) ?? [];
     items.push(grant);
     groups.set(key, items);
   }
-  function compare(left: AchievementGrant, right: AchievementGrant) {
-    const a = getAchievementDefinition(left.id)!;
-    const b = getAchievementDefinition(right.id)!;
-    return ACHIEVEMENT_RARITY_ORDER.indexOf(achievementRarityFor(b, right.scope)) -
-      ACHIEVEMENT_RARITY_ORDER.indexOf(achievementRarityFor(a, left.scope)) || achievementTierOrder(b) - achievementTierOrder(a);
-  }
+  const tier = (grant: AchievementGrant) => ({ rule: getAchievementDefinition(grant.id)!, scope: grant.scope });
   return [...groups].map(([key, items]) => {
-    items.sort(compare);
+    items.sort((left, right) => compareAchievementTiers(tier(left), tier(right)));
     return { key, leading: items[0], additional: items.slice(1) };
-  }).sort((left, right) => compare(left.leading, right.leading));
+  }).sort((left, right) => compareAchievementLevels(tier(left.leading), tier(right.leading)));
 }

@@ -50,6 +50,12 @@ export function achievementValidity(diary: Diary): Map<string, boolean> {
   const evidence = new Map(evaluateAchievementEvidence(eligible, entry => entry.achievementEnrollment?.rankCategory ?? null)
     .map(item => [`${item.id}:${item.scope}`, item.progress]));
   const eligibleById = new Map(eligible.map(entry => [entry.id, entry]));
+  const versionedRankSources = new Set(diary.entries.filter(entry => entry.achievementEnrollment?.exerciseRankVersion).map(entry => entry.id));
+  const hasLegacyExerciseRule = (grant: (typeof ledger.grants)[number]) =>
+    /^RANK0[4-9]$/.test(grant.id) && !versionedRankSources.has(grant.sessionId ?? '');
+  const legacyRankEvidence = ledger.grants.some(hasLegacyExerciseRule)
+    ? new Map(evaluateAchievementEvidence(eligible, entry => entry.achievementEnrollment?.rankCategory ?? null, true)
+      .map(item => [`${item.id}:${item.scope}`, item.progress])) : null;
 
   for (const grant of ledger.grants) {
     const key = `${grant.id}:${grant.scope}`;
@@ -81,6 +87,8 @@ export function achievementValidity(diary: Diary): Map<string, boolean> {
       validity.set(key, !!entry && closingSeriesId !== undefined && evaluateClosedSeriesSwings(entry, closingSeriesId).some(item =>
         item.id === grant.id && item.scope === grant.scope && item.seriesSwing?.arrows === arrows &&
         item.seriesSwing.seriesIds.every((seriesId, index) => seriesId === seriesIds[index])));
+    } else if (hasLegacyExerciseRule(grant)) {
+      validity.set(key, (legacyRankEvidence?.get(key) ?? 0) >= definition.target);
     } else {
       validity.set(key, (evidence.get(key) ?? 0) >= definition.target);
     }

@@ -47,6 +47,7 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [pdfPage, setPdfPage] = useState(1);
+  const [pngPage, setPngPage] = useState(1);
   const award = useRef(onAchievement); award.current = onAchievement;
   const mounted = useRef(true);
   const currentSession = useRef(session); currentSession.current = session;
@@ -54,7 +55,7 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
   useEffect(() => () => { queueMicrotask(() => {
     if (!mounted.current || currentSession.current !== session) session.dispose();
   }); }, [session]);
-  useEffect(() => { setPdfPage(1); setStatus(''); }, [session]);
+  useEffect(() => { setPdfPage(1); setPngPage(1); setStatus(''); }, [session]);
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -118,10 +119,14 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
         <div className="report-example-hits">{[10, 9, 8, 10, 9, 10].map((score, i) => <i key={i}>{score}</i>)}</div>
         {format === 'pdf' && <div className="report-example-chart" aria-hidden="true" />}
       </div>}
-      {ready && format === 'png' && ready.previews.map((url, i) => <figure key={url}>
-        <img src={url} alt={`Тренировка, страница ${i + 1} из ${ready.previews.length}`} />
-        {ready.previews.length > 1 && <figcaption>{i + 1} / {ready.previews.length}</figcaption>}
-      </figure>)}
+      {ready && format === 'png' && <figure>
+        <img src={ready.previews[pngPage - 1]} alt={`Тренировка, страница ${pngPage} из ${ready.previews.length}`} />
+        {ready.previews.length > 1 && <figcaption className="report-png-pagination">
+          <button type="button" aria-label="Предыдущая страница PNG" disabled={pngPage <= 1} onClick={() => setPngPage(pngPage - 1)}>‹</button>
+          <span aria-live="polite">Страница {pngPage} из {ready.previews.length}</span>
+          <button type="button" aria-label="Следующая страница PNG" disabled={pngPage >= ready.previews.length} onClick={() => setPngPage(pngPage + 1)}>›</button>
+        </figcaption>}
+      </figure>}
       {ready && format === 'pdf' && <PdfReportPreview file={ready.files[0]} page={pdfPage} onPage={setPdfPage} />}
     </div>
     {busy && <p role="status" className="motion-status" data-busy="true">Готовлю отчёт…</p>}
@@ -129,8 +134,9 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
     <button type="button" className="report-export-share" data-testid="report-export-share" disabled={!ready || busy || sending} onClick={() => void share()}>
       {sending ? 'Открываю…' : 'Поделиться'}
     </button>
-    <details className="report-export-data"><summary>Экспорт данных</summary>
-      <button type="button" data-testid="report-export-csv" disabled={sending} onClick={() => void csv()}>Данные CSV</button>
+    <details className="report-export-data" data-testid="report-export-data"><summary>Дополнительно</summary>
+      <p>CSV подходит для Excel и импорта результатов в другие программы.</p>
+      <button type="button" data-testid="report-export-csv" disabled={sending} onClick={() => void csv()}>Для таблиц (CSV)</button>
     </details>
   </BottomSheet>;
 }

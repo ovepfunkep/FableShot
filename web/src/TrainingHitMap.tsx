@@ -1,3 +1,5 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { StatisticRules } from './StatisticRules.tsx';
 import { useId, useMemo, useRef, useState } from 'react';
 import type { PointerEvent, ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
@@ -199,11 +201,10 @@ export function TrainingHitMap({ series, conditions, rememberView = false, repor
         setSelectedRound(item?.roundId ?? item?.round ?? null);
         setSelectedId(null);
       }} />
-      <select className="report-scope-select" aria-label="Серия на карте" data-testid="hit-map-series" value={selected?.id ?? ''}
-        onChange={event => setSelectedId(event.target.value === '' ? null : Number(event.target.value))}>
-        <option value="">Все серии</option>
-        {roundSeries.map(entry => <option key={entry.id} value={entry.id}>{round === null ? `Р${entry.round} · ` : ''}Серия {entry.number}</option>)}
-      </select>
+      <ChoicePicker label="Серия на карте" testId="hit-map-series" value={selected ? String(selected.id) : ''}
+        options={[{ value: '', label: 'Все серии' }, ...roundSeries.map(entry => ({
+          value: String(entry.id), label: `${round === null ? `Р${entry.round} · ` : ''}Серия ${entry.number}`,
+        }))]} onChange={value => setSelectedId(value === '' ? null : Number(value))} />
     </div>
     {(visible('result') || visible('grouping') || visible('offset')) && <dl className="report-metric-grid hit-map-readings" aria-live="polite">
       {visible('result') && <div><dt>Очки</dt><dd data-testid="hit-map-score">{score.points}/{score.maximum}</dd></div>}
@@ -230,13 +231,13 @@ export function TrainingHitMap({ series, conditions, rememberView = false, repor
       <span>Темнее — чаще.{visible('volume') && ` Максимум в ячейке ${density.peak}.`}</span>
     </div>}
     {help && <BottomSheet title="Карта попаданий" onClose={() => setHelp(false)}>
-      <p>Крестики показывают промахи, отмеченные в кольце вокруг мишени. Они не входят в плотность, кучность и смещение.</p>
-      <p>Измерения используют зачётные попадания с известными координатами.
-        {profile.vertical && ' «Все вместе» совмещает три круга относительно их центров. При выборе одного круга карта и показатели учитывают только его стрелы. Записи без номера круга доступны в общей выборке.'}
-        {' Белое кольцо отмечает среднюю точку. Смещение — расстояние от центра мишени до средней точки.'}
-        RMS измеряет разброс вокруг средней точки и рассчитывается при наличии трёх или более координат.</p>
-      <p>Плотность показывает количество отмеченных попаданий в ячейках сетки {HIT_MAP_GRID_SIZE} × {HIT_MAP_GRID_SIZE}.
-        Цвет ячейки зависит от её доли от максимума для выбранных серий.</p>
+      <p>Карта показывает, куда легли стрелы. Режим «Плотность» выделяет места, куда они попадали чаще.</p>
+      <StatisticRules>
+        <p>Крестики отмечают промахи с координатами. Кучность, смещение и плотность учитывают только зачётные попадания с известными координатами.</p>
+        {profile.vertical && <p>«Все вместе» совмещает пятна по их центрам. Выбор пятна учитывает только его стрелы. Записи без номера пятна видны в общей выборке.</p>}
+        <p>Белое кольцо показывает среднюю точку. Смещение — расстояние от неё до центра мишени. RMS — корень из среднего квадрата расстояний от попаданий до средней точки, от трёх координат.</p>
+        <p>Плотность делит попадания на сетку {HIT_MAP_GRID_SIZE} × {HIT_MAP_GRID_SIZE}. Цвет показывает долю от самой заполненной ячейки.</p>
+      </StatisticRules>
     </BottomSheet>}
   </section>;
 }

@@ -14,7 +14,14 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await context.setOffline(true);
   await openTraining(page);
   await page.getByTestId('rank-round').click();
-  await page.getByRole('button', { name: 'Мужчины', exact: true }).click();
+  await page.getByRole('button', { name: 'Указать пол в профиле' }).click();
+  const profile = page.getByTestId('profile-screen');
+  await expect(profile.getByRole('group', { name: 'Пол для нормативов' })).toBeInViewport();
+  await profile.getByRole('button', { name: 'Мужской', exact: true }).click();
+  await profile.getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByTestId('rank-details')).toBeVisible();
+  await page.getByTestId('rank-category-female').click();
+  await expect(page.getByTestId('rank-details').getByText('Предпросмотр · Женщины')).toBeVisible();
   await page.keyboard.press('Escape');
   for (let i = 0; i < 3; i++) await page.getByTestId('target').click();
   await expect(page.getByTestId('rank-round')).toContainText('МСМК');
@@ -34,7 +41,8 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await expect(page.getByTestId('rank-round')).toContainText('II');
   await page.getByRole('button', { name: 'Статистика', exact: true }).click();
   const trend = page.getByTestId('training-mean-trend');
-  await trend.getByRole('combobox', { name: 'Показатель по сериям' }).selectOption('rank');
+  await trend.getByRole('button', { name: 'Показатель по сериям' }).click();
+  await page.getByRole('dialog', { name: 'Показатель по сериям' }).locator('[data-choice-value="rank"]').click();
   await expect(trend.getByTestId('training-mean-value')).toHaveText('—');
   await expect(trend.locator('.training-mean-line')).toHaveAttribute('d', /M\s.+\sL\s/);
 });

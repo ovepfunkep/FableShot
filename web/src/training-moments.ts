@@ -1,4 +1,4 @@
-import { exerciseRank } from './exercise-rank.ts';
+import { confirmedExerciseRanks, exerciseRank } from './exercise-rank.ts';
 import { calculateProgress } from './progress-scoring.ts';
 import { RANK_LABELS } from './sport-ranks.ts';
 import { evaluateAchievementEvidence } from './achievement-evidence.ts';
@@ -47,11 +47,9 @@ export function trainingMoment(entry: DiaryEntry, history: readonly DiaryEntry[]
   const evaluation = rank.finalResult ? rank.evaluation : null;
   if (evaluation?.result) {
     const level = evaluation.result.label;
-    const previouslyReached = previous.some(item => {
-      const past = exerciseRank(item.practice, category);
-      return past.finalResult && past.evaluation?.exercise.id === evaluation.exercise.id
-        && past.evaluation.result && RANK_LABELS.indexOf(past.evaluation.result.label) <= RANK_LABELS.indexOf(level);
-    });
+    const previouslyReached = previous.some(item => confirmedExerciseRanks(item.practice, category).some(past =>
+      past.evaluation.exercise.id === evaluation.exercise.id && past.evaluation.result &&
+      RANK_LABELS.indexOf(past.evaluation.result.label) <= RANK_LABELS.indexOf(level)));
     if (!previouslyReached) return { kind: 'rank', level };
   }
   const seriesGrants = grants.filter(grant => grant.sessionId === entry.id && grant.valid !== false

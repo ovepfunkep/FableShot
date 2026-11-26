@@ -3,8 +3,12 @@ import { test } from 'node:test';
 import { unzipSync, zipSync } from 'fflate';
 import { ACTIVE_DATA_KEY, DATA_KEYS, RECOVERY_DATA_KEY, createAppStorage, decodeStoredData } from '../src/app-storage.ts';
 import type { DataRecords } from '../src/app-storage.ts';
-import { archiveSourceToken, createWebArchive, inspectWebArchive, lastRecovery, replaceArchiveRecords, unpackArchive } from '../src/web-archive.ts';
-import { appendShot, emptyPractice } from '../src/practice.ts';
+import { archiveSourceToken, createWebArchive, inspectWebArchive, lastRecovery, projectArchivePreview, projectArchiveRecords, replaceArchiveRecords, unpackArchive, validateArchiveRecords } from '../src/web-archive.ts';
+import { appendShot, applyConditions, emptyPractice } from '../src/practice.ts';
+import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
+import { equipmentSnapshot } from '../src/equipment.ts';
+import type { EquipmentLibrary } from '../src/equipment.ts';
+import { archiveTechnique, createTechnique, newTechniqueText, publishTechnique } from '../src/technique.ts';
 import { DEFAULT_PREFERENCES } from '../src/preferences.ts';
 import { DEFAULT_TARGET, markTargetPoint } from '../src/target.ts';
 import { emptyTournamentStart, saveTournament } from '../src/tournaments.ts';
@@ -81,6 +85,81 @@ test('archive round trip preserves all settings and records with verified counts
   assert.equal(preview.summary.arrows, 2);
   assert.equal(preview.summary.notes, 3);
   assert.equal(preview.summary.archivedNotes, 2);
+});
+
+test('portable backup keeps active entries and historical facts while filtering archives and room operations', async () => {
+  const initial = records(4);
+  const [diaryKey, equipmentKey, , techniqueKey, preferenceKey] = DATA_KEYS;
+  const diary = JSON.parse(initial[diaryKey]!);
+  const [live, native, imported, deleted] = diary.entries;
+  deleted.deletedAt = '2026-11-12T10:00:00Z';
+  native.startedAt = '';
+  native.localDate = null;
+  native.nativeArchiveSession = 'kotlin-unknown-date';
+  diary.nativeArchive = { sha256: 'a'.repeat(64), bytes: 10 };
+  imported.source = { kind: 'mytargets', fileHash: 'b'.repeat(64), parserVersion: '1', sessionId: 'mytargets-1',
+    sourceRecords: [0], seriesFingerprints: ['series'], overlapFingerprints: ['overlap'] };
+  const library: EquipmentLibrary = {
+    bows: [{ id: 'bow', name: 'Баребоу', category: 'barebow' }],
+    arrows: [{ id: 'arrows', name: 'Carbon', diameterMm: 5.2 }],
+    kits: [{ id: 'kit', name: 'Основной', bowId: 'bow', arrowsId: 'arrows' }],
+  };
+  const conditions = { ...DEFAULT_CONDITIONS, equipment: equipmentSnapshot(library, 'kit') };
+  live.practice = { ...appendShot(applyConditions(emptyPractice(), conditions), { code: '10', points: 10, point: { x: 0, y: 0 } }),
+    savedAt: live.practice.savedAt };
+  library.bows[0].archived = true;
+  initial[equipmentKey] = JSON.stringify(library);
+  const memo = createTechnique({ version: 1, documents: [] });
+  const published = publishTechnique(memo.library, memo.documentId, newTechniqueText());
+  const spare = createTechnique(published.library);
+  initial[techniqueKey] = JSON.stringify(archiveTechnique(spare.library, spare.documentId, true));
+  const assignment = { id: 'assigned', discipline: 'barebow', category: 'male', level: 'I', assignedOn: null, issuedBy: '',
+    reference: '', current: false, createdAtMs: 1, updatedAtMs: 2, revision: 1, deletedAtMs: null };
+  initial[preferenceKey] = JSON.stringify({ version: 1, preferences: { ...DEFAULT_PREFERENCES,
+    rankAssignments: [assignment, { ...assignment, id: 'removed', deletedAtMs: 9 }] } });
+  const note = { id: 'standalone', localDate: '2026-11-11', body: 'Стойка', tags: [], place: '', feeling: '',
+    conditions: '', createdAtMs: 1, updatedAtMs: 2 };
+  diary.notes = [note, { ...note, id: 'archived-note', deletedAtMs: 3 }];
+  live.notes = [{ ...note, id: 'archived-training-note', deletedAtMs: 4 }];
+  const start = { ...emptyTournamentStart(), result: '480', sessionIds: [live.id, deleted.id] };
+  diary.tournaments = [{ id: 'cup', title: 'Кубок', from: '2026-11-11', to: null, venue: '', note: 'Проверка',
+    protocol: 'https://example.com/protocol', starts: [start], completed: true }];
+  const grant = { scope: 'global', earnedAt: live.practice.savedAt, sessionId: deleted.id };
+  diary.achievementLedger = { epoch: 'evidence', grants: [{ ...grant, id: 'START01' }, { ...grant, id: 'APP04' }] };
+  diary.groupSeries = [{ roomId: 'temporary-room', entryId: 'room-entry', trainingId: live.id, ends: [] }];
+  live.personalRecords = [{ id: 'record', sessionId: live.id, previousSessionId: deleted.id, kind: 'series', ruleVersion: 1,
+    label: 'Серия', previousValue: 9, value: 10, recordedAtMs: 100, notifiedAtMs: 100 }];
+  initial[diaryKey] = JSON.stringify(diary);
+
+  const full = projectArchiveRecords(initial, true);
+  const { groupSeries: _roomOperations, ...fullDiary } = diary;
+  assert.deepEqual(JSON.parse(full[diaryKey]!), fullDiary);
+  assert.equal(validateArchiveRecords(full).trainings, 4);
+  assert.equal(validateArchiveRecords(full).archivedNotes, 2);
+  const active = projectArchiveRecords(initial, false);
+  const saved = await inspectWebArchive(await createWebArchive(active, 'test'));
+  assert.equal(saved.summary.trainings, 3);
+  assert.equal(saved.summary.arrows, 3);
+  assert.equal(saved.summary.archivedNotes, 0);
+  assert.equal(saved.nativeSource, undefined);
+  const retained = JSON.parse(saved.records[diaryKey]!);
+  assert.equal(retained.nativeArchive, undefined);
+  assert.equal(retained.groupSeries, undefined);
+  assert.deepEqual(retained.entries, [{ ...live, notes: [] }, native, imported]);
+  assert.deepEqual(retained.notes, [note]);
+  assert.deepEqual(retained.tournaments, [{ ...diary.tournaments[0], starts: [{ ...start, sessionIds: [live.id] }] }]);
+  assert.deepEqual(retained.achievementLedger.grants, [{ id: 'APP04', earnedAt: grant.earnedAt, scope: 'global' }]);
+  assert.deepEqual(JSON.parse(saved.records[equipmentKey]!), { bows: [], arrows: library.arrows, kits: [] });
+  assert.deepEqual(JSON.parse(saved.records[techniqueKey]!), published.library);
+  assert.deepEqual(JSON.parse(saved.records[preferenceKey]!).preferences.rankAssignments, [assignment]);
+  assert.deepEqual(JSON.parse(initial[diaryKey]!), diary);
+
+  const fullWeb = { ...full, [diaryKey]: JSON.stringify({ ...JSON.parse(full[diaryKey]!), nativeArchive: undefined }) };
+  const sourcePreview = await inspectWebArchive(await createWebArchive(fullWeb, 'test'));
+  const reducedPreview = projectArchivePreview(sourcePreview, false);
+  assert.deepEqual(reducedPreview.records, saved.records);
+  assert.deepEqual(reducedPreview.summary, saved.summary);
+  assert.deepEqual(projectArchivePreview(sourcePreview, true), sourcePreview);
 });
 
 test('tampered, incomplete, unsafe and oversized ZIP payloads are refused', async () => {

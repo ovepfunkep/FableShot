@@ -1,5 +1,10 @@
 .room-probe, .room-probe-panel { display: grid; gap: 12px; }
 .room-probe-panel { padding: 16px; }
+.room-entry-flow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.room-entry-flow button { display: flex; justify-content: center; align-items: center; gap: 6px; min-height: 48px; padding: 6px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); color: var(--muted); font: inherit; font-size: .8125rem; font-weight: 750; }
+.room-entry-flow button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+.room-entry-flow svg { width: 18px; height: 18px; flex: none; }
+.room-entry-state { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; color: var(--accent); background: var(--accent-wash); font-size: .8125rem; }
 .room-probe h2, .room-probe p { margin: 0; }
 .room-probe h2 { font-size: 1.125rem; }
 .room-probe p { color: var(--muted); }

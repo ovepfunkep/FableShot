@@ -1,3 +1,4 @@
+import { useSheetDismiss, useSheetTouchDismiss } from './BottomSheet.tsx';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { BOW_CATEGORIES, MAX_NUMBERED_ARROWS, bowCategoryName, editEquipment, equipmentSnapshot, loadEquipment, saveEquipment, selectableEquipment, validNumberedCount, validShaftDiameter } from './equipment.ts';
@@ -160,24 +161,26 @@ export function EquipmentPicker({ selected, onSelect, onClose, editSelected = fa
     else if (kit) setKit(null);
     else onClose();
   }
+  const dismissSheet = useSheetDismiss(sheet, dismiss);
+  useSheetTouchDismiss(sheet, dismissSheet);
 
   function startDrag(event: PointerEvent<HTMLElement>) {
-    if (event.button !== 0) return;
+    if (event.pointerType === 'touch' || event.button !== 0) return;
     drag.current = { id: event.pointerId, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function endDrag(event: PointerEvent<HTMLElement>) {
-    if (drag.current?.id === event.pointerId && event.clientY - drag.current.y > 64) dismiss();
+    if (drag.current?.id === event.pointerId && event.clientY - drag.current.y >= 65) dismissSheet();
     drag.current = null;
   }
 
   const title = component ? component.kind === 'bow' ? 'Лук' : 'Стрелы' : kit ? 'Комплект снаряжения' : 'Комплект';
-  return <dialog ref={sheet} className="equipment-sheet" aria-labelledby={titleId} data-testid="conditions-equipment-sheet"
-    onCancel={event => { event.preventDefault(); dismiss(); }} onClick={event => {
+  return <dialog ref={sheet} className="equipment-sheet" aria-labelledby={titleId} data-testid="conditions-equipment-sheet" data-gesture-sheet
+    onCancel={event => { event.preventDefault(); dismissSheet(); }} onClick={event => {
       if (event.target === event.currentTarget) {
         const box = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dismiss();
+        if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dismissSheet();
       }
     }}>
     <header className="equipment-sheet-header" onPointerDown={startDrag} onPointerUp={endDrag} onPointerCancel={() => { drag.current = null; }}>

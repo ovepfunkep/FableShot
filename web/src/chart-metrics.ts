@@ -4,11 +4,6 @@ import type { RankExercise } from './sport-ranks.ts';
 
 const ranks = [...RANK_LABELS].reverse();
 
-export function rankChartValue(label: string | null) {
-  const index = ranks.findIndex(rank => rank === label);
-  return index === -1 ? null : index + 1;
-}
-
 export function chartLabel(metric: string, value: number, hundredths = false) {
   return metric === 'rank' ? ranks[Math.round(value) - 1] ?? '—' : formatAverage(value, hundredths);
 }

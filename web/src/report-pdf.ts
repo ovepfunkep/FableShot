@@ -14,6 +14,7 @@ import { reportSectionShown } from './report-composition.ts';
 import type { ExportSection, ReportComposition } from './report-composition.ts';
 import { chartScale, rankAverageScale } from './chart-metrics.ts';
 import { rankDisplayLabel } from './sport-ranks.ts';
+import { exerciseRankCoverage } from './exercise-rank.ts';
 
 const hex = (value: string) => rgb(parseInt(value.slice(1, 3), 16) / 255, parseInt(value.slice(3, 5), 16) / 255, parseInt(value.slice(5, 7), 16) / 255);
 const ink = hex('#17251c'), muted = hex('#667368'), accent = hex('#517631'), dark = hex('#15251a');
@@ -56,15 +57,19 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     text(title, 205, 814, 10, false, rgb(.9, .94, .88));
     y = 752;
   }
-  function ensure(height: number) { if (y - height < bottom) newPage(section); }
+  function ensure(height: number) {
+    if (y - height >= bottom) return false;
+    newPage(section);
+    return true;
+  }
   function heading(title: string, keep = 100) {
     const wrapped = lines(title, width, 16, true);
     ensure(Math.max(keep, wrapped.length * 23 + 45));
     for (const line of wrapped) { text(line, left, y, 16, true); y -= 23; }
     y -= 8;
   }
-  function paragraph(value: string, size = 10, color = muted) {
-    for (const line of lines(value, width, size)) { ensure(size + 7); text(line, left, y, size, false, color); y -= size + 6; }
+  function paragraph(value: string, size = 10, color = muted, indent = 0) {
+    for (const line of lines(value, width - indent, size)) { ensure(size + 7); text(line, left + indent, y, size, false, color); y -= size + 6; }
     y -= 5;
   }
   function metrics(values: { label: string; value: string }[]) {
@@ -134,6 +139,7 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
   if (includes('norms')) {
     heading('Нормативы', 200);
     const rank = snapshot.rankDetails, evaluation = rank.evaluation;
+    const coverage = exerciseRankCoverage(rank);
     if (!evaluation) paragraph(rank.reason ?? 'Нет данных для сравнения.');
     else {
       ensure(155); box(left, y, width, 136);
@@ -154,6 +160,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       const next = evaluation.next;
       text(next ? `Следующий: ${next.label} · от ${decimal(next.score / evaluation.exercise.arrows, true)} за стрелу` : 'Высший доступный уровень по этой сетке', left + 15, y - 111, 9, true, accent);
       y -= 151;
+      if (coverage) paragraph(coverage.label, 10, accent);
+      if (coverage?.explanation) paragraph(coverage.explanation, 8);
       paragraph(rank.finalResult ? 'Сравнение по очкам упражнения; официальное присвоение разряда требует выполнения условий ЕВСК.'
         : 'Это прогноз по текущему среднему. Полное упражнение ещё не подтверждено.', 8);
     }
@@ -169,35 +177,68 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     for (const group of snapshot.achievements) {
       const rule = getAchievementDefinition(group.leading.id);
       if (!rule) continue;
-      ensure(70); text(rule.title, left, y, 12, true, accent); y -= 21;
+      const title = lines(rule.title, width, 12, true);
+      ensure(title.length * 21 + 32);
+      for (const line of title) { text(line, left, y, 12, true, accent); y -= 21; }
       paragraph(`${ACHIEVEMENT_RARITY_LABELS[achievementRarityFor(rule, group.leading.scope)]} · ${rule.flavor}`, 9);
-      if (group.additional.length) paragraph(`Ещё в группе: ${group.additional.map(grant => getAchievementDefinition(grant.id)?.title ?? grant.id).join(', ')}`, 8);
+      for (const grant of group.additional) {
+        const tier = getAchievementDefinition(grant.id);
+        if (tier) paragraph(`• ${tier.title} · ${ACHIEVEMENT_RARITY_LABELS[achievementRarityFor(tier, grant.scope)]}`, 9, muted, 14);
+      }
     }
   }
 
   if (includes('series')) {
-    ensure(160);
     for (const round of snapshot.rounds) {
-      const firstCard = 37 + Math.ceil(Math.min(round.series[0].shots.length, 90) / 18) * 27;
-      heading(`Раунд ${round.number}`, firstCard + 75);
+      const seriesHeader = () => {
+        box(left, y, width, 24, paper);
+        text('Серия', left + 10, y - 6, 9, true);
+        if (showShots) text('Попадания', left + 108, y - 6, 9, true);
+        text('Очки', left + 366, y - 6, 9, true);
+        text('Ср.', left + 422, y - 6, 9, true);
+        text('Σ', left + 480, y - 6, 9, true);
+        y -= 26;
+      };
+      const firstCard = showShots ? Math.max(38, Math.ceil(Math.min(round.series[0].shots.length, 90) / 11) * 18 + 7) : 38;
+      heading(`Раунд ${round.number}`, firstCard + 100);
       const summary = [shown('result') && `${round.result.points}/${round.result.maximum}`,
         shown('average') && `средний ${decimal(round.result.average)}`,
         shown('volume') && `${round.result.maximum / 10} стрел`,
         includes('norms') && round.rank.label && `${round.rank.finalResult ? 'По очкам' : 'Темп'} · ${rankDisplayLabel(round.rank.label)}`].filter(Boolean).join(' · ');
       if (summary) paragraph(summary, 11, accent);
-      for (const series of round.series) for (let start = 0; start < series.shots.length; start += showShots ? 90 : series.shots.length) {
-        const shots = series.shots.slice(start, start + 90), result = summarize(series.shots);
-        const height = showShots ? 37 + Math.ceil(shots.length / 18) * 27 : 31;
-        ensure(height + 12); box(left, y, width, height);
-        text(`Р${round.number} · Серия ${series.number}${start ? ' · продолжение' : ''}`, left + 12, y - 9, 9, true);
-        const totals = [shown('result') && `${result.points}/${result.maximum}`, shown('average') && `средний ${decimal(result.average)}`,
-          shown('volume') && `${series.shots.length} стрел`].filter(Boolean).join(' · ');
-        text(totals, left + width - 12 - font.widthOfTextAtSize(totals, 8), y - 10, 8, false, muted);
-        if (showShots) shots.forEach((shot, i) => {
-          const x = left + 12 + (i % 18) * 27, top = y - 30 - Math.floor(i / 18) * 27;
-          page.drawRectangle({ x, y: top - 22, width: 22, height: 22, color: hex(zones[shot.points]) });
-          text(shot.code, x + (22 - bold.widthOfTextAtSize(shot.code, 9)) / 2, top - 5, 9, true, shot.points === 0 || shot.points === 3 || shot.points === 4 ? rgb(1, 1, 1) : ink);
-        }); y -= height + 10;
+      seriesHeader();
+      let cumulative = 0;
+      for (const series of round.series) {
+        const result = summarize(series.shots);
+        cumulative += result.points;
+        for (let start = 0; start < series.shots.length; start += showShots ? 90 : series.shots.length) {
+          const shots = series.shots.slice(start, start + 90);
+          const last = !showShots || start + shots.length === series.shots.length;
+          const showVolume = last && shown('volume');
+          const height = Math.max(start && showVolume ? 36 : 25, showShots ? Math.ceil(shots.length / 11) * 18 + 7 : 25);
+          if (ensure(height + 2)) {
+            text(`Раунд ${round.number} · продолжение`, left, y, 12, true);
+            y -= 24;
+            seriesHeader();
+          }
+          box(left, y, width, height);
+          text(`Р${round.number} · Серия ${series.number}`, left + 10, y - 7, 9, true);
+          if (start) text('продолжение', left + 10, y - 19, 7, false, muted);
+          if (last) {
+            if (showVolume) text(`${series.shots.length} стрел`, left + 10, y - (start ? 27 : 17), 8, false, muted);
+            if (shown('result')) {
+              text(`${result.points}/${result.maximum}`, left + 366, y - 7, 9, true);
+              text(String(cumulative), left + 480, y - 7, 9, true, accent);
+            }
+            if (shown('average')) text(decimal(result.average), left + 422, y - 7, 9);
+          }
+          if (showShots) shots.forEach((shot, i) => {
+            const x = left + 106 + (i % 11) * 22, top = y - 4 - Math.floor(i / 11) * 18;
+            page.drawRectangle({ x, y: top - 16, width: 18, height: 16, color: hex(zones[shot.points]) });
+            text(shot.code, x + (18 - bold.widthOfTextAtSize(shot.code, 8)) / 2, top - 3, 8, true, shot.points === 0 || shot.points === 3 || shot.points === 4 ? rgb(1, 1, 1) : ink);
+          });
+          y -= height + 2;
+        }
       }
       y -= 8;
     }
@@ -209,9 +250,9 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     const map = includes('hit_map') && scope.shots.some(shot => shot.point || shot.missPoint);
     const distribution = includes('distribution');
     if (!general && !progress && !map && !distribution) continue;
-    newPage(`АНАЛИТИКА · УСЛОВИЯ ${index + 1}`);
-    paragraph(snapshot.conditions[index], 10);
-    if (includes('result')) metrics([
+    heading(snapshot.analysis.length > 1 ? `Аналитика · условия ${index + 1}` : 'Аналитика', 125);
+    if (snapshot.analysis.length > 1) paragraph(snapshot.conditions[index], 10);
+    if (includes('result') && snapshot.analysis.length > 1) metrics([
       ...(shown('result') ? [{ label: 'ОЧКИ', value: `${scope.result.points}/${scope.result.maximum}` }] : []),
       ...(shown('average') ? [{ label: 'СРЕДНИЙ', value: decimal(scope.result.average) }] : []),
       ...(shown('grouping') ? [{ label: snapshot.spreadLabel, value: scope.spread === null ? '—' : `${decimal(scope.spread)} мм` }] : []),
@@ -220,7 +261,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       ...(shown('volume') ? [{ label: 'СТРЕЛ', value: String(scope.shots.length) }] : []),
     ]);
     const composite = scope.composite;
-    if (general && composite?.total !== undefined) {
+    function drawGeneralScore() {
+      if (!general || composite?.total === undefined) return;
       heading('Общие очки');
       metrics([{ label: 'CG3', value: `${decimal(composite.total, true)} / 105` }]);
       const components = [
@@ -236,7 +278,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
         y -= 37;
       } y -= 10;
     }
-    if (progress) {
+    function drawProgress() {
+      if (!progress) return;
       heading('Прогресс в этих условиях');
       scope.progress.forEach(progress => {
         const value = progress.relativePercent == null ? `${decimal(progress.rawIncrease, true)} балла`
@@ -244,7 +287,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
         paragraph(`${value}${progress.fullRankAvailable ? '' : ' · предварительно'} · средний ${decimal(progress.baselineAverage)} → ${decimal(progress.currentAverage)}`, 12, accent);
       });
     }
-    if (map) {
+    function drawMap() {
+      if (!map) return;
       ensure(295); heading('Карта попаданий');
       const points = knownHitPoints(scope.shots, true), misses = knownMissPoints(scope.shots, true);
       const profile = getTargetProfile(scope.conditions.targetProfileId);
@@ -270,7 +314,8 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
       for (let step = 0; step < 4; step++) page.drawRectangle({ x: left + 341 + step * 23, y: y - 234, width: 21, height: 8, color: hex(['#c3d987', '#9fbe64', '#689548', '#315c34'][step]), opacity: .7 });
       y -= 259;
     }
-    if (distribution) {
+    function drawDistribution() {
+      if (!distribution) return;
       ensure(190); heading('Распределение попаданий');
       const peak = Math.max(...scope.distribution, 1), base = y - 116;
       scope.distribution.forEach((count, zone) => {
@@ -280,10 +325,14 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
         text(zone === 0 ? 'M' : String(zone), x + 10, base - 7, 8, false, muted);
       }); y -= 152;
     }
+    const drawSections = new Map<ExportSection, () => void>([
+      ['general_score', drawGeneralScore], ['progress_score', drawProgress], ['hit_map', drawMap], ['distribution', drawDistribution],
+    ]);
+    for (const key of composition?.sections ?? drawSections.keys()) drawSections.get(key)?.();
   }
 
   if (includes('numbered_arrows')) for (const group of snapshot.numberedArrows) {
-    newPage('ПО НОМЕРАМ СТРЕЛ'); paragraph(group.label, 10); heading('Сравнение попаданий');
+    heading('По номерам стрел', 160); paragraph(group.label, 10); heading('Сравнение попаданий');
     ensure(300);
     const center = { x: 297, y: y - 118 }, radius = 110, extent = numberedArrowMapExtent(group, shown('grouping'));
     target(group.conditions, center, radius, extent);

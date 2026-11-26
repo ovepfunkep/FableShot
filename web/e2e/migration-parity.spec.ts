@@ -81,9 +81,11 @@ test('arrow history aggregates saved sessions and progress exports the selected 
   await page.keyboard.press('Escape');
   await page.getByTestId('nav-progress').click();
   await page.getByTestId('progress-view-compare').click();
-  await page.getByRole('combobox', { name: 'Показатель графика' }).selectOption('xShare');
+  await page.getByRole('button', { name: 'Показатель графика' }).click();
+  await page.getByRole('button', { name: 'Доля X', exact: true }).click();
   await expect(page.getByTestId('progress-trend-value')).toContainText('50');
-  await page.getByRole('combobox', { name: 'Показатель графика' }).selectOption('missShare');
+  await page.getByRole('button', { name: 'Показатель графика' }).click();
+  await page.getByRole('button', { name: 'Доля промахов', exact: true }).click();
   await expect(page.getByTestId('progress-trend-value')).toContainText('50');
   const openExport = async () => {
     await page.getByRole('button', { name: 'Экспорт отчёта по выборке' }).click();

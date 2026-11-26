@@ -55,6 +55,7 @@
 .journal-navigation [aria-current] .journal-navigation-icon { background: var(--accent); color: var(--on-accent); }
 
 .journal-home { display: grid; gap: 20px; padding: 20px var(--journal-home-gutter) 28px; }
+.journal-privacy { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: .8rem; }
 .journal-home-hero {
   display: grid;
   gap: 8px;
@@ -147,7 +148,14 @@
 .journal-timeline-secondary { display: flex; justify-content: center; align-items: center; gap: 3px; flex-wrap: wrap; line-height: 1.1; }
 .journal-timeline-secondary em { color: var(--accent); font-size: 9px; font-style: normal; }
 .journal-timeline-entry:last-child button { border-color: #c6f43d8c; }
-.journal-timeline-month { position: absolute; z-index: 1; top: calc(var(--timeline-axis) - 7px); transform: translateX(-50%); padding: 0 3px; color: var(--muted); background: var(--surface); font-size: 9px; }
+.journal-timeline-month { position: absolute; inset: 0 1px auto; padding-inline-start: 3px; overflow: hidden; color: var(--ink); opacity: .19; font-size: 13px; font-weight: 800; text-align: start; text-transform: uppercase; pointer-events: none; }
+.journal-timeline-point:has(.journal-timeline-month) time { text-align: end; padding-inline-end: 3px; }
+.journal-upcoming { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; text-align: start; }
+.journal-upcoming > svg, .journal-upcoming > b { color: var(--accent); }
+.journal-upcoming > span { display: grid; gap: 3px; min-width: 0; }
+.journal-upcoming strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journal-upcoming small { display: block; color: var(--muted); font-size: .75rem; }
+.journal-upcoming > b { text-align: center; font-variant-numeric: tabular-nums; }
 
 .journal-timeline-frame { min-width: 0; position: relative; }
 .journal-timeline-viewport { container-type: inline-size; overflow-x: auto; scrollbar-width: none; }

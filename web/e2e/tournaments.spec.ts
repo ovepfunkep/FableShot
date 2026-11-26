@@ -2,6 +2,56 @@ import { readDiary } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 import { appendShot, completePractice, emptyPractice } from '../src/practice.ts';
 
+test('a future tournament on Home opens only its passport and Back returns to Home', async ({ page }) => {
+  await page.addInitScript(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    const format = new Intl.DateTimeFormat('sv-SE');
+    const from = format.format(date);
+    date.setDate(date.getDate() + 1);
+    const start = { id: 'first', category: 'Квалификация', bow: null, status: 'planned', result: '', place: null, participants: null, sessionIds: [] };
+    const tournament = { id: 'next', title: 'Ближайший кубок', from, to: null, venue: 'Клуб', protocol: '', note: 'Сбор в 10:00', starts: [start] };
+    localStorage.setItem('app.fableshot.practice-diary.v1', JSON.stringify({ version: 1, entries: [], tournaments: [
+      tournament, { ...tournament, id: 'later', title: 'Поздний кубок', from: format.format(date) },
+    ] }));
+  });
+  await page.goto('./');
+  await page.getByRole('button', { name: /Ближайший кубок/ }).click();
+  const passport = page.getByTestId('tournaments-screen');
+  await expect(passport.getByRole('heading', { name: 'Паспорт турнира' })).toBeVisible();
+  await expect(passport.getByTestId('tournament-card')).toHaveCount(1);
+  await expect(passport.getByText('Сбор в 10:00')).toBeVisible();
+  await expect(passport.getByRole('button', { name: 'Добавить турнир' })).toHaveCount(0);
+  await passport.getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByTestId('home-screen')).toBeVisible();
+});
+
+test('a running tournament on Home can start a new linked practice without losing the active one', async ({ page }) => {
+  const active = appendShot(emptyPractice(), { code: '10', points: 10, point: { x: 0, y: 0 } });
+  await page.addInitScript(practice => {
+    const key = 'app.fableshot.practice-diary.v1';
+    if (localStorage.getItem(key)) return;
+    const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
+    localStorage.setItem(key, JSON.stringify({ version: 1,
+      entries: [{ id: 'practice', startedAt: new Date().toISOString(), practice }],
+      tournaments: [{ id: 'cup', title: 'Открытый кубок', from: today, to: null, venue: 'Клуб', protocol: '', note: '',
+        starts: [{ id: 'first', category: 'Квалификация', bow: null, status: 'planned', result: '', place: null, participants: null, sessionIds: [] }] }],
+    }));
+  }, active);
+  await page.goto('./');
+  await page.getByRole('button', { name: /Ближайший турнир.*Открытый кубок.*Начать/ }).click();
+  await page.getByRole('button', { name: 'Перейти к условиям' }).click();
+  await expect(page.getByRole('button', { name: 'Турнирный старт' })).toContainText('Квалификация');
+  await page.getByRole('button', { name: 'Начать тренировку', exact: true }).click();
+  await expect(page.getByTestId('target')).toBeVisible();
+  const diary = await readDiary(page);
+  const previous = diary.entries.find(entry => entry.id === 'practice');
+  expect(previous?.paused).toBe(true);
+  expect(previous?.practice.rounds[0].series[0].shots).toEqual(active.rounds[0].series[0].shots);
+  const linked = diary.tournaments?.[0].starts[0].sessionIds;
+  expect(linked).toEqual([diary.entries.find(entry => entry.id !== 'practice')?.id]);
+});
+
 const protocolPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK9sAAAAASUVORK5CYII=', 'base64');
 
 test('one tournament holds several starts, links history, and can be removed without deleting training', async ({ page }) => {
@@ -15,7 +65,9 @@ test('one tournament holds several starts, links history, and can be removed wit
   await page.goto('./');
   await page.getByTestId('nav-history').click();
   const history = page.getByTestId('history-screen');
-  await history.getByRole('button', { name: 'Турниры', exact: true }).click();
+  const filters = page.getByTestId('history-filter-sheet');
+  await history.getByTestId('history-filters').click();
+  await filters.getByRole('button', { name: 'Турниры', exact: true }).click();
   await page.getByRole('button', { name: 'Добавить турнир' }).click();
   const editor = page.getByTestId('tournament-editor');
   await editor.getByLabel('Название', { exact: true }).fill('Кубок клуба');
@@ -48,12 +100,17 @@ test('one tournament holds several starts, links history, and can be removed wit
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   const training = page.getByTestId('session-qualification');
   await expect(training).toHaveClass(/is-tournament/);
-  await expect(training).toContainText('Кубок клуба · 2 место');
-  await history.getByLabel('Тип записи').selectOption('ordinary');
+  await expect(training.getByLabel('Турнир · Кубок клуба · 2 место')).toBeVisible();
+  await history.getByTestId('history-filters').click();
+  await filters.getByRole('button', { name: 'Тип записи' }).click();
+  await page.getByRole('button', { name: 'Только тренировки', exact: true }).click();
   await expect(training).toHaveCount(0);
-  await history.getByLabel('Тип записи').selectOption('linked');
-  await expect(training).toBeVisible();
-  await history.getByLabel('Тип записи').selectOption('');
+  await filters.getByRole('button', { name: 'Тип записи' }).click();
+  await page.getByRole('button', { name: 'Только турниры', exact: true }).click();
+  await expect(training).toHaveCount(1);
+  await filters.getByRole('button', { name: 'Тип записи' }).click();
+  await page.getByRole('button', { name: 'Все записи', exact: true }).click();
+  await page.keyboard.press('Escape');
   await page.getByTestId('open-profile').click();
   const profileTournaments = page.getByRole('button', { name: '1 Турниры' });
   await profileTournaments.click();
@@ -64,8 +121,10 @@ test('one tournament holds several starts, links history, and can be removed wit
   await page.reload();
   await page.getByTestId('nav-history').click();
   await expect(training).toHaveClass(/is-tournament/);
-  await history.getByRole('button', { name: 'Турниры', exact: true }).click();
-  await card.getByRole('button', { name: 'Удалить Кубок клуба' }).click();
+  await history.getByTestId('history-filters').click();
+  await filters.getByRole('button', { name: 'Турниры', exact: true }).click();
+  await card.getByRole('button', { name: 'Редактировать Кубок клуба' }).click();
+  await page.getByTestId('tournament-editor').getByRole('button', { name: 'Удалить турнир', exact: true }).click();
   await page.getByRole('dialog', { name: 'Удалить турнир?' }).getByRole('button', { name: 'Удалить турнир' }).click();
   await expect(card).toHaveCount(0);
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
@@ -92,7 +151,8 @@ test('training setup links a start and a completed tournament keeps its protocol
   await page.getByTestId('home-change-conditions').click();
   await expect(page.getByLabel('Турнирный старт')).toBeHidden();
   await page.getByTestId('conditions-advanced').click();
-  await page.getByLabel('Турнирный старт').selectOption({ label: 'Зимний кубок · Баребоу' });
+  await page.getByRole('button', { name: 'Турнирный старт' }).click();
+  await page.getByRole('button', { name: 'Зимний кубок · Баребоу', exact: true }).click();
   await page.getByTestId('start-training').click();
   await page.getByTestId('target').click();
   await page.getByRole('button', { name: 'Завершить тренировку' }).click();
@@ -100,8 +160,9 @@ test('training setup links a start and a completed tournament keeps its protocol
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('nav-history').click();
   const history = page.getByTestId('history-screen');
-  await expect(history.locator('.history-tournament-badge')).toContainText('Зимний кубок · 3 место');
-  await history.getByRole('button', { name: 'Турниры', exact: true }).click();
+  await expect(history.getByLabel('Турнир · Зимний кубок · 3 место')).toBeVisible();
+  await history.getByTestId('history-filters').click();
+  await page.getByTestId('history-filter-sheet').getByRole('button', { name: 'Турниры', exact: true }).click();
   const card = page.getByTestId('tournament-card').filter({ hasText: 'Зимний кубок' });
   await card.getByRole('button', { name: 'Редактировать Зимний кубок' }).click();
   const editor = page.getByTestId('tournament-editor');
@@ -144,7 +205,8 @@ test('training setup links a start and a completed tournament keeps its protocol
   await expect(club).not.toHaveAttribute('data-finish-effect', /./);
   await page.reload();
   await page.getByTestId('nav-history').click();
-  await history.getByRole('button', { name: 'Турниры', exact: true }).click();
+  await history.getByTestId('history-filters').click();
+  await page.getByTestId('history-filter-sheet').getByRole('button', { name: 'Турниры', exact: true }).click();
   await expect(card).toContainText('Завершён');
   await card.getByText('Вложения · 2', { exact: true }).click();
   await expect(card.getByRole('img', { name: 'protocol.png' })).toBeVisible();

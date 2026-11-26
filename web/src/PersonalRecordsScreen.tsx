@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { personalRecordGroups } from './personal-record-events.ts';
@@ -72,11 +73,10 @@ export function PersonalRecordsScreen({ entries, onBack, onOpen, onRanks }: Prop
         {(['all', 'bow', 'kit'] as const).map(item => <button type="button" key={item} aria-pressed={item === scope}
           onClick={() => { setScope(item); setFilter(''); }}>{{ all: 'Общий', bow: 'Класс', kit: 'Комплект' }[item]}</button>)}
       </div>
-      {scope !== 'all' && <select className="personal-records-scope" aria-label={scope === 'kit' ? 'Комплект рекорда' : 'Класс рекорда'}
-        value={scopeChoices.has(filter) ? filter : ''} onChange={event => setFilter(event.target.value)}>
-        <option value="">{scope === 'kit' ? 'Все комплекты' : 'Все классы'}</option>
-        {[...scopeChoices].map(([key, title]) => <option key={key} value={key}>{title}</option>)}
-      </select>}
+      {scope !== 'all' && <ChoicePicker label={scope === 'kit' ? 'Комплект рекорда' : 'Класс рекорда'}
+        value={scopeChoices.has(filter) ? filter : ''} onChange={setFilter}
+        options={[{ value: '', label: scope === 'kit' ? 'Все комплекты' : 'Все классы' },
+          ...[...scopeChoices].map(([value, label]) => ({ value, label }))]} />}
       <div className="personal-records-tabs" role="group" aria-label="Тип рекорда">
         <button type="button" data-testid="records-series" aria-pressed={tab === 'series'} onClick={() => { setTab('series'); setFilter(''); }}>Серии</button>
         <button type="button" data-testid="records-rounds" aria-pressed={tab === 'round'} onClick={() => { setTab('round'); setFilter(''); }}>Раунды</button>
@@ -112,7 +112,7 @@ export function PersonalRecordsScreen({ entries, onBack, onOpen, onRanks }: Prop
           {scope !== 'all' && <span className="personal-records-meta">{group.scopeLabel}</span>}
           <Icon name="right" />
           </button>
-          <button type="button" className="text-action personal-records-history-open" onClick={() => setHistoryKey(group.key)}>История рекорда</button>
+          <button type="button" className="text-action personal-records-history-open" onClick={() => setHistoryKey(group.key)}>История</button>
         </div>;
       })}
     </div>

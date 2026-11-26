@@ -1,4 +1,6 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { TargetBoard } from './TargetBoard.tsx';
 import { DEFAULT_CONDITIONS } from './conditions.ts';
 import { ShotDistribution } from './ShotDistribution.tsx';
@@ -14,6 +16,7 @@ import { RANK_CATEGORIES } from './sport-ranks.ts';
 import type { RankCategory } from './sport-ranks.ts';
 import { releasePush, releasePushSupported } from './release-push.ts';
 import { autoBackupEnabled, driveBackupAvailable, setAutoBackup } from './drive-backup.ts';
+import { scoreOutline } from './score-appearance.ts';
 import './web-onboarding.css';
 
 export type OnboardingChapter = 'welcome' | 'target' | 'report' | 'preferences';
@@ -193,6 +196,8 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
   const [updateNotices, setUpdateNotices] = useState(true);
   const [noticeError, setNoticeError] = useState('');
   const [autoBackup, setBackup] = useState(() => driveBackupAvailable && autoBackupEnabled());
+  const [colorTrainingBorders, setColorTrainingBorders] = useState(preferences.colorTrainingBorders !== false);
+  const outline = scoreOutline([{ ...exampleShot, points: 8 }, { ...exampleShot, points: 9 }, { ...exampleShot, points: 10 }], colorTrainingBorders);
   useEffect(() => {
     if (!releasePushSupported()) return;
     let live = true;
@@ -226,7 +231,7 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
       }
     }
     const success = await update({ ...preferences, themeStyle, averageHundredths: hundredths, rankCategory,
-      showAchievementsDuringInput: inputNotices, ...(standalone ? {} : { onboardingSeen: true }) });
+      showAchievementsDuringInput: inputNotices, colorTrainingBorders, ...(standalone ? {} : { onboardingSeen: true }) });
     if (success) {
       if (hundredths && !preferences.averageHundredths) onEnableHundredths?.();
       onDone();
@@ -242,22 +247,21 @@ function QuickPreferences({ onDone, onBack, standalone, onEnableHundredths }: {
     <WebThemeSettings value={{ themeStyle }} stylesOnly disabled={saving} onChange={patch => {
       if (patch.themeStyle) setThemeStyle(patch.themeStyle);
     }} />
-    <section className="web-onboard-preference-sample" data-style={themeStyle} aria-label="Пример результата">
+    <section className="web-onboard-preference-sample" data-style={themeStyle} aria-label="Пример результата"
+      data-score-outline={outline ? true : undefined} style={outline ? { '--score-outline': outline } as CSSProperties : undefined}>
       <div><span>Результат</span><strong>192/230</strong></div>
       <div><span>Средний</span><strong data-testid="onboard-average-example">{formatAverage(192 / 23, hundredths)}</strong></div>
     </section>
-    <label className="web-onboard-option"><span>Категория нормативов</span>
-      <select className="report-scope-select" value={rankCategory ?? ''} disabled={saving}
-        onChange={event => {
-          const category = event.currentTarget.value;
-          setRankCategory(category === 'male' || category === 'female' ? category : undefined);
-        }}>
-        <option value="">Выбрать позже</option>
-        <option value="male">{RANK_CATEGORIES.male}</option>
-        <option value="female">{RANK_CATEGORIES.female}</option>
-      </select>
-    </label>
+    <div className="web-onboard-option"><span>Категория нормативов</span>
+      <ChoicePicker label="Категория нормативов" value={rankCategory ?? ''} disabled={saving}
+        options={[{ value: '', label: 'Выбрать позже' }, ...Object.entries(RANK_CATEGORIES).map(([value, label]) => ({ value, label }))]}
+        onChange={category => setRankCategory(category === 'male' || category === 'female' ? category : undefined)} />
+    </div>
     <div className="web-onboard-preference-options">
+      <button type="button" className="web-onboard-option" role="switch" aria-checked={colorTrainingBorders}
+        disabled={saving} onClick={() => setColorTrainingBorders(!colorTrainingBorders)}>
+        <span>Цветные обводки тренировок</span><span className="preference-switch" aria-hidden="true"><span /></span>
+      </button>
       {savedUpdateNotices !== null ? <button type="button" role="switch" aria-checked={updateNotices} className="web-onboard-option"
         disabled={saving} onClick={() => setUpdateNotices(!updateNotices)}>
         <span>Уведомления об обновлениях</span><span className="preference-switch" aria-hidden="true"><span /></span>

@@ -35,3 +35,5 @@
 .report-example-hits i:nth-child(3) { background: #e94c40; }
 .report-example-chart { width: 100%; height: 100px; border-left: 1px solid #bbc5b8; border-bottom: 1px solid #bbc5b8; background: linear-gradient(165deg, transparent 48%, #719647 49%, #719647 51%, transparent 52%); }
 .report-heading-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.report-png-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.report-png-pagination button { width: 44px; height: 44px; border: 1px solid var(--edge); border-radius: 50%; background: var(--surface); color: var(--accent); font-size: 24px; }

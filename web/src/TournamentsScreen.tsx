@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useMemo, useRef, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
@@ -31,16 +32,15 @@ function StartEditor({ start, index, entries, occupied, onChange, onRemove }: {
     <div className="tournament-fields">
       <label>Категория<input value={start.category} maxLength={120} placeholder="Например, мужчины 18 м"
         onChange={e => onChange({ ...start, category: e.target.value })} /></label>
-      <label>Тип лука<select value={start.bow ?? ''} onChange={e => onChange({ ...start,
-        bow: BOW_CATEGORIES.find(category => category.value === e.target.value)?.value ?? null })}>
-        <option value="">Не указан</option>{BOW_CATEGORIES.map(category => <option key={category.value} value={category.value}>{category.label}</option>)}
-      </select></label>
-      <label>Статус<select value={start.status} onChange={e => {
-        const status = e.target.value as TournamentStart['status'];
+      <ChoicePicker label="Тип лука" value={start.bow ?? ''}
+        options={[{ value: '', label: 'Не указан' }, ...BOW_CATEGORIES]}
+        onChange={value => onChange({ ...start, bow: BOW_CATEGORIES.find(category => category.value === value)?.value ?? null })} />
+      <ChoicePicker label="Статус" value={start.status}
+        options={Object.entries(tournamentStatuses).map(([value, label]) => ({ value, label }))}
+        onChange={value => {
+        const status = value as TournamentStart['status'];
         onChange(status === 'participated' ? { ...start, status } : { ...start, status, result: '', place: null });
-      }}>
-        {Object.entries(tournamentStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select></label>
+      }} />
       {start.status === 'participated' && <>
         <label className="tournament-wide">Итог по протоколу<input value={start.result} maxLength={240} placeholder="Очки, счёт матча, DNF или DSQ"
           onChange={e => onChange({ ...start, result: e.target.value })} /></label>
@@ -67,10 +67,11 @@ function StartEditor({ start, index, entries, occupied, onChange, onRemove }: {
   </fieldset>;
 }
 
-export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemove, onFinish, onOpenSession }: {
+export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemove, onFinish, onOpenSession, passportId }: {
   tournaments: readonly Tournament[]; entries: readonly DiaryEntry[]; onBack: () => void;
   onSave: (value: Tournament) => Promise<boolean>; onRemove: (id: string) => Promise<boolean>; onOpenSession: (id: string) => void;
   onFinish: (id: string) => Promise<boolean>;
+  passportId?: string | null;
 }) {
   const { preferences } = useTrainingPreferences();
   const [draft, setDraft] = useState<Tournament | null>(null);
@@ -85,7 +86,9 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
   const ordered = useMemo(() => [...entries].sort(compareDiaryDate), [entries]);
   const links = useMemo(() => tournamentLinks(tournaments), [tournaments]);
   const byId = useMemo(() => new Map(entries.map(entry => [entry.id, entry])), [entries]);
-  const sorted = [...tournaments].sort((a, b) => b.from.localeCompare(a.from));
+  const visibleTournaments = passportId
+    ? tournaments.filter(item => item.id === passportId)
+    : [...tournaments].sort((a, b) => b.from.localeCompare(a.from));
   const edit = (value: Tournament) => { editGeneration.current++; setReadingFile(false); setError(''); setDraft(value); };
   const closeEditor = () => { editGeneration.current++; setReadingFile(false); setDraft(null); };
 
@@ -118,13 +121,14 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
   return <main className="conditions-page" data-testid="tournaments-screen">
     <header className="topbar">
       <button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button>
-      <h1>Турниры</h1>
+      <h1>{passportId ? 'Паспорт турнира' : 'Турниры'}</h1>
     </header>
     <div className="conditions-content tournament-list">
-      <button type="button" className="primary" onClick={() => edit({ id: crypto.randomUUID(), title: '', from: localDate.format(new Date()),
-        to: null, venue: '', protocol: '', note: '', starts: [emptyTournamentStart()] })}>Добавить турнир</button>
-      {!sorted.length && <p className="tournament-empty">Здесь появятся твои турниры, категории и места.</p>}
-      {sorted.map(item => <article key={item.id} className="tournament-card" data-testid="tournament-card"
+      {!passportId && <button type="button" className="primary" onClick={() => edit({ id: crypto.randomUUID(), title: '', from: localDate.format(new Date()),
+        to: null, venue: '', protocol: '', note: '', starts: [emptyTournamentStart()] })}>Добавить турнир</button>}
+      {!visibleTournaments.length && <p className="tournament-empty">{passportId
+        ? 'Турнир больше недоступен.' : 'Здесь появятся твои турниры, категории и места.'}</p>}
+      {visibleTournaments.map(item => <article key={item.id} className="tournament-card" data-testid="tournament-card"
         data-finish-effect={preferences.animations && celebration?.id === item.id ? celebration.prize ? 'prize' : 'normal' : undefined}
         onAnimationEnd={event => { if (event.target === event.currentTarget && celebration?.id === item.id) setCelebration(null); }}>
         <header><Icon name="trophy" /><h2>{tournamentTitle(item)}</h2>
@@ -161,8 +165,6 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
           {item.protocol && <a href={item.protocol} target="_blank" rel="noreferrer">Протокол</a>}
           {!item.completed && item.starts.some(start => start.status === 'participated') && <button type="button" className="text-action"
             onClick={() => { setError(''); setFinishing(item); }}>Завершить турнир</button>}
-          <button type="button" className="icon-button tournament-danger" aria-label={`Удалить ${tournamentTitle(item)}`}
-            onClick={() => { setError(''); setRemoving(item); }}><Icon name="delete" /></button>
         </footer>
       </article>)}
     </div>
@@ -205,6 +207,8 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
         </details>
         {error && <p role="alert">{error}</p>}
         <button type="submit" className="primary" disabled={readingFile}>Сохранить турнир</button>
+        {tournaments.some(item => item.id === draft.id) && <button type="button" className="text-action tournament-danger"
+          disabled={readingFile} onClick={() => { setError(''); setRemoving(draft); }}>Удалить турнир</button>}
       </form>
     </BottomSheet>}
     {finishing && <BottomSheet title="Завершить турнир?" onClose={() => setFinishing(null)}>
@@ -222,7 +226,11 @@ export function TournamentsScreen({ tournaments, entries, onBack, onSave, onRemo
       <p>Паспорт и отметки турнира будут удалены. Связанные тренировки останутся в дневнике.</p>
       {error && <p role="alert">{error}</p>}
       <button type="button" className="primary" onClick={async () => {
-        if (await onRemove(removing.id)) setRemoving(null); else setError('Не удалось удалить турнир.');
+        if (await onRemove(removing.id)) {
+          setRemoving(null);
+          closeEditor();
+          if (passportId) onBack();
+        } else setError('Не удалось удалить турнир.');
       }}>Удалить турнир</button>
     </BottomSheet>}
   </main>;

@@ -168,10 +168,10 @@ export function TrainingShotStrip({ shots, previousVolume, selected, entering, o
   </div>;
 }
 
-export function TrainingFooter({ mainText, mainEnabled, mainRef, missEnabled, undoEnabled, showPrevious,
+export function TrainingFooter({ mainText, mainEnabled, mainRef, newRound, missEnabled, undoEnabled, showPrevious,
   onMain, onMiss, onUndo, onPrevious, timerBadge, arrowNumberChoice, status }: {
   mainText: string; mainEnabled: boolean; mainRef: Ref<HTMLButtonElement>; missEnabled: boolean; undoEnabled: boolean;
-  showPrevious: boolean; onPrevious?: () => void;
+  showPrevious: boolean; newRound: boolean; onPrevious?: () => void;
   onMain: () => void; onMiss: () => void; onUndo: () => void;
   timerBadge?: ReactNode; arrowNumberChoice?: ReactNode; status?: string;
 }) {
@@ -186,7 +186,8 @@ export function TrainingFooter({ mainText, mainEnabled, mainRef, missEnabled, un
       <button type="button" className="icon-button" aria-label="Отменить" disabled={!undoEnabled} onClick={onUndo}><Icon name="undo" /></button>
       {showPrevious && <button type="button" className="icon-button" aria-label="Предыдущая серия"
         disabled={!onPrevious} onClick={onPrevious}><Icon name="left" /></button>}
-      <button ref={mainRef} type="button" className="primary" data-testid="next-end" disabled={!mainEnabled} onClick={onMain}>{mainText}</button>
+      <button ref={mainRef} type="button" className="primary" data-testid="next-end" data-new-round={newRound || undefined}
+        disabled={!mainEnabled} onClick={onMain}>{newRound && <Icon name="right" />}{mainText}</button>
     </div>
   </footer>;
 }

@@ -133,7 +133,7 @@ export function TrainingPreferenceControls({ keys, onEnableHundredths }: {
       (item.key !== 'trainingOnLockScreen' || Capacitor.getPlatform() === 'android') &&
       (item.key !== 'useSystemScale' || (keys?.includes(item.key) && supportsAppScale())) &&
       (!['realArrowDiameter', 'maximumSpread', 'colorTrainingBorders'].includes(item.key) || keys?.includes(item.key))).map(item => {
-      const checked = preferences[item.key] ?? !['useSystemScale', 'realArrowDiameter', 'maximumSpread', 'colorTrainingBorders'].includes(item.key);
+      const checked = preferences[item.key] ?? !['useSystemScale', 'realArrowDiameter', 'maximumSpread'].includes(item.key);
       return <div key={item.key} className="preference-row preference-row--with-help">
         <span className="preference-title">{item.title}
           {'subtitle' in item && <small className="preference-subtitle">{item.subtitle}</small>}

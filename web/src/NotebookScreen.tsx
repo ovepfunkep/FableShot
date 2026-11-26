@@ -44,7 +44,7 @@ export function NotebookScreen({ entries, notes, onSaveStandalone, onSaveSession
       <div className="notebook-search">
         <label><span className="sr-only">Поиск по заметкам</span><input type="search" placeholder="Поиск по заметкам"
           maxLength={120} value={query} data-testid="notebook-search" onChange={event => setQuery(event.target.value)} /></label>
-        <button type="button" className="icon-button" aria-label="Написать заметку" data-testid="notebook-add"
+        <button type="button" className="icon-button notebook-add" aria-label="Написать заметку" data-testid="notebook-add"
           onClick={() => setEditor({ create: true })}><span aria-hidden="true">＋</span></button>
       </div>
       {!shown.length ? <p className="notebook-empty" role="status">{needle ? 'Ничего не найдено' : 'Пока нет заметок. Можно написать отдельную запись без тренировки.'}</p>
@@ -52,14 +52,14 @@ export function NotebookScreen({ entries, notes, onSaveStandalone, onSaveSession
           data-testid="notebook-item">
           <button type="button" className="notebook-note" onClick={() => setEditor({ entry, note })}>
             <span className="notebook-note-meta"><Icon name="notes" /><time dateTime={note.localDate}>{displayDate(note.localDate)}</time>
-              {!entry && <span>Отдельная запись</span>}</span>
+              <span className="notebook-kind">{entry ? scopeTitle(note) : 'Отдельная запись'}</span></span>
             {note.body.trim() && <span className="notebook-body">{note.body}</span>}
             {[note.place, note.feeling, note.conditions].some(value => value.trim()) && <span className="notebook-context">
               {[note.place, note.feeling, note.conditions].filter(value => value.trim()).join(' · ')}</span>}
             {!!note.tags.length && <span className="diary-note-tags">{note.tags.map(tag => <span key={tag}>#{tag}</span>)}</span>}
           </button>
           {entry && (!entry.deletedAt ? <button type="button" className="notebook-source" data-testid="notebook-source"
-            onClick={() => onOpenSession(entry.id)}><span>{scopeTitle(note)} · {entry.title || 'Тренировка'}</span><Icon name="right" /></button>
+            onClick={() => onOpenSession(entry.id)}><span>{entry.title || 'Открыть тренировку'}</span><Icon name="right" /></button>
             : <p className="notebook-unavailable">{scopeTitle(note)} · тренировка в корзине</p>)}
         </li>)}</ul>}
     </div>

@@ -60,7 +60,7 @@ test('PNG and paged PDF preview offline without downloading, remain cached and s
   await page.getByTestId('report-export-png').click();
   await expect(sheet.locator('img')).toHaveAttribute('src', poster!);
   expect(downloads).toHaveLength(2);
-  await page.getByText('Экспорт данных', { exact: true }).click();
+  await page.getByTestId('report-export-data').getByText('Дополнительно', { exact: true }).click();
   const csvDownload = page.waitForEvent('download');
   await page.getByTestId('report-export-csv').click();
   const csv = await readFile((await (await csvDownload).path())!, 'utf8');

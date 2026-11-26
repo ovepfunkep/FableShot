@@ -14,6 +14,7 @@ import type { TechniqueSelection } from './technique.ts';
 import { RankTag } from './SportRanks.tsx';
 import { roundRank } from './sport-ranks.ts';
 import { TrainingMeanTrend } from './TrainingMeanTrend.tsx';
+import type { TrendSeriesPosition } from './TrainingMeanTrend.tsx';
 import { TrainingReportMetrics } from './TrainingReportMetrics.tsx';
 import type { TrainingMoment } from './training-moments.ts';
 import { ExerciseRankCard } from './ExerciseRankCard.tsx';
@@ -31,7 +32,21 @@ import { frequentTrainingTitles } from './diary-history.ts';
 import { TrainingTitleSuggestions } from './TrainingTitleSuggestions.tsx';
 import './report-overview.css';
 
-export type ReportPosition = { blocks: string[]; anchor: string; offset: number; series?: number };
+export type ReportPosition = { blocks: string[]; anchor: string; offset: number; series?: TrendSeriesPosition };
+
+export function captureReportPosition(body: HTMLElement | null): ReportPosition | undefined {
+  if (!body || body.scrollTop <= 4) return;
+  const top = body.getBoundingClientRect().top;
+  const blocks = Array.from(body.querySelectorAll<HTMLElement>('[data-report-block]'));
+  const anchor = blocks.find(block => block.getBoundingClientRect().bottom > top + 8);
+  const trend = anchor?.querySelector<HTMLElement>('[data-trend-round][data-trend-series]');
+  if (!anchor?.dataset.reportBlock) return;
+  return {
+    blocks: blocks.map(block => block.dataset.reportBlock!), anchor: anchor.dataset.reportBlock,
+    offset: top - anchor.getBoundingClientRect().top,
+    series: trend ? { round: Number(trend.dataset.trendRound), series: Number(trend.dataset.trendSeries) } : undefined,
+  };
+}
 
 function result(shots: readonly Shot[], hundredths: boolean, showPoints: boolean, showAverage: boolean) {
   const { points, maximum, average } = summarize(shots);
@@ -66,7 +81,7 @@ function ReportDuration({ time }: { time: TrainingTime }) {
   </span>;
 }
 
-export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized, moment, onCorrectConditions, navigation }: {
+export function ReportOverview({ practice, entries, entryId, onBack, onSelectSeries, onResume, onTechnique, onChange, onOpenMemo, onRank, onRankReference, onRankProfile, onTrash, onNotes, onRename, grants, onAchievement, onOpenRecordSession, onPause, onRepeat, onDeleteStage, onRoomLeaderboard, roomFinalized, moment, onCorrectConditions, navigation }: {
   onCorrectConditions?: () => void;
   practice: Practice;
   entries: readonly DiaryEntry[];
@@ -79,6 +94,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   onOpenMemo: (selection: TechniqueSelection) => void;
   onRank: (roundId: number) => void;
   onRankReference: () => void;
+  onRankProfile: () => void;
   onTrash: (deleted: boolean) => Promise<boolean>;
   onNotes: (scope: DiaryNoteScope) => void;
   onRename: (title: string) => Promise<boolean>;
@@ -112,23 +128,9 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
   }, [restorePosition, navigation]);
 
   function openNeighbor(id: string) {
-    const body = reportBody.current;
-    if (!body || !navigation) return;
-    if (body.scrollTop <= 4) {
-      navigation.open(id);
-      return;
-    }
-    const top = body.getBoundingClientRect().top;
-    const blocks = Array.from(body.querySelectorAll<HTMLElement>('[data-report-block]'));
-    const anchor = blocks.find(block => block.getBoundingClientRect().bottom > top + 8);
-    const seriesPosition = anchor?.querySelector<HTMLElement>('[data-series-position]')?.dataset.seriesPosition;
-    navigation.open(id, anchor?.dataset.reportBlock ? {
-      blocks: blocks.map(block => block.dataset.reportBlock!), anchor: anchor.dataset.reportBlock,
-      offset: top - anchor.getBoundingClientRect().top,
-      series: seriesPosition !== undefined ? Number(seriesPosition) : undefined,
-    } : undefined);
+    navigation?.open(id, captureReportPosition(reportBody.current));
   }
-  const { preferences, update } = useTrainingPreferences();
+  const { preferences } = useTrainingPreferences();
   const [exportOpen, setExportOpen] = useState(false);
   const [conditionsOpen, setConditionsOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -165,6 +167,9 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         <button type="button" className="report-back" aria-label="Назад" onClick={onBack}><ReportIcon name="back" /></button>
         <h1 title={entry?.title || undefined}>{entry?.title || 'Тренировка'}</h1>
         <div className="report-heading-actions">
+          {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
+          {onRoomLeaderboard && <button type="button" className="icon-button report-room-action" aria-haspopup="dialog"
+            aria-label={roomFinalized ? 'Итоги комнаты' : 'Таблица комнаты'} onClick={onRoomLeaderboard}><Icon name="group" /></button>}
           {canResume && <button type="button" className="icon-button" aria-label="Продолжить тренировку" data-testid="session-resume" onClick={() => setResumeOpen(true)}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
           </button>}
@@ -179,14 +184,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
           </button>}
         </div>
       </div>
-      <div className="report-start-row">
-        {start && <time className="report-start" data-testid="report-training-start" dateTime={start.iso}>{start.label}</time>}
-        {(onRoomLeaderboard || preferences.showAchievementNotices !== false) && <div className="report-start-actions">
-          {preferences.showAchievementNotices !== false && <SessionAchievements grants={grants} />}
-          {onRoomLeaderboard && <button type="button" className="icon-button report-room-action" aria-haspopup="dialog"
-            aria-label={roomFinalized ? 'Итоги комнаты' : 'Таблица комнаты'} onClick={onRoomLeaderboard}><Icon name="group" /></button>}
-        </div>}
-      </div>
+      {start && <time className="report-start" data-testid="report-training-start" dateTime={start.iso}>{start.label}</time>}
     </header>
     <div className="report-body" data-testid="report-screen" ref={reportBody}>
       {practice.savedAt === null && (!!focus.length || !!technique?.versionId) && <button type="button" className="report-focus" data-testid="report-technique-focus" onClick={onTechnique}>
@@ -196,7 +194,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       {deleted && <button type="button" className="report-resume" onClick={async () => { if (await onTrash(false)) onBack(); }}>Восстановить тренировку</button>}
       {entry && !practice.savedAt && !entry.paused && !deleted && <button type="button" className="report-resume" data-testid="session-pause" onClick={onPause}>Приостановить тренировку</button>}
       {!hasShots && <p className="report-empty">Нет попаданий</p>}
-      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} moment={moment} reportId={entryId ?? undefined}
+      <TrainingReportMetrics practice={practice} entries={entries} onRankReference={onRankReference} onRankProfile={onRankProfile} moment={moment} reportId={entryId ?? undefined}
         duration={entry?.trainingTime && visible('training_time') ? <ReportDuration time={entry.trainingTime} /> : undefined} overview={{
       records: visible('records') && !!entry?.personalRecords?.length && <PersonalRecordCard records={entry.personalRecords}
         availableSessionIds={new Set(entries.filter(item => !item.deletedAt && item.practice.savedAt).map(item => item.id))}
@@ -211,11 +209,6 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
             <h3 data-testid={`report-round-total-${roundIndex + 1}`}>Раунд {roundIndex + 1}{summary(shots) && ` · ${summary(shots)}`}</h3>
             {visible('norms') && <RankTag rank={roundRank(practice, round.id, preferences.rankCategory ?? null)} testId={`report-rank-${roundIndex + 1}`} onOpen={() => onRank(round.id)} />}
           </div>
-          {(visible('result') || visible('average')) && <div className="report-series-columns" aria-hidden="true">
-            {visible('result') && <span className="report-series-score">Очки</span>}
-            {visible('average') && <span className="report-series-average">Ср.</span>}
-            {visible('result') && <span className="report-series-cumulative" title="Сумма с начала раунда">Σ</span>}
-          </div>}
           {round.series.map((series, seriesIndex) => {
             const result = summarize(series.shots);
             cumulative += result.points;
@@ -232,10 +225,10 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
       }),
       mean_trend: visible('mean_trend') && <TrainingMeanTrend practice={practice} initialSeriesPosition={restorePosition?.series} />,
       norms: hasShots && visible('norms') && <ExerciseRankCard practice={practice} category={preferences.rankCategory ?? null}
-        onCategory={rankCategory => update({ ...preferences, rankCategory })} onOpenReference={onRankReference} />,
+        onProfile={onRankProfile} onOpenReference={onRankReference} />,
       }} />
     </div>
-    {navigation && <nav className="report-neighbors" aria-label="Соседние тренировки">
+    {navigation && (navigation.previous || navigation.next) && <nav className="report-neighbors" aria-label="Соседние тренировки">
       <button type="button" aria-label="Предыдущая" title="Предыдущая тренировка" disabled={!navigation.previous} onClick={() => openNeighbor(navigation.previous!)}>
         <Icon name="left" />
       </button>

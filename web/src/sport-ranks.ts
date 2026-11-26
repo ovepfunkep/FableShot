@@ -146,7 +146,7 @@ function rankBow(conditions: Conditions | null): RankBow | null {
   return value === 'recurve' || value === 'compound' || value === 'barebow' ? value : null;
 }
 
-function sameRankConditions(a: Conditions, b: Conditions): boolean {
+export function sameRankConditions(a: Conditions, b: Conditions): boolean {
   return (a.equipment?.bow.category ?? null) === (b.equipment?.bow.category ?? null) &&
     a.distanceMeters === b.distanceMeters && a.targetProfileId === b.targetProfileId && a.targetDiameterMm === b.targetDiameterMm;
 }

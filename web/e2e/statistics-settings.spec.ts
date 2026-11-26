@@ -130,7 +130,7 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await expect(page.getByTestId('exercise-rank-next')).toHaveText('КМС · на 38 очков выше порога');
   await rankTable.getByRole('button', { name: 'КМС', exact: true }).click();
   await page.getByTestId('report-exercise-rank').screenshot({ path: '../artifacts/web-0.13.0-exercise-rank.png' });
-  await page.getByRole('button', { name: 'Разряд по всей тренировке', exact: true }).click();
+  await page.getByRole('button', { name: /Разряд по зачётным стрелам · 60 стрел/ }).click();
   await expect(page.getByTestId('rank-details').getByRole('table')).toBeVisible();
   await expect(page.getByTestId('rank-details').locator('.rank-scale')).toHaveCount(0);
   await expect(page.getByTestId('rank-progress')).toContainText('540 очков');
@@ -144,10 +144,8 @@ test('whole exercise uses two rounds and display switches persist without rewrit
   await expect(page.getByTestId('exercise-rank-level')).toHaveText('Темп МС');
   await expect(page.getByTestId('report-result-rank')).toHaveText('МС');
   await expect(page.locator('.report-result-rank')).toHaveAttribute('data-forecast', 'true');
-  await expect(page.getByTestId('exercise-rank-progress')).toHaveText('57 из 60 стрел');
-  await expect(page.getByTestId('exercise-rank-next')).toHaveText('МСМК · порог уже недостижим');
-  await rankTable.getByRole('button', { name: 'МС', exact: true }).click();
-  await expect(page.getByTestId('exercise-rank-next')).toHaveText('До МС · на оставшихся нужен средний 8,33');
+  await expect(page.getByTestId('report-result-rank-coverage')).toHaveText('30 стрел · раунд 1');
+  await expect(page.getByRole('table', { name: 'Пороги нормативов за 30 стрел' })).toBeVisible();
   await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByTestId('open-settings').click();
   await page.getByTestId('settings-statistics').click();

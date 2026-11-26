@@ -4,13 +4,17 @@ import { ACTIVE_DATA_KEY, DATA_KEYS, LEGACY_DATA_KEYS, RECOVERY_DATA_KEY, appSto
 import type { DataRecords, StoredData } from './app-storage.ts';
 import { DIARY_KEY, isDiary, loadDiary, NATIVE_ARCHIVE_BYTE_LIMIT } from './persistence.ts';
 import type { Diary, NativeArchiveReference } from './persistence.ts';
-import { isLibrary } from './equipment.ts';
+import { isLibrary, selectableEquipment } from './equipment.ts';
+import type { EquipmentLibrary } from './equipment.ts';
 import { isPreset } from './conditions.ts';
 import { isTechniqueLibrary } from './technique.ts';
+import type { TechniqueLibrary } from './technique.ts';
 import { valid as validPreferences } from './preferences.ts';
+import type { TrainingPreferences } from './preferences.ts';
 import { isTechniqueDisplaySettings } from './technique-settings.ts';
 import { isSettings as isTimerSettings } from './timer.ts';
 import { getNativeSource, putNativeSource } from './native-source-store.ts';
+import { achievementValidity, dependsOnTraining } from './achievement-validity.ts';
 
 const MAX_WEB_ONLY_BYTES = 12 * 1024 * 1024;
 export const MAX_ARCHIVE_BYTES = MAX_WEB_ONLY_BYTES + NATIVE_ARCHIVE_BYTE_LIMIT;
@@ -82,10 +86,71 @@ export function validateArchiveRecords(records: unknown): ArchiveSummary {
 export function captureArchiveRecords(): DataRecords {
   const records = Object.fromEntries(DATA_KEYS.map(key => [key, appStorage.getItem(key)]));
   // Normalize the read-only legacy fallback, without modifying its original key.
-  const { groupSeries: _pendingRoomOperations, ...diary } = loadDiary();
-  records[DIARY_KEY] = JSON.stringify(diary);
-  validateArchiveRecords(records);
+  records[DIARY_KEY] = JSON.stringify(loadDiary());
   return records;
+}
+
+/** Projects validated data for transfer. Local rollback snapshots bypass this function. */
+export function projectArchiveRecords(records: DataRecords, includeArchived: boolean): DataRecords {
+  const projected = { ...records };
+  const [, equipmentKey, , techniqueKey, preferencesKey] = DATA_KEYS;
+  const current = JSON.parse(records[DIARY_KEY]!) as Diary;
+  const { groupSeries: _roomOperations, ...diary } = current;
+
+  if (!includeArchived) {
+    delete diary.nativeArchive;
+    diary.entries = diary.entries.filter(entry => entry.deletedAt == null).map(entry =>
+      entry.notes ? { ...entry, notes: entry.notes.filter(note => note.deletedAtMs == null) } : entry);
+    if (diary.notes) diary.notes = diary.notes.filter(note => note.deletedAtMs == null);
+    const activeIds = new Set(diary.entries.map(entry => entry.id));
+    if (diary.tournaments) diary.tournaments = diary.tournaments.map(tournament => ({
+      ...tournament, starts: tournament.starts.map(start => ({
+        ...start, sessionIds: start.sessionIds.filter(id => activeIds.has(id)),
+      })),
+    }));
+    if (diary.achievementLedger) {
+      const removedIds = new Set(current.entries.filter(entry => entry.deletedAt != null).map(entry => entry.id));
+      let validity: ReturnType<typeof achievementValidity> | undefined;
+      diary.achievementLedger = { ...diary.achievementLedger, grants: diary.achievementLedger.grants.flatMap(grant => {
+        if (!grant.sessionId || !removedIds.has(grant.sessionId)) return [grant];
+        if (grant.stageRank || grant.seriesSwing) return [];
+        if (dependsOnTraining(grant.id)) {
+          if (grant.nativeSnapshot) return [];
+          validity ??= achievementValidity(diary);
+          if (!validity.get(`${grant.id}:${grant.scope}`)) return [];
+        }
+        const { sessionId: _removedSession, ...independentGrant } = grant;
+        return [independentGrant];
+      }) };
+    }
+
+    const equipment = JSON.parse(records[equipmentKey] ?? 'null') as EquipmentLibrary | null;
+    if (equipment) {
+      const available = selectableEquipment(equipment);
+      if (available.bows.length + available.arrows.length + available.kits.length <
+        equipment.bows.length + equipment.arrows.length + equipment.kits.length) {
+        projected[equipmentKey] = JSON.stringify({ ...equipment, ...available });
+      }
+    }
+    const techniques = JSON.parse(records[techniqueKey] ?? 'null') as TechniqueLibrary | null;
+    if (techniques?.documents.some(document => document.archived)) {
+      projected[techniqueKey] = JSON.stringify({ ...techniques, documents: techniques.documents.filter(document => !document.archived) });
+    }
+    const saved = JSON.parse(records[preferencesKey] ?? 'null') as { version: 1; preferences: TrainingPreferences } | null;
+    if (saved?.preferences.rankAssignments?.some(assignment => assignment.deletedAtMs != null)) {
+      projected[preferencesKey] = JSON.stringify({ ...saved, preferences: { ...saved.preferences,
+        rankAssignments: saved.preferences.rankAssignments.filter(assignment => assignment.deletedAtMs == null) } });
+    }
+  }
+  const serialized = JSON.stringify(diary);
+  if (serialized !== JSON.stringify(current)) projected[DIARY_KEY] = serialized;
+  return projected;
+}
+
+export function projectArchivePreview(preview: WebArchivePreview, includeArchived: boolean): WebArchivePreview {
+  const records = projectArchiveRecords(preview.records, includeArchived);
+  return { manifest: preview.manifest, records, summary: validateArchiveRecords(records),
+    ...(includeArchived && preview.nativeSource ? { nativeSource: preview.nativeSource } : {}) };
 }
 
 export function nativeArchiveReference(records: DataRecords): NativeArchiveReference | undefined {

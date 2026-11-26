@@ -1,39 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
-import { ACHIEVEMENT_RARITY_LABELS, achievementRarityFor, achievementScopeLabel, getAchievementDefinition } from './achievement-catalog.ts';
-import { stageRankBasisLabel } from './stage-rank-achievements.ts';
+import { getAchievementDefinition } from './achievement-catalog.ts';
+import { AchievementGrantDetails, AchievementStack, grantRarity } from './AchievementStack.tsx';
 import { groupAchievementGrants } from './achievement-ledger.ts';
 import type { AchievementGrant, AchievementGroup } from './achievement-ledger.ts';
 import { Icon } from './TrainingChrome.tsx';
 import './achievement-notices.css';
-
-const rarity = (grant: AchievementGrant) => achievementRarityFor(getAchievementDefinition(grant.id)!, grant.scope);
-
-function GrantTitle({ grant }: { grant: AchievementGrant }) {
-  return <><strong>{getAchievementDefinition(grant.id)!.title}</strong><span className="achievement-rarity-label">{ACHIEVEMENT_RARITY_LABELS[rarity(grant)]}</span></>;
-}
-
-function GrantEvidence({ grant, compact = false }: { grant: AchievementGrant; compact?: boolean }) {
-  const swing = grant.seriesSwing;
-  return <>
-    {grant.stageRank && <small>{compact ? `Порог ${grant.stageRank.threshold} из ${10 * grant.stageRank.exerciseArrows}`
-      : `${achievementScopeLabel(grant.scope)} · ${stageRankBasisLabel(grant.stageRank)}`}</small>}
-    {swing && <small>{swing.points.map(points => `${points}/${10 * swing.arrows}`).join(' → ')}</small>}
-    {grant.valid === false && <small className="achievement-evidence-note">Награда получена раньше. Текущие записи больше не подтверждают её условие.</small>}
-  </>;
-}
-
-function GrantList({ grants, flavor = false, compact = false }: { grants: readonly AchievementGrant[]; flavor?: boolean; compact?: boolean }) {
-  return <ul className="achievement-earned-list">{grants.map(grant => {
-    const rule = getAchievementDefinition(grant.id)!;
-    return <li key={`${grant.id}:${grant.scope}`} className="achievement-earned-card" data-rarity={rarity(grant)}>
-      <header><span className="achievement-earned-icon"><Icon name="trophy" /></span><div><GrantTitle grant={grant} /></div></header>
-      <p>{flavor ? rule.flavor : rule.description}</p>
-      <GrantEvidence grant={grant} compact={compact} />
-    </li>;
-  })}</ul>;
-}
 
 const noticeDuration = 4000;
 const noticeEnter = 170;
@@ -42,12 +15,13 @@ const groupGrants = (group: AchievementGroup) => [group.leading, ...group.additi
 const animated = () => document.documentElement.dataset.motion !== 'off' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
-  group: AchievementGroup; compact?: boolean; onOpen: () => void; onNext: () => void; onShown: () => void;
+  group: AchievementGroup; compact?: boolean; onOpen: (grant: AchievementGrant) => void; onNext: () => void; onShown: () => void;
 }) {
   const banner = useRef<HTMLElement>(null);
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const suppressClick = useRef(false);
   const [dragging, setDragging] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [leaving, setLeaving] = useState<'up' | 'left'>();
   const remaining = useRef(noticeDuration + (animated() ? noticeEnter : 0));
   const next = useRef(onNext);
@@ -61,14 +35,14 @@ function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
       const end = window.setTimeout(() => next.current(), noticeExit);
       return () => window.clearTimeout(end);
     }
-    if (dragging) return;
+    if (dragging || expanded) return;
     const started = Date.now();
     const timer = window.setTimeout(() => setLeaving('up'), remaining.current);
     return () => {
       window.clearTimeout(timer);
       remaining.current = Math.max(0, remaining.current - (Date.now() - started));
     };
-  }, [dragging, leaving]);
+  }, [dragging, expanded, leaving]);
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
     const point = start.current;
@@ -88,33 +62,30 @@ function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
   }
 
   return <aside ref={banner} className="achievement-notice" aria-label="Новое достижение" data-testid="achievement-notice"
-    data-rarity={rarity(group.leading)} data-compact={compact || undefined} data-dragging={dragging || undefined} data-leaving={leaving}
+    data-rarity={grantRarity(group.leading)} data-compact={compact || undefined} data-dragging={dragging || undefined} data-leaving={leaving} data-expanded={expanded || undefined}
     onAnimationEnd={event => {
       if (event.target === event.currentTarget && event.animationName === 'achievement-notice-in') banner.current?.setAttribute('data-arrived', '');
     }}>
-    <button type="button" aria-label="Посмотреть полученные достижения" aria-haspopup="dialog" onClick={() => {
-      if (!suppressClick.current && !leaving) onOpen();
-      suppressClick.current = false;
-    }} onPointerDown={event => {
+    <AchievementStack group={group} variant="notice" onOpen={onOpen} onExpandedChange={setExpanded}
+      rootProps={{ 'aria-label': 'Посмотреть полученные достижения', onClick: () => {
+        if (!suppressClick.current && !leaving) onOpen(group.leading);
+        suppressClick.current = false;
+      }, onPointerDown: event => {
       if (leaving || event.button !== 0 || start.current) return;
       suppressClick.current = false;
       start.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
       banner.current?.setAttribute('data-arrived', '');
       event.currentTarget.setPointerCapture(event.pointerId);
       setDragging(true);
-    }} onPointerMove={event => {
+    }, onPointerMove: event => {
       const point = start.current;
       if (!point || point.id !== event.pointerId || !animated()) return;
       const x = Math.min(0, event.clientX - point.x);
       const y = Math.min(0, event.clientY - point.y);
       banner.current?.style.setProperty('--notice-x', `${x}px`);
       banner.current?.style.setProperty('--notice-y', `${y}px`);
-    }} onPointerUp={event => finishDrag(event)} onPointerCancel={event => finishDrag(event, true)}
-      onLostPointerCapture={event => finishDrag(event, true)}>
-      <Icon name="trophy" />
-      <div><GrantTitle grant={group.leading} /></div>
-      {!!group.additional.length && <b>+{group.additional.length}</b>}
-    </button>
+    }, onPointerUp: event => finishDrag(event), onPointerCancel: event => finishDrag(event, true),
+      onLostPointerCapture: event => finishDrag(event, true) }} />
     <svg className="achievement-notice-clock" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true">
       <rect x=".7" y=".7" width="98.6" height="20.6" rx="4" pathLength="1" />
     </svg>
@@ -131,59 +102,36 @@ function groupTitle(grant: AchievementGrant) {
   return ({ group: 'Кучность', stability: 'Стабильность', records: 'Личный рекорд', progress: 'Прогресс' } as Record<string, string>)[family] ?? 'Дневник';
 }
 
-function AchievementStack({ group, active }: { group: AchievementGroup; active: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const id = useId();
-  const { leading, additional } = group;
-  const rule = getAchievementDefinition(leading.id)!;
-  return <div className="achievement-stack">
-    <div className="achievement-earned-card achievement-stack-leading" data-rarity={rarity(leading)}>
-      <div className="achievement-stack-heading">
-        <span className="achievement-earned-icon"><Icon name="trophy" /></span>
-        <div><GrantTitle grant={leading} /></div>
-      </div>
-      <p>{rule.flavor}</p>
-      <GrantEvidence grant={leading} />
-      {!!additional.length && <button type="button" className="achievement-stack-toggle" aria-expanded={expanded} aria-controls={id}
-        aria-label={expanded ? 'Свернуть младшие награды' : `Раскрыть младшие награды, ${additional.length}`}
-        onClick={() => setExpanded(value => !value)}><b>+{additional.length}</b><Icon name="right" /></button>}
-    </div>
-    {!!additional.length && <div className="achievement-stack-tail" data-open={expanded && active} id={id} inert={!expanded || !active}>
-      <div><GrantList grants={additional} flavor compact /></div>
-    </div>}
-    {!!additional.length && !expanded && <div className="achievement-stack-peek" aria-hidden="true">
-      {additional.slice(0, 2).map(grant => <span key={grant.id} data-rarity={rarity(grant)} />)}
-    </div>}
-  </div>;
-}
-
-function AchievementMomentDetails({ groups, initial }: { groups: readonly AchievementGroup[]; initial: number }) {
-  const pages = useRef<HTMLDivElement>(null);
+function AchievementMomentDetails({ groups, initial, onOpen }: { groups: readonly AchievementGroup[]; initial: number; onOpen: (grant: AchievementGrant) => void }) {
   const [page, setPage] = useState(initial);
-  useLayoutEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const viewport = pages.current;
-      if (viewport) viewport.scrollLeft = initial * viewport.clientWidth;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [initial]);
+  const [direction, setDirection] = useState<'next' | 'previous'>();
+  const start = useRef<{ x: number; y: number } | null>(null);
   function goTo(index: number) {
-    const viewport = pages.current;
-    if (viewport) viewport.scrollTo({ left: index * viewport.clientWidth, top: 0, behavior: animated() ? 'smooth' : 'instant' });
+    if (!groups[index] || index === page) return;
+    setDirection(index > page ? 'next' : 'previous');
+    setPage(index);
   }
+  const group = groups[page] ?? groups[0];
+  if (!group) return null;
   const total = groups.reduce((sum, group) => sum + 1 + group.additional.length, 0);
   return <div className="achievement-moment-details">
     <div className="achievement-moment-meta"><span>Получено наград · {total}</span>
       {groups.length > 1 && <span aria-live="polite">{page + 1} из {groups.length}</span>}
     </div>
-    <div ref={pages} className="achievement-pages" onScroll={event => {
-      const viewport = event.currentTarget;
-      if (viewport.clientWidth) setPage(Math.min(groups.length - 1, Math.max(0, Math.round(viewport.scrollLeft / viewport.clientWidth))));
+    <div className="achievement-pages" onTouchStart={event => {
+      const touch = event.touches.length === 1 ? event.touches[0] : null;
+      start.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    }} onTouchCancel={() => { start.current = null; }} onTouchEnd={event => {
+      const point = start.current, touch = event.changedTouches[0];
+      start.current = null;
+      if (!point || !touch) return;
+      const delta = point.x - touch.clientX;
+      if (Math.abs(delta) > Math.max(40, Math.abs(point.y - touch.clientY) * 1.4)) goTo(page + (delta > 0 ? 1 : -1));
     }}>
-      {groups.map((group, index) => <section className="achievement-page" key={group.key} inert={index !== page}>
+      <section className="achievement-page" key={group.key} data-direction={direction}>
         <h3>{groupTitle(group.leading)}</h3>
-        <AchievementStack group={group} active={index === page} />
-      </section>)}
+        <AchievementStack group={group} onOpen={onOpen} />
+      </section>
     </div>
     {groups.length > 1 && <nav className="achievement-moment-nav" aria-label="Страницы наград">
       <button type="button" className="icon-button" disabled={page === 0} aria-label="Предыдущий тип наград" onClick={() => goTo(page - 1)}><Icon name="left" /></button>
@@ -198,31 +146,36 @@ export function AchievementNotice({ groups, compact, onNext, onShown }: {
 }) {
   const [seen, setSeen] = useState<string[]>([]);
   const [reading, setReading] = useState<string>();
+  const [selected, setSelected] = useState<AchievementGrant | null>(null);
   const waiting = groups.filter(group => !seen.includes(group.key) && groupGrants(group).some(grant => !grant.notifiedAt));
   const current = waiting[0];
   if (reading) return <BottomSheet title="Полученные достижения" onClose={onNext}>
-    <AchievementMomentDetails groups={groups} initial={Math.max(0, groups.findIndex(group => group.key === reading))} />
+    <AchievementMomentDetails groups={groups} initial={Math.max(0, groups.findIndex(group => group.key === reading))} onOpen={setSelected} />
+    {selected && <AchievementGrantDetails grant={selected} onClose={() => setSelected(null)} />}
   </BottomSheet>;
   if (!current) return null;
   return <AchievementBanner key={current.key} group={current} compact={compact} onShown={() => onShown(groupGrants(current))}
     onNext={() => waiting.length > 1 ? setSeen(keys => [...keys, current.key]) : onNext()}
-    onOpen={() => {
+    onOpen={grant => {
       setReading(current.key);
+      if (grant !== current.leading) setSelected(grant);
       onShown(groups.flatMap(groupGrants));
     }} />;
 }
 
 export function SessionAchievements({ grants }: { grants: readonly AchievementGrant[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [selected, setSelected] = useState<AchievementGrant | null>(null);
   const groups = groupAchievementGrants(grants);
   if (!groups.length) return null;
-  const earned = groups.flatMap(group => [group.leading, ...group.additional]);
+  const earned = groups.reduce((total, group) => total + 1 + group.additional.length, 0);
   return <span className="session-achievements-action" data-testid="session-achievements">
     <button type="button" aria-haspopup="dialog" onClick={() => setExpanded(true)}>
-      <Icon name="trophy" /><span className="sr-only">Получено достижений: </span><strong>{earned.length}</strong>
+      <Icon name="trophy" /><span className="sr-only">Получено достижений: </span><strong>{earned}</strong>
     </button>
     {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(false)}>
-      <GrantList grants={earned} />
+      <div className="achievement-session-stacks">{groups.map(group => <AchievementStack key={group.key} group={group} onOpen={setSelected} />)}</div>
+      {selected && <AchievementGrantDetails grant={selected} onClose={() => setSelected(null)} />}
     </BottomSheet>}
   </span>;
 }

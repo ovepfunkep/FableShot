@@ -276,9 +276,12 @@ test('training duration survives reload and continuation excludes the time after
   await expect(page.getByTestId('shooting-hours-total')).toHaveText('2 ч 3 мин');
   await page.getByTestId('assigned-open').click();
   await page.getByTestId('assigned-add').click();
-  await page.getByTestId('assigned-discipline').selectOption('barebow');
-  await page.getByTestId('assigned-category').selectOption('male');
-  await page.getByTestId('assigned-level').selectOption('III');
+  await page.getByTestId('assigned-discipline').click();
+  await page.getByRole('dialog', { name: 'Дисциплина', exact: true }).locator('[data-choice-value="barebow"]').click();
+  await page.getByTestId('assigned-category').click();
+  await page.getByRole('button', { name: 'Мужчины', exact: true }).click();
+  await page.getByTestId('assigned-level').click();
+  await page.getByRole('button', { name: 'III', exact: true }).click();
   await page.getByTestId('assigned-current').check();
   await page.getByTestId('assigned-save').click();
   await expect(page.getByTestId('assigned-list-sheet')).toContainText('КЛб (М) · III');

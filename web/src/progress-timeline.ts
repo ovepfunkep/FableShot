@@ -2,8 +2,9 @@ import type { Conditions } from './conditions.ts';
 import { calculateCompositeScore, conditionsKey } from './composite-scoring.ts';
 import { BOW_CATEGORIES } from './equipment.ts';
 import { hitGeometry, maximumSpread } from './hit-map.ts';
-import { exerciseRank } from './exercise-rank.ts';
-import { rankChartValue } from './chart-metrics.ts';
+import { confirmedExerciseRanks, exerciseRank } from './exercise-rank.ts';
+import { sameRankConditions } from './sport-ranks.ts';
+import type { RankEvaluation } from './sport-ranks.ts';
 import { calculateProgress } from './progress-scoring.ts';
 import { isLocalDate } from './import-source.ts';
 import type { DiaryEntry } from './persistence.ts';
@@ -35,6 +36,7 @@ export type TimelinePoint = {
   values: Record<TimelineMetric, number | null>; arrows: number;
   geometry: { rmsMm: number; shiftMm: number; known: number } | null;
   comparisonKey?: string;
+  rank?: RankEvaluation;
 };
 export type TimelineGroup = { key: string; label: string; comparable: boolean; points: TimelinePoint[] };
 export type ProgressPeriod = 0 | 7 | 30 | 90 | -1;
@@ -144,7 +146,7 @@ export function buildTrainingHistoryTimeline(entries: readonly DiaryEntry[], pre
   return group;
 }
 
-function measurements(entry: DiaryEntry, series: readonly Series[], preferences: ChartPreferences): Pick<TimelinePoint, 'values' | 'arrows' | 'geometry'> {
+function measurements(entry: DiaryEntry, series: readonly Series[], preferences: ChartPreferences): Pick<TimelinePoint, 'values' | 'arrows' | 'geometry' | 'rank'> {
   const shots = series.flatMap(item => item.shots), conditions = series[0].conditions;
   const profile = getTargetProfile(conditions.targetProfileId);
   const verifiedTarget = !!profile && acceptsDiameter(profile, conditions.targetDiameterMm);
@@ -155,16 +157,19 @@ function measurements(entry: DiaryEntry, series: readonly Series[], preferences:
   const share = (matches: (shot: Series['shots'][number]) => boolean) =>
     shots.length ? 100 * shots.filter(matches).length / shots.length : null;
   const xKnown = shots.some(shot => shot.code === 'X') || (verifiedTarget && profile.zones.some(zone => zone.code === 'X'));
-  const overall = exerciseRank(entry.practice, preferences.rankCategory ?? null);
+  const category = preferences.rankCategory ?? null;
+  const overall = confirmedExerciseRanks(entry.practice, category)
+    .find(rank => sameRankConditions(rank.conditions, conditions)) ?? exerciseRank(entry.practice, category);
+  const rank = overall.conditions && sameRankConditions(overall.conditions, conditions) ? overall.forecast ?? undefined : undefined;
   const baselineId = series[0].progressBaselineId;
   const baseline = baselineId === undefined || series.some(item => item.progressBaselineId !== baselineId)
     ? undefined : entry.practice.progressBaselines?.[baselineId];
   const progress = baseline?.status === 'ready' ? calculateProgress(baseline, series) : null;
-  return { arrows: shots.length, geometry, values: {
+  return { arrows: shots.length, geometry, rank, values: {
     ...basicMeasurements(shots), rms: geometry?.rmsMm ?? null,
     spread: verifiedTarget && preferences.maximumSpread ? maximumSpread(shots, conditions.targetDiameterMm) : measured?.rmsMm ?? null,
     shift: measured?.shiftMm ?? null,
-    rank: rankChartValue(overall.forecast?.pace?.label ?? null),
+    rank: rank?.average ?? null,
     stability: composite.stability === undefined ? null : composite.stability * 100,
     progress: progress?.fullRankAvailable ? progress.relativePercent ?? null : null,
     xShare: xKnown ? share(shot => shot.code === 'X') : null,

@@ -1,3 +1,4 @@
+import { useSheetDismiss, useSheetTouchDismiss } from './BottomSheet.tsx';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Capacitor } from '@capacitor/core';
@@ -50,9 +51,11 @@ function Field({ label, value, onChange, maxLength, multiline = false, testId, r
 }
 function Sheet({ children, onBack, label }: { children: ReactNode; onBack: () => void; label: string }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const dismiss = useSheetDismiss(ref, onBack);
+  useSheetTouchDismiss(ref, dismiss);
   useLayoutEffect(() => { ref.current?.showModal(); }, []);
-  return <dialog ref={ref} className="technique-sheet" aria-label={label}
-    onCancel={event => { event.preventDefault(); onBack(); }} onClick={event => { if (event.target === event.currentTarget) onBack(); }}>
+  return <dialog ref={ref} className="technique-sheet" aria-label={label} data-gesture-sheet
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); dismiss(); }} onClick={event => { if (event.target === event.currentTarget) dismiss(); }}>
     <div className="technique-sheet-content"><span className="technique-handle" />{children}</div>
   </dialog>;
 }

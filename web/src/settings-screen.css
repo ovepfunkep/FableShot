@@ -2,7 +2,6 @@
   padding-inline: 12px 20px;
   border-bottom: 1px solid var(--edge);
 }
-.settings-header-glyph { flex: none; display: grid; place-items: center; color: var(--accent); }
 .settings-content { gap: 16px; padding-block: 16px max(24px, env(safe-area-inset-bottom)); }
 .settings-entries, .settings-actions { display: grid; gap: 8px; }
 .settings-entry {

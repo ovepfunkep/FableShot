@@ -1,6 +1,23 @@
 import { readDiary, readStoredJournal } from './stored-journal.ts';
 import { expect, test } from '@playwright/test';
 
+test('Home and About link to public privacy and About offers a Sber transfer', async ({ page }) => {
+  await page.goto('./');
+  const homePolicy = page.getByTestId('home-screen').getByRole('link', { name: 'Политика конфиденциальности' });
+  await expect(homePolicy).toHaveAttribute('href', /\/privacy\.html$/);
+  const policyHref = (await homePolicy.getAttribute('href'))!;
+  const policyUrl = new URL(policyHref, page.url());
+  expect(policyUrl.pathname).toBe('/FableShot/privacy.html');
+  const policy = await page.request.get(policyUrl.href);
+  expect(policy.status()).toBe(200);
+  expect(await policy.text()).toContain('Резервные копии на Google Диске');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-about').click();
+  await expect(page.getByRole('link', { name: 'Политика конфиденциальности' })).toHaveAttribute('href', policyHref);
+  const support = page.getByRole('link', { name: 'Поддержать через СБП' });
+  await expect(support).toHaveAttribute('href', /^https:\/\/www\.sberbank\.ru\/ru\/choise_bank\?/);
+});
+
 test('motion settings keep the global toggle and omit the individual shot style', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('open-settings').click();

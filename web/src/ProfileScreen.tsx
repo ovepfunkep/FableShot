@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { DiaryEntry } from './persistence.ts';
 import { formatTrainingTime } from './training-time.ts';
@@ -11,22 +11,35 @@ import { bestRankResults } from './PersonalRanksScreen.tsx';
 import { AssignedRanks } from './AssignedRanks.tsx';
 import { ProfileAchievements } from './AchievementGallery.tsx';
 import type { AchievementGrant } from './achievement-ledger.ts';
+import { driveBackupAvailable, driveBackupState, signOutGoogle, subscribeDriveBackup } from './drive-backup.ts';
+import { GoogleAccountButton } from './GoogleAccountButton.tsx';
+import { ProfileAvatar } from './ProfileAvatar.tsx';
 import './profile-screen.css';
 
-export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements, onAchievement, onPublication, onRecords, onNotebook, onTournaments, tournamentCount }: { entries: readonly DiaryEntry[];
+export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements, onAchievement, onPublication, onRecords, onNotebook, onTournaments, tournamentCount, focusRankCategory }: { entries: readonly DiaryEntry[];
   grants: readonly AchievementGrant[]; onBack: () => void; onRanks: () => void; onAchievements: () => void;
   onAchievement?: (id: 'APP08') => void; onPublication?: (publication: TechniquePublication) => void;
   onRecords: () => void;
   onNotebook: () => void;
   onTournaments: () => void;
   tournamentCount: number;
+  focusRankCategory?: boolean;
 }) {
   const { preferences, update, error } = useTrainingPreferences();
+  const { account, connected } = useSyncExternalStore(subscribeDriveBackup, driveBackupState);
+  const displayName = preferences.displayName || account?.name;
   const [panel, setPanel] = useState<'name' | 'time' | 'technique' | null>(null);
   const [name, setName] = useState('');
   const [hours, setHours] = useState('');
   const [minutes, setMinutes] = useState('');
   const [achievementError, setAchievementError] = useState('');
+  const [accountError, setAccountError] = useState('');
+  const categoryRow = useRef<HTMLFieldSetElement>(null);
+  useLayoutEffect(() => {
+    if (!focusRankCategory) return;
+    categoryRow.current?.scrollIntoView({ block: 'center' });
+    categoryRow.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus({ preventScroll: true });
+  }, [focusRankCategory]);
   const base = preferences.shootingBaseMinutes ?? 0;
   const showEarned = preferences.showAchievementNotices !== false;
   const recorded = entries.reduce((sum, item) => sum + (item.trainingTime?.closedMs ?? 0), 0);
@@ -44,9 +57,17 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
     <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Профиль</h1></header>
     <div className="conditions-content profile-content">
       <section className="profile-panel profile-name">
-        <Icon name="user" />
-        <h2>{preferences.displayName || 'Мой профиль'}</h2>
-        <button type="button" className="icon-button" aria-label="Изменить имя" onClick={() => { setName(preferences.displayName ?? ''); setPanel('name'); }}>{editIcon}</button>
+        <ProfileAvatar picture={account?.picture} name={displayName} size={48} />
+        <div><h2>{displayName || 'Мой профиль'}</h2>{account && <small>{connected ? 'Google подключён' : 'Аккаунт Google'}</small>}</div>
+        <button type="button" className="icon-button" aria-label="Изменить имя" onClick={() => { setName(displayName ?? ''); setPanel('name'); }}>{editIcon}</button>
+        {driveBackupAvailable && <div className="profile-account-actions">
+          {!connected && <GoogleAccountButton className="profile-account-button" label={account ? 'Подключить Google снова' : 'Войти через Google'} />}
+          {account && <button type="button" className="profile-account-button" onClick={() => {
+            setAccountError('');
+            try { signOutGoogle(); } catch { setAccountError('Не удалось отключить аккаунт Google.'); }
+          }}>Выйти из Google</button>}
+          {accountError && <p role="alert">{accountError}</p>}
+        </div>}
       </section>
       {achievementError && <p role="alert">{achievementError}</p>}
       <button type="button" className="primary profile-primary" data-testid="profile-technique" onClick={() => setPanel('technique')}><Icon name="notes" />Моя техника</button>
@@ -61,6 +82,14 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
             setHours(String(Math.floor(base / 60))); setMinutes(String(base % 60)); setPanel('time');
           }}>{editIcon}</button>
       </div>}
+      <fieldset className="profile-panel profile-rank-category" ref={categoryRow}>
+        <legend>Пол для нормативов</legend>
+        <div>{([['male', 'М'], ['female', 'Ж'], [undefined, 'Не указан']] as const).map(([value, label]) =>
+          <button type="button" key={label} aria-pressed={preferences.rankCategory === value}
+            aria-label={value === 'male' ? 'Мужской' : value === 'female' ? 'Женский' : 'Не указан'}
+            onClick={() => void update({ ...preferences, rankCategory: value })}>{label}</button>)}</div>
+        <small>Используется для расчёта разрядов.</small>
+      </fieldset>
       {showNorms && <><AssignedRanks assignments={preferences.rankAssignments ?? []} defaultCategory={preferences.rankCategory}
         onChange={rankAssignments => update({ ...preferences, rankAssignments })} />
         <button type="button" className="profile-panel profile-metric" data-testid="profile-rank-results" onClick={onRanks}>

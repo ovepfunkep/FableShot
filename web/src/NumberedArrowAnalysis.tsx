@@ -1,3 +1,5 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { StatisticRules } from './StatisticRules.tsx';
 import { useId, useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { buildNumberedArrowAnalysis, numberedArrowMapExtent } from './numbered-arrow-analysis.ts';
@@ -85,14 +87,14 @@ export function NumberedArrowAnalysis({ series, showEmpty = false }: { series: r
       <h3 id={titleId}>По номерам стрел</h3>
       <button type="button" className="numbered-arrow-help" aria-label="Об анализе по номерам стрел" onClick={() => setHelp(true)}>?</button>
     </header>
-    {groups.length > 1 && <select value={selected.key} aria-label="Условия для сравнения стрел" data-testid="numbered-arrow-conditions"
-      onChange={event => setRequestedKey(event.target.value)}>
-      {groups.map(group => <option key={group.key} value={group.key}>{group.label}</option>)}
-    </select>}
+    {groups.length > 1 && <ChoicePicker value={selected.key} label="Условия для сравнения стрел" testId="numbered-arrow-conditions"
+      onChange={setRequestedKey} options={groups.map(group => ({ value: group.key, label: group.label }))} />}
     <ArrowComparison key={selected.key} group={selected} />
     {help && <BottomSheet title="По номерам стрел" onClose={() => setHelp(false)}>
-      <p>Сравнение учитывает выстрелы из одного сохранённого набора при одинаковых условиях. Цвет обозначает номер стрелы. Точки показывают известные координаты, а круг RMS — разброс вокруг средней точки.</p>
-      <p>Для расчёта разброса и смещения нужны минимум три координаты одной стрелы.</p>
+      <p>Сравни, как летят разные стрелы из одного комплекта. Каждый цвет соответствует номеру стрелы.</p>
+      <StatisticRules>
+        <p>Сравниваются выстрелы при одинаковых условиях. Измерения используют от трёх известных координат на номер стрелы. Круг RMS показывает разброс вокруг средней точки.</p>
+      </StatisticRules>
     </BottomSheet>}
   </section>;
 }

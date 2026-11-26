@@ -1,15 +1,18 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Conditions } from './conditions.ts';
 import { formatAverage, RECENT_PRACTICE_LIMIT } from './preferences.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { getTargetProfile, summarize } from './target.ts';
 import { Icon } from './TrainingChrome.tsx';
+import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { statisticVisible } from './statistics-visibility.ts';
 import { compactProgress } from './progress-scoring.ts';
 import { timelineDate } from './progress-timeline.ts';
 import { scoreOutline } from './score-appearance.ts';
+import { tournamentTitle, upcomingTournament } from './tournaments.ts';
+import type { Tournament } from './tournaments.ts';
 import './journal-shell.css';
 
 const destinations = {
@@ -39,12 +42,13 @@ function JournalGlyph({ name }: { name: keyof typeof paths }) {
   </svg>;
 }
 
-export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, children }: {
+export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, avatar, children }: {
   tab: JournalTab;
   onTab: (tab: JournalTab) => void;
   onSettings?: () => void;
   onProfile?: () => void;
   displayName?: string;
+  avatar?: string;
   children: ReactNode;
 }) {
   const content = useRef<HTMLElement>(null);
@@ -84,8 +88,7 @@ export function JournalShell({ tab, onTab, onSettings, onProfile, displayName, c
         <Icon name="settings" />
       </button>}
       {onProfile && <button type="button" className="icon-button" data-testid="open-profile" aria-label="Профиль" onClick={onProfile}>
-        {displayName ? <strong>{Array.from(displayName)[0].toLocaleUpperCase('ru-RU')}</strong>
-          : <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="7" r="4" /><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2" /></svg>}
+        <ProfileAvatar picture={avatar} name={displayName} size={32} />
       </button>}
     </header>
     <main className="journal-content" ref={content}>{children}</main>
@@ -119,7 +122,6 @@ function HomeConditions({ conditions, onEquipment }: { conditions: Conditions; o
   </dl>;
 }
 
-const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'short' });
 const fullDate = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' });
 
 function PracticeTimelineViewport({ children }: { children: ReactNode }) {
@@ -172,12 +174,11 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
     .sort((left, right) => right.localDate.localeCompare(left.localDate) ||
       Date.parse(right.startedAt) - Date.parse(left.startedAt) || right.id.localeCompare(left.id))
     .slice(0, preferences.recentPracticeLimit ?? RECENT_PRACTICE_LIMIT.min).reverse();
-  const monthName = (date: Date) => monthLabel.format(date).replace(/\.$/, '');
-  const monthChanged = (index: number) => index > 0 && (
+  const monthName = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
+  const monthChanged = (index: number) => index === 0 || (
     ordered[index].date.getMonth() !== ordered[index - 1].date.getMonth() ||
     ordered[index].date.getFullYear() !== ordered[index - 1].date.getFullYear()
   );
-  const hasTransition = ordered.some((_, index) => monthChanged(index));
   const visibleCount = Math.min(ordered.length, RECENT_PRACTICE_LIMIT.min);
   const chartStyle = {
     '--card-share': `${200 / (visibleCount + 1)}%`,
@@ -192,7 +193,7 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
         data-testid="home-practice-horizontal" aria-label="Тренировки от старых к новым">
         {ordered.map((entry, index) => {
           const shots = entry.practice.rounds.flatMap(round => round.series.flatMap(series => series.shots));
-          const outline = scoreOutline(shots, !!preferences.colorTrainingBorders && !preferences.hideScores && showResult);
+          const outline = scoreOutline(shots, preferences.colorTrainingBorders !== false && !preferences.hideScores && showResult);
           const result = summarize(shots);
           const score = `${result.points}/${result.maximum}`;
           const average = formatAverage(result.average, preferences.averageHundredths);
@@ -200,9 +201,9 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
           const description = [showResult && score, showAverage && `средний ${average}`,
             showVolume && `${shots.length} стрел`, progress && `прогресс ${progress.text}`].filter(Boolean).join(', ');
           return <li key={entry.id} className="journal-timeline-entry">
-            {monthChanged(index) && <span className="journal-timeline-month" style={{ left: position(index - .5) }}>{monthName(entry.date)}</span>}
             <div className="journal-timeline-point" style={{ left: position(index) }}>
-              <time dateTime={entry.localDate}>{entry.date.getDate()}{index === 0 && hasTransition && ` ${monthName(entry.date)}`}</time>
+              {monthChanged(index) && <span className="journal-timeline-month" aria-hidden="true">{monthName.format(entry.date)}</span>}
+              <time dateTime={entry.localDate}>{entry.date.getDate()}</time>
               <button type="button" data-testid="home-practice-session" onClick={() => onOpen(entry.id)}
                 data-score-outline={outline !== undefined || undefined}
                 style={outline ? { '--score-outline': outline } as CSSProperties : undefined}
@@ -226,7 +227,8 @@ function PracticeTimeline({ recent, onOpen }: { recent: readonly DiaryEntry[]; o
   </section>;
 }
 
-export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup, onHistory, onEquipment }: {
+export function JournalHome({ active, paused, recent, practiceCount, arrowCount, conditions, needsEquipment, onStart, onConditions, onOpen, onGroup, onHistory, onEquipment,
+  tournaments, activeId, onTournament }: {
   active: boolean;
   paused?: boolean;
   recent: readonly DiaryEntry[];
@@ -240,8 +242,21 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
   onOpen: (id: string) => void;
   onGroup?: () => void;
   onHistory: () => void;
+  tournaments: readonly Tournament[];
+  activeId?: string;
+  onTournament: (item: NonNullable<ReturnType<typeof upcomingTournament>>) => void;
 }) {
   const { preferences } = useTrainingPreferences();
+  const localDay = () => new Intl.DateTimeFormat('sv-SE').format(new Date());
+  const [today, setToday] = useState(localDay);
+  useEffect(() => {
+    const refresh = () => setToday(localDay());
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
+  const tournament = upcomingTournament(tournaments, today, activeId);
   return <div className="journal-home" data-testid="home-screen">
     <section className="journal-home-hero" data-testid="home-hero">
       <p className="journal-home-eyebrow">{active ? 'В процессе' : 'Время для себя'}</p>
@@ -258,6 +273,13 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
         </button>}
       </div>
     </section>
+    {tournament && <button type="button" className="journal-home-card journal-upcoming" onClick={() => onTournament(tournament)}>
+      <Icon name="trophy" />
+      <span><small>Ближайший турнир</small><strong>{tournamentTitle(tournament.item)}</strong>
+        <small>{[tournament.item.from.split('-').reverse().join('.'), tournament.item.venue].filter(Boolean).join(' · ')}</small></span>
+      <b>{tournament.days ? <>{tournament.days}<small>{new Intl.PluralRules('ru').select(tournament.days) === 'one' ? 'день' :
+        new Intl.PluralRules('ru').select(tournament.days) === 'few' ? 'дня' : 'дней'}</small></> : tournament.canContinue ? 'Продолжить' : 'Начать'}</b>
+    </button>}
     {statisticVisible(preferences, 'volume') && <section className="journal-home-totals" data-testid="home-all-time-totals" aria-label="Всего за всё время">
       <div className="journal-home-card"><JournalGlyph name="target" /><span><strong>{arrowCount.toLocaleString('ru-RU')}</strong>Стрел</span></div>
       <button type="button" className="journal-home-card journal-home-history" onClick={onHistory} aria-label="Открыть историю тренировок">
@@ -265,5 +287,6 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
       </button>
     </section>}
     <PracticeTimeline recent={recent} onOpen={onOpen} />
+    <a className="journal-privacy" href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener">Политика конфиденциальности</a>
   </div>;
 }

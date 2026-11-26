@@ -1,5 +1,5 @@
 import { conditionsKey, practiceCompositeGroups, calculateCompositeScore, displayCompositeScore } from './composite-scoring.ts';
-import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
+import { exerciseRank, exerciseRankCoverage, exerciseRankDisplay } from './exercise-rank.ts';
 import { hitGeometry, maximumSpread } from './hit-map.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { formatAverage } from './preferences.ts';
@@ -128,6 +128,7 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
   return { entryId: entry.id, startedAt: entry.startedAt, startLabel: reportedTrainingStart(entry)?.label,
     completed: practice.savedAt !== null, rounds, result, analysis,
     title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank, rankDisplay: exerciseRankDisplay(rank),
+    rankCoverage: exerciseRankCoverage(rank),
     duration: duration === null ? null : `${formatTrainingTime(duration)}${entry.trainingTime?.partial ? ' · учтённое время' : ''}`,
     focus: [focus?.focus1, focus?.focus2].filter((value): value is string => !!value),
     records: entry.personalRecords ?? [], achievements: groupAchievementGrants(details.grants ?? []),

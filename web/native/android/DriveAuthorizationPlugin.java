@@ -15,11 +15,12 @@ import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.Identity;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
-import java.util.Collections;
+import java.util.Arrays;
 
 @CapacitorPlugin(name = "DriveAuthorization")
 public class DriveAuthorizationPlugin extends Plugin {
     private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+    private static final String PROFILE_SCOPE = "https://www.googleapis.com/auth/userinfo.profile";
     private ActivityResultLauncher<IntentSenderRequest> consent;
     private PluginCall pending;
 
@@ -33,7 +34,7 @@ public class DriveAuthorizationPlugin extends Plugin {
     public void authorize(PluginCall call) {
         boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive"));
         AuthorizationRequest request = AuthorizationRequest.builder()
-            .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE))).build();
+            .setRequestedScopes(Arrays.asList(new Scope(DRIVE_SCOPE), new Scope(PROFILE_SCOPE), new Scope("openid"))).build();
         Activity activity = getActivity();
         activity.runOnUiThread(() -> {
             if (pending != null) {

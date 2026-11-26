@@ -27,6 +27,13 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
 
     int acceptedSeries() { return acceptedSeries; }
 
+    synchronized int participantCount() {
+        String sql = "SELECT COUNT(*) FROM (SELECT entry FROM participants WHERE room = ? UNION SELECT entry FROM series WHERE room = ?)";
+        try (Cursor rows = getReadableDatabase().rawQuery(sql, new String[] {roomId, roomId})) {
+            return rows.moveToFirst() ? rows.getInt(0) : 0;
+        }
+    }
+
     synchronized void loadAcceptedCount() {
         try (Cursor rows = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM series WHERE room = ?", new String[] {roomId})) {
             if (rows.moveToFirst()) acceptedSeries = rows.getInt(0);

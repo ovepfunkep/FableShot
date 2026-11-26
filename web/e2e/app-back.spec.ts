@@ -85,3 +85,24 @@ test('a bottom sheet follows the drag, returns after a short gesture and dismiss
   await page.mouse.click(15, 15);
   await expect(sheet).toHaveCount(0);
 });
+
+test('pulling from a series card moves and dismisses the sheet without selecting it', async ({ page, context }) => {
+  await page.goto('./');
+  await openTraining(page);
+  await page.getByTestId('target').click();
+  await page.getByTestId('training-series-open').click();
+  const sheet = page.getByTestId('stage-picker');
+  await expect(sheet).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  const series = sheet.locator('.stage-picker__series-select').first();
+  const box = await series.boundingBox();
+  if (!box) throw new Error('Series card was not visible.');
+  const x = Math.round(box.x + box.width / 2), y = Math.round(box.y + 8);
+  const touch = await context.newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + 36 }] });
+  await expect(sheet).toHaveAttribute('data-sheet-dragging', '');
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + 72 }] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByTestId('series-score')).toHaveText('10/10');
+});

@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useRef, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { roomShotLabel, roomShotPoints } from './group-leaderboard.ts';
@@ -45,9 +46,8 @@ export function RoomTargetViewer({ history, ids, initialId, ownId, ordinal, choi
     headerAction={<div className="room-ordinal">
       <button type="button" className="icon-button" aria-label="Предыдущая серия на мишени" disabled={previousSeries === undefined}
         onClick={() => onSeries(previousSeries)}><Icon name="left" /></button>
-      <select value={ordinal} aria-label="Серия на мишени" onChange={event => onSeries(Number(event.currentTarget.value))}>
-        {choices.map(number => <option key={number} value={number}>Серия {number}</option>)}
-      </select>
+      <ChoicePicker label="Серия на мишени" value={String(ordinal)} onChange={value => onSeries(Number(value))}
+        options={choices.map(number => ({ value: String(number), label: `Серия ${number}` }))} />
       <button type="button" className="icon-button" aria-label="Следующая серия на мишени" disabled={nextSeries === undefined}
         onClick={() => onSeries(nextSeries)}><Icon name="right" /></button>
     </div>}>

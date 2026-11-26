@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Conditions } from '../src/conditions.ts';
-import { exerciseRank, exerciseRankDisplay } from '../src/exercise-rank.ts';
+import { confirmedExerciseRanks, exerciseRank, exerciseRankCoverage, exerciseRankDisplay, legacyExerciseRank } from '../src/exercise-rank.ts';
 import type { Practice } from '../src/practice.ts';
 
 const indoor: Conditions = {
@@ -74,17 +74,35 @@ test('uses the reference volume while open and the actual supported volume after
   assert.equal(saved.finalResult, true);
 });
 
-test('early completion, excess volume and partial series stay at pace comparison', () => {
-  for (const practice of [
-    training([firstRound, secondRound.slice(0, 27)]),
-    training([firstRound, secondRound, [10, 10, 10]]),
-    training([firstRound.slice(0, 29), [...secondRound, 10]]),
-  ]) {
-    const rank = exerciseRank(practice, 'male');
-    assert.equal(rank.evaluation?.exercise.arrows, 60);
-    assert.equal(rank.evaluation?.result, null);
-    assert.equal(rank.finalResult, false);
+test('uses a single complete 30 when another round is incomplete and retains pace if none qualify', () => {
+  const short = exerciseRank(training([firstRound, secondRound.slice(0, 27)]), 'male');
+  assert.equal(short.evaluation?.entered, 30);
+  assert.equal(short.finalResult, true);
+  const incomplete = exerciseRank(training([firstRound.slice(0, 29), [...secondRound, 10]]), 'male');
+  assert.equal(incomplete.evaluation?.exercise.arrows, 60);
+  assert.equal(incomplete.evaluation?.result, null);
+  assert.equal(incomplete.finalResult, false);
+});
+
+test('selects the first compatible pair across incomplete rounds and skips surplus rounds', () => {
+  const high = Array<number>(30).fill(10);
+  for (const [rounds, numbers] of [
+    [[firstRound, secondRound, [10, 10, 10]], [1, 2]],
+    [[firstRound, [10, 10, 10], secondRound], [1, 3]],
+    [[firstRound, secondRound, high], [1, 2]],
+    [[firstRound, secondRound, high, high, []], [1, 2]],
+  ] as const) {
+    const practice = training([...rounds]);
+    const ranks = confirmedExerciseRanks(practice, 'male');
+    assert.equal(ranks.length, 1);
+    assert.equal(ranks[0].evaluation.points, 392);
+    assert.deepEqual(ranks[0].coverage.rounds, numbers.map(number => ({ id: (number - 1) * 100 + 1, number })));
+    assert.match(exerciseRankCoverage(ranks[0])?.label ?? '', /^60 стрел · раунды 1 и [23]$/);
+    assert.ok(ranks[0].coverage.excluded.every(round => round.number !== 5));
   }
+  const excess = training([firstRound, secondRound, [10, 10, 10]]);
+  assert.equal(legacyExerciseRank(excess, 'male').finalResult, false);
+  assert.deepEqual(exerciseRank(excess, 'male').coverage?.excluded, [{ id: 201, number: 3, reason: 'incomplete' }]);
 });
 
 test('rejects mixed scored conditions and ignores an empty series with future conditions', () => {
@@ -94,12 +112,53 @@ test('rejects mixed scored conditions and ignores an empty series with future co
   assert.equal(exerciseRank(practice, 'male').finalResult, true);
 
   practice.rounds[1].series[0].conditions = nextConditions;
-  assert.match(exerciseRank(practice, 'male').reason ?? '', /разные условия/);
-  assert.equal(exerciseRank(practice, 'male').evaluation, null);
+  assert.equal(exerciseRank(practice, 'male').evaluation?.entered, 30);
+  assert.deepEqual(exerciseRank(practice, 'male').coverage?.excluded, [{ id: 101, number: 2, reason: 'mixed' }]);
 
   const differentKit = { ...indoor, equipment: { ...indoor.equipment!, id: 'other-kit' } };
   practice.rounds[1].series[0].conditions = differentKit;
-  assert.match(exerciseRank(practice, 'male').reason ?? '', /разные условия/);
-  assert.equal(exerciseRank(practice, 'male').evaluation, null);
+  assert.equal(exerciseRank(practice, 'male').evaluation?.entered, 60);
+  assert.equal(legacyExerciseRank(practice, 'male').evaluation, null);
   assert.equal(exerciseRank(training([firstRound]), null).reason, 'Выбери категорию сравнения');
+});
+
+test('honors both round limit units and allows a short final series that reaches the arrow limit', () => {
+  const practice = training([firstRound, secondRound]);
+  for (const round of practice.rounds) {
+    const first = round.series[0];
+    first.shots.push(round.series[1].shots.shift()!);
+    round.series[1].shots.push(round.series[9].shots.shift()!);
+  }
+  assert.equal(exerciseRank(practice, 'male').evaluation?.entered, 60);
+  practice.roundRule = { unit: 'series', limit: 10 };
+  assert.equal(exerciseRank(practice, 'male').finalResult, false);
+  practice.roundRule = { unit: 'unlimited', limit: null };
+  assert.equal(exerciseRank(practice, 'male').finalResult, false);
+  const regular = training([firstRound, secondRound]);
+  regular.roundRule = { unit: 'series', limit: 10 };
+  assert.equal(exerciseRank(regular, 'male').evaluation?.entered, 60);
+  regular.roundRule = { unit: 'series', limit: 11 };
+  assert.equal(exerciseRank(regular, 'male').finalResult, false);
+});
+
+test('chooses full 60 and 72 or the first split 72 and keeps condition groups distinct', () => {
+  const high = Array<number>(36).fill(10);
+  const outdoor: Conditions = {
+    ...indoor, distanceMeters: 70, targetProfileId: 'wa-outdoor-full-v1', targetDiameterMm: 1220,
+    equipment: { ...indoor.equipment!, bow: { name: 'Лук', category: 'recurve' } },
+  };
+  const mixedFormats = training([high, [...firstRound, ...secondRound], high, [...high, ...high]]);
+  mixedFormats.roundRule = { unit: 'unlimited', limit: null };
+  for (const index of [0, 2, 3]) for (const series of mixedFormats.rounds[index].series) series.conditions = outdoor;
+  for (const round of mixedFormats.rounds) for (const series of round.series) series.plannedCount = 3;
+  assert.deepEqual(confirmedExerciseRanks(mixedFormats, 'male').map(rank => [
+    rank.evaluation.entered, rank.coverage.rounds.map(round => round.number),
+  ]), [[72, [1, 3]], [60, [2]]]);
+  mixedFormats.rounds = mixedFormats.rounds.filter(round => round.id !== 201);
+  assert.deepEqual(exerciseRank(mixedFormats, 'male').coverage?.rounds.map(round => round.id), [301]);
+
+  const incompatible = training([firstRound, Array<number>(30).fill(10)]);
+  for (const series of incompatible.rounds[1].series) series.conditions.targetProfileId = 'wa-indoor-full-x-v1';
+  assert.equal(exerciseRank(incompatible, 'male').evaluation?.points, 210);
+  assert.equal(exerciseRank(incompatible, 'male').evaluation?.entered, 30);
 });

@@ -4,6 +4,11 @@ import type { ThemeMode, ThemePreferences, ThemeStyle } from './web-theme.ts';
 import './web-theme.css';
 
 const styleLabels: Record<ThemeStyle, string> = { sport: 'Спорт', pop: 'Поп', minimal: 'Минимал' };
+const styleDescriptions: Record<ThemeStyle, string> = {
+  sport: 'Контрастные карточки и геометрия',
+  pop: 'Яркие цвета и акценты',
+  minimal: 'Спокойный фон и меньше эффектов',
+};
 const modeLabels: Record<ThemeMode, string> = { system: 'Как в системе', light: 'Светлая', dark: 'Тёмная' };
 
 export function WebThemeSettings({ value, onChange, disabled = false, stylesOnly = false }: {
@@ -26,7 +31,7 @@ export function WebThemeSettings({ value, onChange, disabled = false, stylesOnly
               <path d="M4 20 20 4m-7 0h7v7M4 20v-5m0 5h5m-1-4v-5m0 5h5" />
             </svg>
           </span>
-          <span className="web-theme-style-name">{styleLabels[style]}</span>
+          <span className="web-theme-style-name">{styleLabels[style]}<small>{styleDescriptions[style]}</small></span>
           <svg className="web-theme-selected" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
         </label>)}
       </div>

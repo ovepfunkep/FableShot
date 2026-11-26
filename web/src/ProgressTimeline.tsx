@@ -4,9 +4,11 @@ import { formatAverage } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { availableTimelineMetrics, buildProgressTimeline, DEFAULT_PROGRESS_FILTERS, filterProgressEntries, progressPeriodRange, TIMELINE_METRICS, TIMELINE_VISIBLE_DAYS, timelineComparison, timelineDate, timelineViewport } from './progress-timeline.ts';
-import { chartLabel, chartScale } from './chart-metrics.ts';
+import { chartScale, rankAverageScale } from './chart-metrics.ts';
 import { progressTone } from './progress-scoring.ts';
 import type { ProgressFilters, ProgressPeriod, TimelineGroup, TimelineMetric } from './progress-timeline.ts';
+import { ChoicePicker } from './ChoicePicker.tsx';
+import { StatisticRules } from './StatisticRules.tsx';
 import './progress-timeline.css';
 
 const DAY = 86_400_000;
@@ -17,7 +19,7 @@ function Arrow({ previous }: { previous?: boolean }) {
   return <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d={previous ? 'm14 6-6 6 6 6' : 'm10 6 6 6-6 6'} /></svg>;
 }
 
-function TimelinePlot({ group, metric }: { group: TimelineGroup; metric: TimelineMetric }) {
+function TimelinePlot({ group, metric, onOpen }: { group: TimelineGroup; metric: TimelineMetric; onOpen: (id: string) => void }) {
   const { preferences } = useTrainingPreferences();
   const scroller = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(320), [scrollLeft, setScrollLeft] = useState(0), [selectedId, setSelectedId] = useState<string | null>(null);
@@ -26,23 +28,56 @@ function TimelinePlot({ group, metric }: { group: TimelineGroup; metric: Timelin
   const trackWidth = Math.max(width, (bounds.latestEnd - bounds.firstDay) / TIMELINE_VISIBLE_DAYS * width);
   const start = bounds.firstDay + scrollLeft / width * TIMELINE_VISIBLE_DAYS, end = start + TIMELINE_VISIBLE_DAYS;
   const visible = points.filter(point => point.x >= start && point.x <= end);
-  const { lower, upper, ticks } = chartScale(visible.map(point => point.values[metric]!), metric);
+  const compatible = (point: TimelineGroup['points'][number], prior: TimelineGroup['points'][number]) =>
+    (group.comparable || !!point.comparisonKey && point.comparisonKey === prior.comparisonKey) &&
+    (metric !== 'rank' || point.rank?.exercise.id === prior.rank?.exercise.id);
+  let sum = 0, count = 0;
+  const cumulative = group.points.map((point, index) => {
+    const value = point.values[metric], prior = group.points[index - 1];
+    const joins = !!(prior && prior.values[metric] !== null && compatible(point, prior));
+    if (!joins) { sum = 0; count = 0; }
+    if (value === null) return null;
+    const weight = metric === 'rank' ? point.rank!.entered : metric === 'average' || metric.endsWith('Share') ? point.arrows : 1;
+    sum += value * weight; count += weight;
+    return count ? { value: sum / count, joins } : null;
+  });
+  const chartValues = [
+    ...visible.map(point => point.values[metric]!),
+    ...cumulative.flatMap((point, i) => point && group.points[i].x >= start && group.points[i].x <= end ? [point.value] : []),
+  ];
+  const exercises = new Map(visible.flatMap(point => point.rank ? [[point.rank.exercise.id, point.rank.exercise] as const] : []));
+  const rankAxis = metric === 'rank' ? rankAverageScale(chartValues, exercises.size === 1 ? exercises.values().next().value : undefined) : null;
+  const { lower, upper, ticks } = rankAxis ?? chartScale(chartValues, metric);
+  const axisTicks = ticks.length > 5
+    ? ticks.filter((_, index) => index === 0 || index === ticks.length - 1 || index % Math.ceil(ticks.length / 4) === 0) : ticks;
   const selected = visible.find(point => point.id === selectedId) ?? visible.at(-1);
   const definition = TIMELINE_METRICS.find(item => item.key === metric)!;
   const x = (day: number) => (day - bounds.firstDay) / TIMELINE_VISIBLE_DAYS * width;
   const y = (value: number) => 148 - (value - lower) / (upper - lower) * 128;
-  const path = metric === 'rank' ? '' : group.points.map((point, i) => {
+  const path = group.points.map((point, i) => {
     const value = point.values[metric];
     if (value === null || point.x < start || point.x > end) return '';
     const previous = group.points[i - 1];
-    const joins = previous && previous.x >= start && previous.values[metric] !== null &&
-      (group.comparable || point.comparisonKey && point.comparisonKey === previous.comparisonKey);
+    const joins = previous && previous.x >= start && previous.values[metric] !== null && compatible(point, previous);
     return `${joins ? 'L' : 'M'} ${x(point.x)} ${y(value)}`;
   }).join(' ');
+  const guide = cumulative.map((point, i) => {
+    if (!point) return '';
+    const current = group.points[i];
+    if (current.x < start || current.x > end) return '';
+    const previous = group.points[i - 1];
+    const before = cumulative[i - 1];
+    if (!point.joins || !before || previous.x < start) return `M ${x(current.x)} ${y(point.value)}`;
+    const middle = (x(previous.x) + x(current.x)) / 2;
+    return `C ${middle} ${y(before.value)} ${middle} ${y(point.value)} ${x(current.x)} ${y(point.value)}`;
+  }).join(' ');
   function format(value: number) {
-    return metric === 'rank' ? chartLabel(metric, value) : metric === 'average' ? formatAverage(value, preferences.averageHundredths) :
+    return metric === 'rank' || metric === 'average' ? formatAverage(value, preferences.averageHundredths) :
       value.toLocaleString('ru-RU', { maximumFractionDigits: metric === 'cg3' ? 2 : 1 });
   }
+  const pointLabel = (point: TimelineGroup['points'][number]) => metric === 'rank'
+    ? point.rank?.pace?.label ?? '—' : format(point.values[metric]!);
+  const axisLabel = (value: number) => rankAxis?.thresholds.find(threshold => threshold.average === value)?.label ?? format(value);
   useLayoutEffect(() => {
     const node = scroller.current; if (!node) return;
     const measure = () => setWidth(Math.max(1, node.clientWidth));
@@ -62,14 +97,16 @@ function TimelinePlot({ group, metric }: { group: TimelineGroup; metric: Timelin
   return <>
     <div className="progress-timeline-range" data-testid="progress-trend-range">{label(start, true)} — {label(end - 1, true)}</div>
     <div className="progress-timeline-plot">
-      <div className="progress-timeline-scale" aria-hidden="true">{[...ticks].reverse().map(value => <span key={value}>{format(value)}</span>)}</div>
+      <div className="progress-timeline-scale" aria-hidden="true">{axisTicks.map(value => <span key={value}
+        style={{ top: y(value) }}>{axisLabel(value)}</span>)}</div>
       <div className="progress-timeline-scroll" ref={scroller} tabIndex={0} role="region" aria-label={`График: ${definition.label}. Стрелки влево и вправо перемещают на 30 дней.`}
         data-testid="progress-trend-chart" onScroll={event => setScrollLeft(event.currentTarget.scrollLeft)}
         onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); pan(event.key === 'ArrowLeft' ? -1 : 1); } }}>
         <svg className="progress-timeline-svg" width={trackWidth} height="184" viewBox={`0 0 ${trackWidth} 184`} role="group" aria-label={definition.label}>
-          {ticks.map(value => <line key={value} x1="0" x2={trackWidth} y1={y(value)} y2={y(value)} className="progress-timeline-grid" />)}
+          {axisTicks.map(value => <line key={value} x1="0" x2={trackWidth} y1={y(value)} y2={y(value)} className="progress-timeline-grid" />)}
+          {guide.includes('C ') && <path className="progress-cumulative-line" d={guide} />}
           {visible.length > 1 && path && <path className="progress-timeline-line" d={path} />}
-          {visible.map(point => <g key={point.id} role="button" tabIndex={0} aria-label={`${label(point.day, true)} · ${point.title}: ${format(point.values[metric]!)} ${definition.unit}`}
+          {visible.map(point => <g key={point.id} role="button" tabIndex={0} aria-label={`${label(point.day, true)} · ${point.title}: ${pointLabel(point)} ${definition.unit}`}
             aria-pressed={selected?.id === point.id} onClick={() => setSelectedId(point.id)}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedId(point.id); } }}>
             <circle cx={x(point.x)} cy={y(point.values[metric]!)} r="14" className="progress-timeline-hit" />
@@ -84,14 +121,16 @@ function TimelinePlot({ group, metric }: { group: TimelineGroup; metric: Timelin
     <div className="progress-timeline-selected" aria-live="polite" data-testid="progress-trend-value">
       {selected ? <><span><time dateTime={selected.date}>{label(selected.day, true)}</time><small>{selected.title}</small></span>
         <strong data-progress-tone={metric === 'progress' ? progressTone(selected.values.progress!) : undefined}>
-          {metric === 'progress' && selected.values.progress! > 0 ? '+' : ''}{format(selected.values[metric]!)} <small>{definition.unit}</small>
-        </strong></> : <span>В этом отрезке нет результатов. Пролистай график к тренировкам.</span>}
+          {metric === 'progress' && selected.values.progress! > 0 ? '+' : ''}{pointLabel(selected)} <small>{definition.unit}</small>
+        </strong><button type="button" className="text-action progress-open-training" onClick={() => onOpen(selected.sessionId)}>Открыть тренировку</button>
+      </> : <span>В этом отрезке нет результатов. Пролистай график к тренировкам.</span>}
     </div>
+    {guide.includes('C ') && <p className="progress-cumulative-legend">{metric === 'average' || metric === 'rank' || metric.endsWith('Share') ? 'Накопительное среднее' : 'Среднее по тренировкам'}</p>}
   </>;
 }
 
-export function ProgressTimeline({ groups, history, comparisonKey, onCompare }: {
-  groups: readonly TimelineGroup[]; history: TimelineGroup; comparisonKey: string | null; onCompare: (key: string) => void;
+export function ProgressTimeline({ groups, history, comparisonKey, onCompare, onOpen }: {
+  groups: readonly TimelineGroup[]; history: TimelineGroup; comparisonKey: string | null; onCompare: (key: string) => void; onOpen: (id: string) => void;
 }) {
   const { preferences, update } = useTrainingPreferences();
   const requestedMetric = TIMELINE_METRICS.find(item => item.key === preferences.statisticsView?.progressMetric)?.key ?? 'average';
@@ -118,16 +157,14 @@ export function ProgressTimeline({ groups, history, comparisonKey, onCompare }: 
       <button type="button" aria-pressed={!comparing} onClick={() => setView('history')} data-testid="progress-view-history">Все тренировки</button>
       <button type="button" aria-pressed={comparing} onClick={() => setView('compare')} data-testid="progress-view-compare">По условиям</button>
     </div>}
-    {comparing && (supported.length > 1 ? <select className="progress-timeline-conditions" aria-label="Условия сравнения"
-      value={group?.key} onChange={event => onCompare(event.currentTarget.value)}>
-      {supported.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-    </select> : <p className="progress-timeline-condition-label">
+    {comparing && (supported.length > 1 ? <ChoicePicker label="Условия сравнения" value={group?.key ?? ''}
+      options={supported.map(item => ({ value: item.key, label: item.label }))} onChange={onCompare} /> : <p className="progress-timeline-condition-label">
       {group?.label ?? 'Для сравнения нужны тренировки с указанным классом лука и одинаковыми условиями.'}
     </p>)}
-    {group && metric && <><select className="progress-timeline-conditions" aria-label="Показатель графика" value={metric} onChange={event => {
-      void update({ ...preferences, statisticsView: { ...preferences.statisticsView, progressMetric: event.currentTarget.value } });
-    }}>{TIMELINE_METRICS.filter(item => metrics.includes(item.key)).map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>
-    <TimelinePlot key={group.key} group={group} metric={metric} /></>}
+    {group && metric && <><ChoicePicker label="Показатель графика" variant="ghost" value={metric}
+      options={TIMELINE_METRICS.filter(item => metrics.includes(item.key)).map(item => ({ value: item.key, label: item.label }))}
+      onChange={progressMetric => { void update({ ...preferences, statisticsView: { ...preferences.statisticsView, progressMetric } }); }} />
+    <TimelinePlot key={group.key} group={group} metric={metric} onOpen={onOpen} /></>}
     {comparisons.length > 0 && <div className="progress-insights" data-testid="progress-insights">
       <h3>Последняя тренировка · {label(comparisons[0].latest.day, true)}</h3>
       <div className="progress-insights-grid">
@@ -150,8 +187,11 @@ export function ProgressTimeline({ groups, history, comparisonKey, onCompare }: 
       </div>
     </div>}
     {help && <BottomSheet title="Динамика прогресса" onClose={() => setHelp(false)} tag="progress-trend-help">
-      <p className="round-help">В режиме «Все тренировки» каждая точка показывает результат занятия с известной датой. Если выбран комплект или условия, учитываются подходящие серии. В режиме «По условиям» совпадают класс лука, дистанция и мишень. Листай график вбок или нажми на точку, чтобы увидеть число. Для RMS нужны три отметки. CG3 доступен для полных серий с достаточными координатами.</p>
-      <p>Сводка сравнивает последнюю тренировку со средним значением за 3–5 предыдущих занятий на более ранних датах в этой выборке. База считается отдельно для каждого показателя.</p>
+      <p className="round-help">Каждая точка показывает результат тренировки. Нажми на точку, чтобы увидеть значение и открыть тренировку.</p>
+      <StatisticRules>
+        <p>Для сравнения совпадают класс лука, дистанция и мишень. В накопительной линии средний балл и доли взвешены по количеству стрел.</p>
+        <p>Сводка сравнивает последнее занятие со средним за 3–5 предыдущих занятий на более ранних датах.</p>
+      </StatisticRules>
     </BottomSheet>}
   </section>;
 }
@@ -204,23 +244,16 @@ export function ProgressFiltersSheet({ entries, value, onApply, onClose }: {
         </div>
         {!range.valid && <p className="progress-filter-error" role="alert">Укажи обе даты. Начало должно быть не позже окончания.</p>}
       </>}
-      {(equipment.size > 0 || draft.equipmentId) && <label>Комплект
-        <select className="progress-timeline-conditions" aria-label="Комплект" value={draft.equipmentId ?? ''}
-          onChange={event => setDraft(current => ({ ...current, equipmentId: event.target.value || null }))}>
-          <option value="">Все комплекты</option>
-          {draft.equipmentId && !equipment.has(draft.equipmentId) && <option value={draft.equipmentId}>Выбранный комплект · нет результатов</option>}
-          {[...equipment].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-      </label>}
-      <label>Сопоставимые условия
-        <select className="progress-timeline-conditions" aria-label="Сопоставимые условия" value={draft.conditionKey ?? ''}
-          data-testid="analytics-conditions" onChange={event => setDraft(current => ({ ...current, conditionKey: event.target.value || null }))}>
-          <option value="">Все условия</option>
-          {draft.conditionKey && !groups.some(group => group.key === draft.conditionKey) &&
-            <option value={draft.conditionKey}>Выбранные условия · нет результатов</option>}
-          {groups.map(group => <option key={group.key} value={group.key}>{group.label}</option>)}
-        </select>
-      </label>
+      {(equipment.size > 0 || draft.equipmentId) && <ChoicePicker label="Комплект" value={draft.equipmentId ?? ''}
+        onChange={value => setDraft(current => ({ ...current, equipmentId: value || null }))}
+        options={[{ value: '', label: 'Все комплекты' },
+          ...(draft.equipmentId && !equipment.has(draft.equipmentId) ? [{ value: draft.equipmentId, label: 'Выбранный комплект · нет результатов' }] : []),
+          ...[...equipment].map(([value, label]) => ({ value, label }))]} />}
+      <ChoicePicker label="Сопоставимые условия" value={draft.conditionKey ?? ''} testId="analytics-conditions"
+        onChange={value => setDraft(current => ({ ...current, conditionKey: value || null }))}
+        options={[{ value: '', label: 'Все условия' },
+          ...(draft.conditionKey && !groups.some(group => group.key === draft.conditionKey) ? [{ value: draft.conditionKey, label: 'Выбранные условия · нет результатов' }] : []),
+          ...groups.map(group => ({ value: group.key, label: group.label }))]} />
       <div className="progress-filter-actions">
         <button type="button" data-testid="analytics-choose" aria-expanded={choosing}
           onClick={() => setChoosing(current => !current)}>{draft.sessionIds === null ? 'Выбрать тренировки' : `Выбрано ${count}`}</button>

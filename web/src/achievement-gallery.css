@@ -5,7 +5,7 @@
 .achievement-cards, .achievement-details { display: grid; gap: 14px; }
 .achievement-empty, .achievement-detail-scope { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
-.achievement-card, .achievement-detail {
+.achievement-card {
   display: grid;
   gap: 9px;
   width: 100%;
@@ -18,24 +18,14 @@
   color: inherit;
   overflow-wrap: anywhere;
 }
-.achievement-card[data-earned="true"] { background: color-mix(in srgb, var(--achievement-tint) 8%, var(--surface)); }
 .achievement-card[data-earned="false"], .achievement-detail[data-state="next"] { border-color: var(--accent); }
-.achievement-detail[data-state="earned"] { background: var(--raised); }
 .achievement-detail[data-state="locked"] { color: var(--muted); }
 .achievement-card-meta { display: flex; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; color: var(--muted); }
-.achievement-earned-count { font-weight: 700; }
-.achievement-heading { display: flex; align-items: center; gap: 11px; }
-.achievement-heading > span:last-child { display: grid; min-width: 0; gap: 4px; }
-.achievement-heading strong { font-size: 15px; line-height: 1.3; }
-.achievement-heading small { color: var(--achievement-tint); font-size: 12px; line-height: 1.4; }
-.achievement-medal { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: color-mix(in srgb, var(--achievement-tint) 12%, var(--surface)); color: var(--achievement-tint); }
 .achievement-state { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .achievement-state svg, .achievement-more svg { flex: none; width: 16px; height: 16px; }
 .achievement-state-earned, .achievement-state-next { color: var(--accent); font-weight: 700; }
 .achievement-state-unconfirmed { color: var(--muted); }
 .achievement-state time { white-space: nowrap; }
-.achievement-flavor, .achievement-requirement { margin: 0; color: inherit; font-size: 13px; line-height: 1.5; }
-.achievement-requirement { white-space: pre-line; }
 .achievement-next { display: grid; gap: 6px; padding: 10px; border-radius: 14px; border: 1px solid var(--accent); background: var(--surface); }
 .achievement-next-main { display: grid; gap: 6px; }
 .achievement-next strong { font-size: 14px; }
@@ -47,17 +37,10 @@
 .achievement-progress progress { width: 100%; height: 7px; accent-color: var(--accent); }
 .achievement-close { color: var(--accent); }
 
-[data-rarity="Common"] { --achievement-tint: var(--muted); }
-[data-rarity="Uncommon"] { --achievement-tint: var(--accent); }
-[data-rarity="Rare"] { --achievement-tint: #9bc4ff; }
-[data-rarity="Epic"] { --achievement-tint: #d4b4ff; }
-[data-rarity="Legendary"] { --achievement-tint: var(--gold, #ffd882); }
-[data-rarity="Mythic"] { --achievement-tint: #ffb4e4; }
-[data-rarity="Mystery"] { --achievement-tint: #b9b8cf; }
 .achievement-card.achievement-mystery {
   min-height: 86px; background: #14131a; color: #efedf9;
   border: 1px solid #77758d; cursor: default;
 }
-[data-theme-appearance="light"] [data-rarity="Rare"] { --achievement-tint: #275da2; }
-[data-theme-appearance="light"] [data-rarity="Epic"] { --achievement-tint: #75409e; }
-[data-theme-appearance="light"] [data-rarity="Mythic"] { --achievement-tint: #992b70; }
+
+.achievement-family { display: grid; gap: 6px; }
+.achievement-mystery .achievement-flavor > span { display: block; }

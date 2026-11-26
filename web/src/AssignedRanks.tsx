@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
@@ -82,18 +83,14 @@ export function AssignedRanks({ assignments, onChange, defaultCategory }: {
         event.preventDefault();
         if (isRankAssignment(edited)) write(() => saveRankAssignment(assignments, edited, Date.now()));
       }}>
-        <label>Дисциплина<select value={draft.discipline} data-testid="assigned-discipline"
-          onChange={event => editField('discipline', event.target.value as RankDiscipline)}>
-          {Object.entries(RANK_DISCIPLINES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select></label>
-        <label>Категория<select required value={draft.category} data-testid="assigned-category"
-          onChange={event => editField('category', event.target.value as Draft['category'])}>
-          <option value="" disabled>Выбрать категорию</option><option value="male">Мужчины</option><option value="female">Женщины</option>
-        </select></label>
-        <label>Разряд или звание<select value={draft.level} data-testid="assigned-level"
-          onChange={event => editField('level', event.target.value as RankLevel)}>
-          {RANK_LEVELS.map(level => <option key={level}>{level}</option>)}
-        </select></label>
+        <ChoicePicker label="Дисциплина" value={draft.discipline} testId="assigned-discipline"
+          onChange={value => editField('discipline', value as RankDiscipline)}
+          options={Object.entries(RANK_DISCIPLINES).map(([value, label]) => ({ value, label }))} />
+        <ChoicePicker label="Категория" value={draft.category} testId="assigned-category" placeholder="Выбрать категорию"
+          onChange={value => editField('category', value as Draft['category'])}
+          options={[{ value: 'male', label: 'Мужчины' }, { value: 'female', label: 'Женщины' }]} />
+        <ChoicePicker label="Разряд или звание" value={draft.level} testId="assigned-level"
+          onChange={value => editField('level', value as RankLevel)} options={RANK_LEVELS.map(level => ({ value: level, label: level }))} />
         <label>Дата присвоения<input placeholder="ГГГГ-ММ-ДД" maxLength={16} value={draft.assignedOn} data-testid="assigned-date"
           aria-invalid={!!draft.assignedOn.trim() && !isRankAssignmentDate(draft.assignedOn.trim())}
           onChange={event => editField('assignedOn', event.target.value)} /></label>

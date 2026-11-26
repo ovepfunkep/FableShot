@@ -7,6 +7,8 @@ import type { RoomMembership, RoomStatus } from './group-room-membership.ts';
 import { readRoomHistory } from './group-leaderboard.ts';
 import './local-room-probe.css';
 import { BottomSheet } from './ConditionsScreen.tsx';
+import { Icon } from './TrainingChrome.tsx';
+import { ChoicePicker } from './ChoicePicker.tsx';
 
 
 function InviteScanner({ onScan, onError }: { onScan: (value: string) => void; onError: (message: string) => void }) {
@@ -77,9 +79,12 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const [error, setError] = useState('');
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmResults, setConfirmResults] = useState(false);
+  const [flow, setFlow] = useState<'host' | 'join'>(native ? 'host' : 'join');
   const alive = useRef(false);
   const acceptScan = useCallback((value: string) => {
     setInvitation(value);
+    setVerified('');
+    setJoinedRoom(undefined);
     setMessage('');
     setScanning(false);
   }, []);
@@ -121,6 +126,14 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
   const nameField = <label>Имя для комнаты<input maxLength={60} value={name} onChange={event => setName(event.target.value)}
     placeholder="Стрелок" /></label>;
   return <section className="room-probe">
+    {native && !room.invitation && !room.restorable && <div className="room-entry-flow" role="group" aria-label="Действие с комнатой">
+      <button type="button" disabled={busy} aria-pressed={flow === 'host'} onClick={() => {
+        setFlow('host'); setScanning(false); setError(''); setMessage('');
+      }}><Icon name="group" />Создать комнату</button>
+      <button type="button" disabled={busy} aria-pressed={flow === 'join'} onClick={() => {
+        setFlow('join'); setError(''); setMessage('');
+      }}><Icon name="right" />Войти по коду</button>
+    </div>}
     {confirmResults && <BottomSheet title="Зафиксировать итоги?" onClose={() => setConfirmResults(false)}>
       <p>Подождите, пока все отправят серии. После фиксации участники смогут открыть и сохранить таблицу, а приём новых серий завершится.</p>
       <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
@@ -140,7 +153,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
       <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(false)}>Оставить открытой</button>
       {error && <p role="alert">{error}</p>}
     </BottomSheet>}
-    {native && <div className="settings-panel room-probe-panel">
+    {native && (flow === 'host' || room.invitation || room.restorable) && <div className="settings-panel room-probe-panel">
       <h2>{room.roomName || 'Создать комнату'}</h2>
       {room.invitation ? <>
         <p>Подключите участника к той же сети Wi-Fi. Покажите QR или передайте код.</p>
@@ -150,8 +163,10 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
           await navigator.clipboard.writeText(room.invitation!);
           setMessage('Код скопирован.');
         })}>Скопировать код</button>
-        <p>Успешных проверок · {room.checks ?? 0}</p>
-        <p>Принято серий · {room.acceptedSeries ?? 0}</p>
+        <div className="room-entry-state" role="status">
+          <span>{room.finalizedAt ? 'Итоги зафиксированы' : 'Комната открыта'}</span>
+          {room.participantCount !== undefined ? <span>Участников · {room.participantCount}</span> : <span>Серий · {room.acceptedSeries ?? 0}</span>}
+        </div>
         {onTraining && !room.finalizedAt && nameField}
         {onTraining && !room.finalizedAt && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
           const membership = await createRoomMembership(room.invitation!, name, room.roomName, room);
@@ -173,9 +188,8 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
           setAddress(result.addresses[0] ?? '');
           if (!result.addresses.length) setError('Локальный адрес не найден. Включите точку доступа и повторите.');
         })}>Найти адрес</button>
-        {addresses.length > 0 && <label>Адрес телефона<select value={address} onChange={event => setAddress(event.target.value)}>
-          {addresses.map(value => <option key={value} value={value}>{value}</option>)}
-        </select></label>}
+        {addresses.length > 1 && <ChoicePicker label="Адрес телефона" value={address} onChange={setAddress}
+          options={addresses.map(value => ({ value, label: value }))} />}
         <button type="button" className="primary" disabled={busy || !address} onClick={() => void run(async () => {
           const created = await probe.start({ address, roomName: roomTitle });
           if (alive.current) setRoom(created);
@@ -183,7 +197,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
         {room.restorable && <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>Закрыть комнату</button>}
       </>}
     </div>}
-    {!room.invitation && <div className="settings-panel room-probe-panel">
+    {!room.invitation && !room.restorable && flow === 'join' && <div className="settings-panel room-probe-panel">
       <h2>Войти в комнату</h2>
       <p>Сначала подключитесь к Wi-Fi создателя.</p>
       {!native && <p>Разрешите Chrome доступ к локальной сети, когда он попросит.</p>}
@@ -191,14 +205,14 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
         {scanning ? 'Закрыть камеру' : 'Сканировать QR'}
       </button>
       {scanning && <InviteScanner onScan={acceptScan} onError={failScan} />}
-      <label>Код приглашения<input autoCapitalize="none" spellCheck={false} value={invitation}
-        onChange={event => { setInvitation(event.target.value); setMessage(''); }} /></label>
-      <button type="button" className="primary" disabled={busy || !invitation.trim()} onClick={() => {
+      <label>Код приглашения<input autoCapitalize="none" spellCheck={false} value={invitation} disabled={busy}
+        onChange={event => { setInvitation(event.target.value); setVerified(''); setJoinedRoom(undefined); setMessage(''); setError(''); }} /></label>
+      {(!verified || verified !== invitation.trim()) && <button type="button" className="primary" disabled={busy || !invitation.trim()} onClick={() => {
         setScanning(false);
         void run(async () => {
           const code = invitation.trim();
           setVerified('');
-          const result = await (native ? probe.check({ invitation: code }) : checkBrowserRoom(code));
+          await (native ? probe.check({ invitation: code }) : checkBrowserRoom(code));
           try {
             const snapshot = await roomSnapshot(code);
             const title = readRoomName(snapshot);
@@ -209,9 +223,11 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
             if (alive.current) setJoinedRoom({ code, title, cg3, pg1, shotPositions, finalized });
           } catch { /* Old hosts can answer the connectivity check without room metadata. */ }
           setVerified(code);
-          setMessage(`Комната ответила за ${result.milliseconds} мс.`);
+          if (alive.current) setMessage('Связь установлена');
         });
-      }}>Проверить связь</button>
+      }}>Проверить связь</button>}
+      {message && <p role="status" className="room-entry-state">{message}</p>}
+      {error && <p role="alert" className="room-probe-error">{error}</p>}
       {joinedRoom?.code === verified && joinedRoom.finalized && <p>Итоги уже зафиксированы. Участники могут открыть таблицу из своей тренировки.</p>}
       {onTraining && verified && verified === invitation.trim() && !(joinedRoom?.code === verified && joinedRoom.finalized) && <>{nameField}
         {joinedRoom?.code === verified && joinedRoom.title && <strong>{joinedRoom.title}</strong>}
@@ -220,10 +236,10 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
         const metadata = joinedRoom?.code === verified ? joinedRoom : undefined;
         const membership = await createRoomMembership(verified, name, metadata?.title, metadata);
         if (alive.current) onTraining(membership);
-      })}>Начать групповую тренировку</button></>}
+      })}>Войти в тренировку</button></>}
       {unavailableReason && verified === invitation.trim() && verified && <p role="alert">{unavailableReason}</p>}
     </div>}
-    {message && <p role="status">{message}</p>}
-    {error && <p role="alert" className="room-probe-error">{error}</p>}
+    {(flow === 'host' || room.invitation) && message && <p role="status">{message}</p>}
+    {(flow === 'host' || room.invitation) && error && <p role="alert" className="room-probe-error">{error}</p>}
   </section>;
 }

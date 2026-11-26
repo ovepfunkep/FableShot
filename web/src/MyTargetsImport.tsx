@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
@@ -235,10 +236,12 @@ export function MyTargetsImport({ onClose }: { onClose: () => void }) {
               <legend>{title} · раунд {round.rawConditions.round}</legend>
               <p>{round.rawConditions.distance || 'Дистанция неизвестна'} · {round.rawConditions.target || 'Мишень неизвестна'}</p>
               <label>Дистанция, м<input type="number" min="0.01" step="any" value={draft.distance} onChange={event => mapRound(round, { distance: event.target.value })} /></label>
-              <label>Мишень<select value={draft.profile} onChange={event => {
-                const profile = TARGET_PROFILES.find(profile => profile.id === event.target.value);
-                mapRound(round, { profile: event.target.value, ...(profile?.diameters.length && !profile.diameters.includes(Number(draft.diameter)) ? { diameter: String(profile.diameters[0]) } : {}) });
-              }}><option value="">Выберите мишень</option>{TARGET_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.title}</option>)}</select></label>
+              <ChoicePicker label="Мишень" value={draft.profile} disabled={busy}
+                options={[{ value: '', label: 'Выберите мишень' }, ...TARGET_PROFILES.map(profile => ({ value: profile.id, label: profile.title }))]}
+                onChange={value => {
+                  const profile = TARGET_PROFILES.find(profile => profile.id === value);
+                  mapRound(round, { profile: value, ...(profile?.diameters.length && !profile.diameters.includes(Number(draft.diameter)) ? { diameter: String(profile.diameters[0]) } : {}) });
+                }} />
               <label>Диаметр, мм<input type="number" min="1" max="10000" step="1" value={draft.diameter} onChange={event => mapRound(round, { diameter: event.target.value })} /></label>
               <small>{overrides[round.sourceId] ? 'Условия выбраны' : 'Раунд будет пропущен'}</small>
             </fieldset>;

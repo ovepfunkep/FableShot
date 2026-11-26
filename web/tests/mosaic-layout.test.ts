@@ -37,3 +37,21 @@ test('groups keep consecutive tiles in each row and share the grid without overl
   }
   assert.equal(occupied.size, 36);
 });
+
+test('rows read high to low and empty cells stay at the right edge', () => {
+  const layout = packMosaicGroups([{ score: 2, tiles: 12 }, { score: 10, tiles: 3 }, { score: 5, tiles: 2 }]);
+  const scores = new Map([...layout.cellsByScore].flatMap(([score, cells]) =>
+    cells.map(({ column, row }) => [`${column}:${row}`, score] as const),
+  ));
+  for (let row = 0; row < layout.rows; row++) {
+    let previous = Infinity;
+    for (let column = 0; column < layout.columns; column++) {
+      const score = scores.get(`${column}:${row}`);
+      if (score === undefined) assert.equal(column, layout.columns - 1);
+      else {
+        assert.ok(score <= previous);
+        previous = score;
+      }
+    }
+  }
+});

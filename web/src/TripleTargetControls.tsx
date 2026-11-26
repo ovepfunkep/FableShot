@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker.tsx';
 import { DEFAULT_TRIPLE_ORDER } from './preferences.ts';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import type { TargetSpot } from './target.ts';
@@ -11,21 +12,20 @@ export function TripleTargetControls() {
     <label className="triple-toggle">
       <input type="checkbox" checked={preferences.tripleAutoAdvance ?? false} disabled={!readable}
         onChange={event => void update({ ...preferences, tripleAutoAdvance: event.currentTarget.checked })} />
-      Переходить к следующей мишени
+      Автопереход на «Светофоре»
     </label>
+    <p className="report-metrics-muted">После отметки стрелы открывается следующее пятно.</p>
     <div className="triple-order">
-      {order.map((spot, index) => <label key={index}>{index + 1}-я
-        <select className="report-scope-select" value={spot} disabled={!readable} aria-label={`Позиция ${index + 1} в порядке мишеней`}
-          onChange={event => {
-            const chosen = Number(event.currentTarget.value) as TargetSpot;
+      {order.map((spot, index) => <div key={index}><span>{index + 1}-я</span>
+        <ChoicePicker value={String(spot)} disabled={!readable} label={`Позиция ${index + 1} в порядке мишеней`}
+          onChange={value => {
+            const chosen = Number(value) as TargetSpot;
             const next = [...order];
             next[order.indexOf(chosen)] = spot;
             next[index] = chosen;
             void update({ ...preferences, tripleOrder: next });
-          }}>
-          {tripleSpotNames.map((name, id) => <option value={id} key={name}>{name}</option>)}
-        </select>
-      </label>)}
+          }} options={tripleSpotNames.map((label, id) => ({ value: String(id), label }))} />
+      </div>)}
     </div>
     {error && <p className="preferences-error" role="alert">{error}</p>}
   </section>;

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { exerciseRank, exerciseRankDisplay } from './exercise-rank.ts';
+import { exerciseRank, exerciseRankCoverage, exerciseRankDisplay } from './exercise-rank.ts';
 import type { Practice } from './practice.ts';
 import { formatAverage } from './preferences.ts';
 import { RankDetails, RankMedal } from './SportRanks.tsx';
@@ -9,10 +9,10 @@ import { statisticVisible } from './statistics-visibility.ts';
 import { ExerciseThresholdTable } from './ExerciseThresholdTable.tsx';
 import './exercise-rank.css';
 
-export function ExerciseRankCard({ practice, category, onCategory, onOpenReference }: {
+export function ExerciseRankCard({ practice, category, onProfile, onOpenReference }: {
   practice: Practice;
   category: RankCategory | null;
-  onCategory: (category: RankCategory) => void;
+  onProfile: () => void;
   onOpenReference: () => void;
 }) {
   const titleId = useId();
@@ -21,6 +21,7 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
   const rank = useMemo(() => exerciseRank(practice, category), [practice, category]);
   const { evaluation, finalResult } = rank;
   const display = exerciseRankDisplay(rank);
+  const coverage = exerciseRankCoverage(rank);
   const showAverage = statisticVisible(preferences, 'average');
   const showVolume = statisticVisible(preferences, 'volume');
   const showResult = statisticVisible(preferences, 'result');
@@ -43,10 +44,14 @@ export function ExerciseRankCard({ practice, category, onCategory, onOpenReferen
         </p>}
       </div>
       {display.actual && <p className="exercise-rank__score">{display.actual}</p>}
+      {coverage && <p className="exercise-rank__score">{coverage.label}</p>}
+      {coverage?.explanation && <p className="exercise-rank__score">{coverage.explanation}</p>}
       <ExerciseThresholdTable key={evaluation.exercise.id} evaluation={evaluation} finalResult={finalResult}
         saved={practice.savedAt !== null} showAverage={showAverage} showVolume={showVolume} />
-    </> : <p data-testid="exercise-rank-unavailable">{rank.reason}</p>}
-    {details && <RankDetails rank={rank} forecast={display.actual ? rank.forecast : null} onClose={() => setDetails(false)} onCategory={onCategory}
+    </> : category ? <p data-testid="exercise-rank-unavailable">{rank.reason}</p> : <button type="button" className="rank-open-reference"
+      onClick={onProfile}>Указать пол в профиле</button>}
+    {details && <RankDetails rank={rank} forecast={display.actual ? rank.forecast : null} onClose={() => setDetails(false)}
+      rankForCategory={category => exerciseRank(practice, category)} onProfile={onProfile}
       onOpenReference={() => { setDetails(false); onOpenReference(); }} />}
   </section>;
 }

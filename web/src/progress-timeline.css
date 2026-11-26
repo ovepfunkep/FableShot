@@ -10,7 +10,8 @@
 .progress-timeline-metrics button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .progress-timeline-range { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .progress-timeline-plot { position: relative; display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 5px; }
-.progress-timeline-scale { height: 148px; padding-top: 12px; display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: .7rem; text-align: right; }
+.progress-timeline-scale { position: relative; height: 148px; color: var(--muted); font-size: .7rem; text-align: right; }
+.progress-timeline-scale > span { position: absolute; inset-inline-end: 0; transform: translateY(-50%); }
 .progress-timeline-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
 .progress-timeline-svg { display: block; max-width: none; height: 184px; overflow: hidden; }
 .progress-timeline-svg text { fill: var(--muted); font-size: 10px; }
@@ -62,3 +63,7 @@
 .progress-insight small, .progress-insight details { font-size: .75rem; color: var(--muted); }
 .progress-insight summary { min-height: 32px; cursor: pointer; }
 .progress-insight ul { margin: 0; padding-inline-start: 17px; }
+.progress-cumulative-line { fill: none; stroke: light-dark(#236bd3, #80b5ff); stroke-width: 1.6; }
+.progress-cumulative-legend { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--muted); font-size: 12px; }
+.progress-cumulative-legend::before { content: ''; width: 18px; height: 2px; background: light-dark(#236bd3, #80b5ff); }
+.progress-open-training { grid-column: 1 / -1; justify-self: start; }

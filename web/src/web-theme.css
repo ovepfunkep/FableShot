@@ -175,3 +175,4 @@ html:is([data-theme-style="sport"], [data-theme-style="pop"])[data-theme-appeara
   background: var(--highlight-field), var(--raised);
   border-color: color-mix(in srgb, var(--accent) 32%, var(--edge));
 }
+.web-theme-style-name small { display: block; color: var(--muted); font-size: .75rem; font-weight: 400; line-height: 1.25; }

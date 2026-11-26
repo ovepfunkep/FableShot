@@ -213,7 +213,7 @@ export function isDiary(value: unknown): value is Diary {
       typeof entry.startedAt !== 'string' || (!isSavedAt(entry.startedAt) && !(entry.startedAt === '' && (entry.source || entry.nativeArchiveSession) && entry.localDate === null)) || !isPractice(entry.practice) ||
       (entry.createdAt !== undefined && (typeof entry.createdAt !== 'string' || !isSavedAt(entry.createdAt))) ||
       (entry.paused !== undefined && (typeof entry.paused !== 'boolean' || entry.paused && entry.practice.savedAt !== null)) ||
-      (entry.nativeArchiveSession !== undefined && (!nativeArchive || typeof entry.nativeArchiveSession !== 'string' ||
+      (entry.nativeArchiveSession !== undefined && (typeof entry.nativeArchiveSession !== 'string' ||
         !entry.nativeArchiveSession || entry.nativeArchiveSession.length > 128)) ||
       (entry.title !== undefined && (typeof entry.title !== 'string' || entry.title.length > 5000)) ||
       (entry.groupRoomName !== undefined && (typeof entry.groupRoomName !== 'string' || !entry.groupRoomName.trim() || entry.groupRoomName.length > 60)) ||
