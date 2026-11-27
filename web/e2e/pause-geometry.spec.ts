@@ -46,7 +46,7 @@ test('geometry trend shows exact RMS and offset values and respects its display 
   await expect(graph.getByTestId('geometry-trend-selected-value')).toHaveText('4,9 мм');
   await graph.getByTestId('geometry-trend-offset').click();
   await expect(graph.getByTestId('geometry-trend-selected-value')).toHaveText('12 мм');
-  await graph.getByTestId('geometry-trend-prev').click();
+  await graph.getByTestId('geometry-trend-point').nth(1).click();
   await expect(graph.getByTestId('geometry-trend-selected-value')).toHaveText('8 мм');
   await graph.screenshot({ path: '../artifacts/web-0.22.0-geometry.png' });
   await page.getByTestId('open-settings').click();

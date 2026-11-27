@@ -14,6 +14,7 @@ import type { AchievementGrant } from './achievement-ledger.ts';
 import { driveBackupAvailable, driveBackupState, signOutGoogle, subscribeDriveBackup } from './drive-backup.ts';
 import { GoogleAccountButton } from './GoogleAccountButton.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
+import { ChoicePicker } from './ChoicePicker.tsx';
 import './profile-screen.css';
 
 export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements, onAchievement, onPublication, onRecords, onNotebook, onTournaments, tournamentCount, focusRankCategory }: { entries: readonly DiaryEntry[];
@@ -34,11 +35,11 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
   const [minutes, setMinutes] = useState('');
   const [achievementError, setAchievementError] = useState('');
   const [accountError, setAccountError] = useState('');
-  const categoryRow = useRef<HTMLFieldSetElement>(null);
+  const categoryRow = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!focusRankCategory) return;
     categoryRow.current?.scrollIntoView({ block: 'center' });
-    categoryRow.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus({ preventScroll: true });
+    categoryRow.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   }, [focusRankCategory]);
   const base = preferences.shootingBaseMinutes ?? 0;
   const showEarned = preferences.showAchievementNotices !== false;
@@ -60,8 +61,8 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
         <ProfileAvatar picture={account?.picture} name={displayName} size={48} />
         <div><h2>{displayName || 'Мой профиль'}</h2>{account && <small>{connected ? 'Google подключён' : 'Аккаунт Google'}</small>}</div>
         <button type="button" className="icon-button" aria-label="Изменить имя" onClick={() => { setName(displayName ?? ''); setPanel('name'); }}>{editIcon}</button>
-        {driveBackupAvailable && <div className="profile-account-actions">
-          {!connected && <GoogleAccountButton className="profile-account-button" label={account ? 'Подключить Google снова' : 'Войти через Google'} />}
+        {driveBackupAvailable && !connected && <GoogleAccountButton className="profile-account-button" label={account ? 'Подключить Google снова' : 'Войти через Google'} />}
+        {driveBackupAvailable && account && <div className="profile-account-actions">
           {account && <button type="button" className="profile-account-button" onClick={() => {
             setAccountError('');
             try { signOutGoogle(); } catch { setAccountError('Не удалось отключить аккаунт Google.'); }
@@ -75,6 +76,7 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
         <div className="profile-panel profile-metric"><Icon name="target" /><div><strong>{arrows}</strong><span>Стрел</span></div></div>
         <div className="profile-panel profile-metric"><Icon name="calendar" /><div><strong>{entries.length}</strong><span>Тренировок</span></div></div>
       </div>}
+      <div className="profile-settings-row">
       {statisticVisible(preferences, 'training_time') && <div className="profile-panel profile-metric">
           <Icon name="timer" />
           <div><strong data-testid="shooting-hours-total">{formatMinutes(base * 60_000 + recorded)}</strong><span>Часы стрельбы</span></div>
@@ -82,14 +84,13 @@ export function ProfileScreen({ entries, grants, onBack, onRanks, onAchievements
             setHours(String(Math.floor(base / 60))); setMinutes(String(base % 60)); setPanel('time');
           }}>{editIcon}</button>
       </div>}
-      <fieldset className="profile-panel profile-rank-category" ref={categoryRow}>
-        <legend>Пол для нормативов</legend>
-        <div>{([['male', 'М'], ['female', 'Ж'], [undefined, 'Не указан']] as const).map(([value, label]) =>
-          <button type="button" key={label} aria-pressed={preferences.rankCategory === value}
-            aria-label={value === 'male' ? 'Мужской' : value === 'female' ? 'Женский' : 'Не указан'}
-            onClick={() => void update({ ...preferences, rankCategory: value })}>{label}</button>)}</div>
-        <small>Используется для расчёта разрядов.</small>
-      </fieldset>
+      <div className="profile-panel profile-rank-category" ref={categoryRow} role="group" aria-label="Пол для нормативов">
+        <span>Пол для нормативов</span>
+        <ChoicePicker label="Пол для нормативов" value={preferences.rankCategory ?? ''}
+          options={[{ value: 'male', label: 'Мужской' }, { value: 'female', label: 'Женский' }, { value: '', label: 'Не указан' }]}
+          onChange={value => void update({ ...preferences, rankCategory: value === 'male' || value === 'female' ? value : undefined })} />
+      </div>
+      </div>
       {showNorms && <><AssignedRanks assignments={preferences.rankAssignments ?? []} defaultCategory={preferences.rankCategory}
         onChange={rankAssignments => update({ ...preferences, rankAssignments })} />
         <button type="button" className="profile-panel profile-metric" data-testid="profile-rank-results" onClick={onRanks}>

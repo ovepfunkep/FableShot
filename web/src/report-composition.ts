@@ -5,8 +5,18 @@ import type { ReportBlock, StatisticFeature } from './statistics-visibility.ts';
 
 export type ExportSection = ReportBlock | 'focus' | 'achievements';
 export type ReportComposition = { sections: readonly ExportSection[]; showShots: boolean };
+export type DistributionView = 'mosaic' | 'pie';
 
-const pngSections = new Set<ExportSection>(['result', 'series', 'distribution', 'norms', 'general_score']);
+const pngSections = new Set<string>(['result', 'series', 'distribution', 'norms', 'general_score']);
+const sections = new Set<string>([...REPORT_BLOCKS.map(([id]) => id), 'focus', 'achievements']);
+
+export function readReportComposition(value: unknown, format: ReportFormat): ReportComposition | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const data = value as Partial<ReportComposition>;
+  if (!Array.isArray(data.sections) || typeof data.showShots !== 'boolean') return undefined;
+  return { sections: [...new Set(data.sections.filter(id => typeof id === 'string' && sections.has(id) &&
+    (format === 'pdf' || pngSections.has(id))))], showShots: data.showShots };
+}
 
 export function exportSectionOptions(snapshot: ReportSnapshot, format: ReportFormat, order: readonly ReportBlock[]) {
   const available: Record<ExportSection, boolean> = {

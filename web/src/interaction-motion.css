@@ -119,15 +119,29 @@ html[data-motion="off"] .journal-timeline-frame::before, html[data-motion="off"]
   .equipment-catalog-star svg, .equipment-chip, .journal-tab-history-card { transition: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  html:not([data-motion="off"]) [data-new-round] { animation: training-new-round 480ms ease-out; }
+  html:not([data-motion="off"]) :not([data-testid="next-end"])[data-new-round] { animation: training-new-round 650ms ease-out; }
+  html:not([data-motion="off"]) [data-new-round] .stage-number > :first-child { animation: training-new-round-number 650ms ease-out both; }
+  html:not([data-motion="off"]) [data-new-round] .stage-number-previous { animation: training-old-round-number 650ms ease-out both; }
+}
+.stage-number { position: relative; display: inline-block; min-width: 2ch; font-variant-numeric: tabular-nums; }
+.stage-number-previous { position: absolute; inset-inline-start: 0; opacity: 0; }
+.stage-number-previous::after { content: attr(data-previous); }
+@keyframes training-new-round-number {
+  0%, 12% { opacity: 0; }
+  24%, 100% { opacity: 1; }
+}
+@keyframes training-old-round-number {
+  0% { opacity: 1; }
+  20%, 100% { opacity: 0; }
 }
 @keyframes training-new-round {
-  from { box-shadow: 0 0 18px var(--accent-line), inset 0 0 0 2px var(--accent); }
+  0% { box-shadow: 0 0 8px var(--accent-line), inset 0 0 0 1px var(--accent); }
+  22% { box-shadow: 0 0 25px var(--accent-line), inset 0 0 0 3px var(--accent), inset 0 0 30px var(--accent-line); }
   to { box-shadow: 0 0 0 transparent, inset 0 0 0 transparent; }
 }
 .training-actions [data-testid="next-end"] { transition: background 200ms ease, color 200ms ease; }
 .training-actions [data-testid="next-end"][data-new-round="true"] {
-  background: var(--raised); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--raised); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px var(--accent-line);
 }
 .training-actions [data-testid="next-end"] > svg { width: 16px; height: 16px; margin-inline-end: 4px; vertical-align: middle; }
 [data-motion="off"] .training-actions [data-testid="next-end"] { transition: none; }

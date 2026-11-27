@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Conditions } from '../src/conditions.ts';
-import { confirmedExerciseRanks, exerciseRank, exerciseRankCoverage, exerciseRankDisplay, legacyExerciseRank } from '../src/exercise-rank.ts';
+import { confirmedExerciseRanks, exerciseRank, exerciseRankCoverage, exerciseRankDisplay, legacyExerciseRank, personalBestExerciseCandidates } from '../src/exercise-rank.ts';
 import type { Practice } from '../src/practice.ts';
 
 const indoor: Conditions = {
@@ -28,6 +28,17 @@ function training(scores: number[][], saved: string | null = savedAt): Practice 
 
 const firstRound = Array<number>(30).fill(7);
 const secondRound = [...Array<number>(27).fill(6), 10, 10, 0];
+
+test('a personal best can come from any full half without changing the first confirmed pair', () => {
+  const first = [...Array<number>(26).fill(8), ...Array<number>(4).fill(7)];
+  const second = [...Array<number>(29).fill(8), 9];
+  const third = [...Array<number>(20).fill(8), ...Array<number>(10).fill(9)];
+  const practice = training([first, [10, 10, 10], second, third]);
+  const candidates = personalBestExerciseCandidates(practice, 'male');
+  assert.deepEqual(candidates.map(rank => [rank.evaluation.exercise.arrows, rank.evaluation.points, rank.coverage.rounds.map(round => round.number)]),
+    [[60, 477, [1, 3]], [30, 236, [1]], [30, 241, [3]], [30, 250, [4]]]);
+  assert.deepEqual(confirmedExerciseRanks(practice, 'male').map(rank => rank.evaluation.points), [477]);
+});
 
 test('five six-arrow ends show the 60-arrow barebow pace alongside the actual short exercise rank', () => {
   const practice = training([Array<number>(30).fill(10)]);

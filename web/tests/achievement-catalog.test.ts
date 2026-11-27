@@ -26,7 +26,7 @@ test('catalog preserves active runtime IDs, ordering, count targets and the sour
   assert.match(rule('GEAR03').description, /12 зачётных стрел подряд на каждой из трёх дистанций/);
   assert.equal(rule('MIND08').family, 'archive');
   assert.equal(rule('SWING01').hiddenUntilEarned, true);
-  assert.deepEqual(rule('APP14').mysteryHaiku, ['Тихий круг дрожит', 'Три следа легли в лупе', 'Центр зовёт назад']);
+  assert.deepEqual(rule('APP14').mysteryHaiku, ['На пробном щите', 'Десять, девять и десять', 'Три стрелы подряд']);
   assert.ok(ACHIEVEMENT_CATALOG.every(item => item.plainCondition.trim().length > 0));
   assert.ok(ACHIEVEMENT_CATALOG.every(item => !item.mysteryHaiku || (item.rarity === 'Mystery' && !item.hiddenUntilEarned)));
   assert.equal(rule('SWING02').family, rule('SWING03').family);

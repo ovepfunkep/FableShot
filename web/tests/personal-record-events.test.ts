@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { DEFAULT_CONDITIONS } from '../src/conditions.ts';
 import { calculatePersonalRecordEvents, isPersonalRecordEvent, personalRecordGroups, personalRoundRecords, personalSeriesRecords, personalVolumeRecord } from '../src/personal-record-events.ts';
 import type { DiaryEntry } from '../src/persistence.ts';
+import { reconcileConditionsCorrection } from '../src/conditions-correction-results.ts';
+import type { Diary } from '../src/persistence.ts';
 
 const at = Date.parse('2026-11-11T12:00:00Z');
 const kit = { id: 'kit', name: 'Комплект', bow: { name: 'Лук', category: 'recurve' }, arrows: { name: 'Стрелы', diameterMm: 6 } };
@@ -23,6 +25,30 @@ function calculate(candidate: DiaryEntry, history: DiaryEntry[], category: 'male
   let id = 0;
   return calculatePersonalRecordEvents(candidate, history, category, at, () => `record-${++id}`);
 }
+
+test('corrected conditions repair later record comparisons and move first evidence to its earliest valid session', () => {
+  const base = training('base', [[8, 8, 8]], '2026-11-01');
+  const amended = training('amended', [[10, 10, 10]], '2026-11-02');
+  const later = training('later', [[10, 9, 9]], '2026-11-03');
+  for (const entry of [base, amended, later]) entry.achievementEnrollment = { epoch: 'correction', rankCategory: null };
+  amended.personalRecords = calculate(amended, [base]);
+  later.personalRecords = [];
+  const original: Diary = { version: 1, entries: [base, amended, later], achievementLedger: { epoch: 'correction', grants: [
+    { id: 'START02', scope: 'recurve', earnedAt: amended.practice.savedAt!, notifiedAt: amended.practice.savedAt!, sessionId: amended.id },
+  ] } };
+  const corrected = structuredClone(amended);
+  corrected.practice.rounds[0].series[0].conditions = {
+    ...corrected.practice.rounds[0].series[0].conditions, distanceMeters: 30,
+    equipment: { ...corrected.practice.rounds[0].series[0].conditions.equipment!, bow: { name: 'Другой лук', category: 'barebow' } },
+  };
+  const now = '2026-11-27T10:00:00Z';
+  const result = reconcileConditionsCorrection(original, { ...original, entries: [base, corrected, later] }, amended.id, null, now);
+  assert.deepEqual(result.entries[1].personalRecords, []);
+  assert.deepEqual(result.entries[2].personalRecords?.map(event => [event.value, event.previousValue, event.previousSessionId]), [[28, 24, base.id]]);
+  assert.deepEqual(result.achievementLedger!.grants.filter(grant => grant.id === 'START02')
+    .map(grant => [grant.scope, grant.sessionId]).sort(), [['barebow', amended.id], ['recurve', later.id]]);
+  assert.equal(reconcileConditionsCorrection(result, result, amended.id, null, now), result);
+});
 
 test('personal record histories pool kits by bow and bow classes by format, while preserving kit identity', () => {
   const first = training('first', [[8, 8, 8]], '2026-11-01');

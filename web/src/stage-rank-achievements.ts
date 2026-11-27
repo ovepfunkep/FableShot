@@ -106,6 +106,20 @@ export function confirmsStageRank(practice: Practice, kind: 'series' | 'round', 
   return summarize(shots).points * basis.exerciseArrows >= basis.threshold * shots.length;
 }
 
+export function closedStageRankObservations(practice: Practice, categories: Readonly<Record<string, RankCategory | null>> = {}) {
+  const active = practice.savedAt === null ? currentSeries(practice) : null;
+  return practice.rounds.flatMap(round => {
+    const series = round.series.flatMap(end => {
+      const category = categories[end.id];
+      return end.id !== active?.series.id && category && full(end)
+        ? collect(seriesRank(practice, end.id, category), 'SNR', round, [end]) : [];
+    });
+    const category = categories[round.id];
+    return round.id !== active?.round.id && category && fullRound(practice, round.series)
+      ? [...series, ...collect(roundRank(practice, round.id, category), 'RNR', round, round.series)] : series;
+  });
+}
+
 export function stageRankBasisLabel(basis: StageRankBasis): string {
   const average = (basis.points / basis.arrows).toFixed(2).replace('.', ',');
   return `${basis.points} очков / ${basis.arrows} стрел · средний ${average} · порог ${basis.threshold} из ${basis.exerciseArrows * 10}`;

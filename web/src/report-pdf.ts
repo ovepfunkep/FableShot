@@ -12,9 +12,10 @@ import { achievementRarityFor, ACHIEVEMENT_RARITY_LABELS, getAchievementDefiniti
 import type { StatisticFeature } from './statistics-visibility.ts';
 import { reportSectionShown } from './report-composition.ts';
 import type { ExportSection, ReportComposition } from './report-composition.ts';
-import { chartScale, rankAverageScale } from './chart-metrics.ts';
+import { chartScale } from './chart-metrics.ts';
 import { rankDisplayLabel } from './sport-ranks.ts';
 import { exerciseRankCoverage } from './exercise-rank.ts';
+import { distributionHeight, distributionWidth, reportDistribution } from './report-distribution.ts';
 
 const hex = (value: string) => rgb(parseInt(value.slice(1, 3), 16) / 255, parseInt(value.slice(3, 5), 16) / 255, parseInt(value.slice(5, 7), 16) / 255);
 const ink = hex('#17251c'), muted = hex('#667368'), accent = hex('#517631'), dark = hex('#15251a');
@@ -137,29 +138,18 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
   ]);
   if (includes('focus') && snapshot.focus.length) { heading('Фокус тренировки'); snapshot.focus.forEach(focus => paragraph(focus)); }
   if (includes('norms')) {
-    heading('Нормативы', 200);
+    heading('Нормативы', 145);
     const rank = snapshot.rankDetails, evaluation = rank.evaluation;
     const coverage = exerciseRankCoverage(rank);
     if (!evaluation) paragraph(rank.reason ?? 'Нет данных для сравнения.');
     else {
-      ensure(155); box(left, y, width, 136);
+      ensure(85); box(left, y, width, 72);
       text(`${snapshot.rankDisplay.forecast ? 'Темп' : 'По очкам'} · ${snapshot.rankDisplay.label}`, left + 15, y - 12, 19, true, accent);
       if (snapshot.rankDisplay.actual) text(snapshot.rankDisplay.actual, left + 15, y - 32, 9, false, muted);
       text(`${rank.classLabel} · ${evaluation.entered} из ${evaluation.exercise.arrows} стрел · средний ${decimal(evaluation.average)}`, left + 15, y - 42, 9, false, muted);
-      const lineY = y - 82, start = left + 20, length = width - 40;
-      const scale = rankAverageScale([evaluation.average ?? 0], evaluation.exercise);
-      const position = (value: number) => start + (value - scale.lower) / (scale.upper - scale.lower) * length;
-      page.drawLine({ start: { x: start, y: lineY }, end: { x: start + length, y: lineY }, color: edge, thickness: 4 });
-      scale.thresholds.forEach(threshold => {
-        const x = position(threshold.average);
-        page.drawLine({ start: { x, y: lineY - 7 }, end: { x, y: lineY + 7 }, color: muted, thickness: 1 });
-        text(threshold.label, x - 5, lineY + 18, 7, false, muted);
-      });
-      page.drawCircle({ x: position(evaluation.average ?? 0), y: lineY, size: 5, color: accent });
-      text(decimal(scale.lower, false), start, lineY - 10, 7, false, muted); text(decimal(scale.upper, false), start + length - 15, lineY - 10, 7, false, muted);
       const next = evaluation.next;
-      text(next ? `Следующий: ${next.label} · от ${decimal(next.score / evaluation.exercise.arrows, true)} за стрелу` : 'Высший доступный уровень по этой сетке', left + 15, y - 111, 9, true, accent);
-      y -= 151;
+      text(next ? `Следующий: ${next.label} · от ${decimal(next.score / evaluation.exercise.arrows, true)} за стрелу` : 'Высший доступный уровень по этой сетке', left + 15, y - 56, 9, true, accent);
+      y -= 86;
       if (coverage) paragraph(coverage.label, 10, accent);
       if (coverage?.explanation) paragraph(coverage.explanation, 8);
       paragraph(rank.finalResult ? 'Сравнение по очкам упражнения; официальное присвоение разряда требует выполнения условий ЕВСК.'
@@ -316,14 +306,21 @@ export async function createReportPdf(snapshot: ReportSnapshot, fonts: { regular
     }
     function drawDistribution() {
       if (!distribution) return;
-      ensure(190); heading('Распределение попаданий');
-      const peak = Math.max(...scope.distribution, 1), base = y - 116;
-      scope.distribution.forEach((count, zone) => {
-        const x = left + 10 + zone * 45, height = count / peak * 93;
-        page.drawRectangle({ x, y: base, width: 30, height: Math.max(height, .7), color: hex(zones[zone]), borderColor: edge, borderWidth: .4, opacity: count ? 1 : .35 });
-        text(String(count), x + 10, base + height + 14, 8, true, accent);
-        text(zone === 0 ? 'M' : String(zone), x + 10, base - 7, 8, false, muted);
-      }); y -= 152;
+      heading('Распределение попаданий', distributionHeight + 32);
+      const start = left + (width - distributionWidth) / 2;
+      for (const mark of reportDistribution(scope.distribution, snapshot.distributionView)) {
+        if (mark.type === 'tile') {
+          page.drawRectangle({ x: start + mark.x, y: y - mark.y - mark.side, width: mark.side, height: mark.side, color: hex(mark.color) });
+        } else if (mark.type === 'path') {
+          const path = mark.points.map(([x, y], i) => `${i ? 'L' : 'M'} ${x} ${y}`).join(' ');
+          page.drawSvgPath(mark.color ? `${path} Z` : path, { x: start, y,
+            borderWidth: .8, borderColor: mark.color ? paper : muted, color: mark.color ? hex(mark.color) : undefined });
+        } else {
+          text(mark.text, start + mark.x - bold.widthOfTextAtSize(mark.text, mark.size) / 2,
+            y - mark.y + mark.size * .64, mark.size, true, mark.color ? hex(mark.color) : ink);
+        }
+      }
+      y -= distributionHeight;
     }
     const drawSections = new Map<ExportSection, () => void>([
       ['general_score', drawGeneralScore], ['progress_score', drawProgress], ['hit_map', drawMap], ['distribution', drawDistribution],

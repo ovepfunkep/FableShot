@@ -50,9 +50,11 @@ test('personal records filter by conditions and open the series and volume sourc
   const ranks = page.getByTestId('personal-ranks-screen');
   await ranks.getByRole('button', { name: 'Указать пол в профиле' }).click();
   const rankProfile = page.getByTestId('profile-screen');
-  await rankProfile.getByRole('button', { name: 'Мужской', exact: true }).click();
+  await rankProfile.getByRole('button', { name: 'Пол для нормативов' }).click();
+  await page.getByRole('dialog', { name: 'Пол для нормативов' }).getByRole('button', { name: 'Мужской', exact: true }).click();
   await rankProfile.getByRole('button', { name: 'Назад', exact: true }).click();
-  const bestRank = ranks.locator('[data-testid^="personal-best-"]');
+  const bestRank = ranks.getByTestId('personal-best-recurve-18-60-male');
+  await expect(ranks.getByTestId('personal-best-recurve-18-30-male')).toContainText('270/300');
   await expect(bestRank).toContainText('540/600');
   await ranks.getByTestId('personal-rank-grid').click();
   await expect(page.getByTestId('rank-reference')).toBeVisible();

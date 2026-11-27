@@ -59,7 +59,7 @@ function confirmedRank(conditions: Conditions, exercise: RankExercise, used: Ran
   };
 }
 
-export function confirmedExerciseRanks(practice: Practice, category: RankCategory | null): ConfirmedExerciseRank[] {
+function exerciseRankCandidates(practice: Practice, category: RankCategory | null, includeIndividualRounds: boolean): ConfirmedExerciseRank[] {
   if (practice.savedAt === null || !category) return [];
   const rounds = rankRounds(practice, category);
   const groups: { conditions: Conditions; rounds: RankRound[] }[] = [];
@@ -76,6 +76,11 @@ export function confirmedExerciseRanks(practice: Practice, category: RankCategor
       const single = group.find(round => round.entered === exercise.arrows);
       const pair = group.filter(round => round.entered * 2 === exercise.arrows).slice(0, 2);
       const hasPair = pair.length === 2;
+      if (includeIndividualRounds) {
+        const attempts = group.filter(round => round.entered === exercise.arrows).map(round => [round]);
+        if (hasPair) attempts.push(pair);
+        return attempts.map(used => confirmedRank(conditions, exercise, used, rounds));
+      }
       if (!single && !hasPair) return [];
       // The shorter line of a split exercise is used only when a full pair cannot be formed.
       if (candidates.some(item => item.arrows === exercise.arrows * 2) &&
@@ -85,6 +90,15 @@ export function confirmedExerciseRanks(practice: Practice, category: RankCategor
     });
   }).sort((a, b) => b.evaluation.entered - a.evaluation.entered ||
     a.coverage.rounds.at(-1)!.number - b.coverage.rounds.at(-1)!.number);
+  return ranked;
+}
+
+export function personalBestExerciseCandidates(practice: Practice, category: RankCategory | null): ConfirmedExerciseRank[] {
+  return exerciseRankCandidates(practice, category, true);
+}
+
+export function confirmedExerciseRanks(practice: Practice, category: RankCategory | null): ConfirmedExerciseRank[] {
+  const ranked = exerciseRankCandidates(practice, category, false);
   const firstByFormat = new Map<string, ConfirmedExerciseRank>();
   for (const rank of ranked) {
     const id = rank.evaluation.exercise.id;

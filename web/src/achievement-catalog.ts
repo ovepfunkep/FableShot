@@ -602,7 +602,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     family: 'app.kit', rarity: 'Uncommon', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'APP14', title: 'Охотник за пикселями', flavor: 'Три пробных выстрела. Один подозрительно точный эксперимент.',
     plainCondition: "Повторите нужный рисунок попаданий на тестовой мишени.",
-    mysteryHaiku: ['Тихий круг дрожит', 'Три следа легли в лупе', 'Центр зовёт назад'],
+    mysteryHaiku: ['На пробном щите', 'Десять, девять и десять', 'Три стрелы подряд'],
     description: 'Попасть 10–9–10 подряд на тестовой мишени.', family: 'app.easter-aim',
     rarity: 'Mystery', target: 1, priority: 1, categorySpecific: false, performanceFormat: false },
   { id: 'ROOM01', title: 'Свои на рубеже', flavor: 'Наконец-то есть кому сказать «это была пристрелка»',

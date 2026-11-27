@@ -16,8 +16,8 @@ export type RoomSeries = {
   result: { points: number; arrows: number; bowCategory: string | null; conditions?: RoomConditions; hits?: number; spread?: RoomSpread;
     progressBase?: RoomProgressBase; scores?: string; shotPositions?: RoomShotPosition[] } | null;
 };
-export type RoomParticipant = { entryId: string; displayName?: string; bowCategory: string | null };
-export type RoomHistory = { receivedAt: number; series: RoomSeries[]; participants: RoomParticipant[]; finalizedAt?: number };
+export type RoomParticipant = { entryId: string; displayName?: string; bowCategory: string | null; finished?: true };
+export type RoomHistory = { receivedAt: number; series: RoomSeries[]; participants: RoomParticipant[]; finalizedAt?: number; trainingCompletion?: true };
 export const roomShotPoints = (code: string) => code === 'T' || code === 'X' ? 10 : Number(code);
 export const roomShotLabel = (code: string) => code === 'T' ? '10' : code === '0' ? 'M' : code;
 
@@ -29,6 +29,7 @@ export function readRoomHistory(snapshot: unknown): RoomHistory {
   const finalizedAt = snapshot && typeof snapshot === 'object' && 'finalizedAt' in snapshot ? snapshot.finalizedAt : undefined;
   if (finalizedAt !== undefined && !validRoomDate(finalizedAt)) throw new Error('Некорректная дата итогов комнаты.');
   return { receivedAt: Date.now(), series: readRoomSeries(snapshot), participants: readRoomParticipants(snapshot),
+    ...(snapshot && typeof snapshot === 'object' && 'trainingCompletion' in snapshot && snapshot.trainingCompletion === true ? { trainingCompletion: true } : {}),
     ...(finalizedAt === undefined ? {} : { finalizedAt }) };
 }
 
@@ -64,7 +65,8 @@ export function readRoomParticipants(snapshot: unknown): RoomParticipant[] {
       (item.displayName !== undefined && (typeof item.displayName !== 'string' || item.displayName.length > 60)) ||
       (item.bowCategory !== null && typeof item.bowCategory !== 'string')) throw new Error('Некорректный участник комнаты.');
     ids.add(item.entryId);
-    return { entryId: item.entryId, displayName: item.displayName, bowCategory: item.bowCategory };
+    return { entryId: item.entryId, displayName: item.displayName, bowCategory: item.bowCategory,
+      ...(item.finished === true ? { finished: true } : {}) };
   });
 }
 

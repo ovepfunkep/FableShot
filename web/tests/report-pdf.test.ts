@@ -48,7 +48,7 @@ async function extract(bytes: Uint8Array) {
 test('detailed PDF is a standalone vector report with rounds, awards, records, norms and numbered-arrow analysis', async () => {
   const entry = fixture(), original = JSON.stringify(entry);
   const grants = ['START01', 'START05', 'START09'].map(id => ({ id, scope: 'global', earnedAt: '2026-11-11T11:00:00Z', sessionId: 'pdf' }));
-  const snapshot = reportSnapshot(entry, 'male', true, { grants });
+  const snapshot = reportSnapshot(entry, 'male', true, { grants, distributionView: 'pie' });
   const bytes = await createReportPdf(snapshot, await fonts);
   const { pages, firstPageHasRaster } = await extract(bytes);
   assert.equal(firstPageHasRaster, false);
@@ -60,6 +60,8 @@ test('detailed PDF is a standalone vector report with rounds, awards, records, n
   for (const title of ['Нормативы', 'Личные рекорды', 'Новый рекорд серии', 'Начало пути', 'Раунд 1', 'Раунд 2',
     'Общие очки', 'Карта попаданий', 'Плотность', 'Распределение попаданий', 'Сравнение попаданий']) assert.ok(text.includes(title), title);
   assert.match(text, /162\s*\/\s*180/);
+  assert.ok(text.indexOf('Раунд 2') < text.indexOf('Распределение попаданий'));
+  assert.match(text, /Доля 10\+9/);
   assert.match(text, /1 ч 0 мин/);
   const document = await PDFDocument.load(bytes);
   for (const page of document.getPages()) assert.deepEqual(page.getSize(), { width: 595, height: 842 });

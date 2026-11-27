@@ -40,6 +40,12 @@ export function Icon({ name }: { name: keyof typeof paths }) {
   </svg>;
 }
 
+function StageNumber({ number, previous }: { number: number | string; previous?: number }) {
+  return <strong className="stage-number">
+    <span>{number}</span>{previous !== undefined && <span className="stage-number-previous" aria-hidden="true" data-previous={previous} />}
+  </strong>;
+}
+
 function ScoreTile({ label, number, shots, onOpen, tag, rank, emphasis }: {
   label: string; number: number | string; shots: readonly Shot[]; onOpen: () => void; tag: 'round' | 'series';
   rank?: ReactNode; emphasis?: number;
@@ -49,7 +55,7 @@ function ScoreTile({ label, number, shots, onOpen, tag, rank, emphasis }: {
   const score = `${result.points}/${result.maximum}`;
   const average = formatAverage(result.average, preferences.averageHundredths);
   return <div className="stage-tile-container"><button key={emphasis} type="button" className="stage-tile" data-new-round={emphasis !== undefined || undefined} data-testid={`training-${tag === 'round' ? 'rounds' : 'series'}-open`} onClick={onOpen}>
-    <span className="tile-heading">{label} <strong>{number}</strong></span>
+    <span className="tile-heading">{label} <StageNumber number={number} previous={emphasis !== undefined && typeof number === 'number' ? number - 1 : undefined} /></span>
     {statisticVisible(preferences, 'result') && <span className="tile-score" data-testid={`${tag}-score`}
       aria-live={tag === 'series' ? 'polite' : undefined} aria-atomic={tag === 'series' ? true : undefined}>
       <ChangingScore text={score} />
@@ -84,7 +90,9 @@ export function TrainingSummary({ roundNumber, seriesNumber, roundShots, seriesS
 }) {
   const { preferences } = useTrainingPreferences();
   if (preferences.hideScores) return <section className="stage-summary stage-summary-hidden" aria-label="Этап тренировки">
-    <button key={roundEmphasis} type="button" data-new-round={roundEmphasis !== undefined || undefined} data-testid="training-rounds-open" onClick={onRound}>Раунд {roundNumber}</button>
+    <button key={roundEmphasis} type="button" data-new-round={roundEmphasis !== undefined || undefined} data-testid="training-rounds-open" onClick={onRound}>
+      Раунд <StageNumber number={roundNumber} previous={roundEmphasis !== undefined ? roundNumber - 1 : undefined} />
+    </button>
     <button type="button" data-testid="training-series-open" onClick={onSeries}>Серия {seriesNumber}</button>
   </section>;
   return <section className="stage-summary" aria-label="Результаты тренировки">

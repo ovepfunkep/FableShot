@@ -21,7 +21,7 @@ export function ChoicePicker({ label, value, options, onChange, disabled, varian
       aria-label={label} aria-describedby={currentValueId} aria-haspopup="dialog" aria-expanded={open} disabled={disabled || !first} onClick={() => setOpen(true)}>
       <span id={currentValueId}>{selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span>
     </button>
-    {open && <BottomSheet title={label} onClose={close}>
+    {open && <BottomSheet className="choice-picker-sheet" title={label} onClose={close}>
       <div className="choice-picker-options" onKeyDown={event => {
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
         const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:enabled'));

@@ -6,6 +6,7 @@ import type { RankAssignment } from './assigned-ranks.ts';
 import { isThemeMode, isThemeStyle } from './web-theme.ts';
 import type { ThemeMode, ThemeStyle } from './web-theme.ts';
 import type { TargetSpot } from './target.ts';
+import type { ReportComposition } from './report-composition.ts';
 
 export const RECENT_PRACTICE_LIMIT = { min: 5, max: 20 };
 export const AIM_SPEED_SETTING = { min: 20, max: 150, default: 40 };
@@ -40,6 +41,7 @@ export type TrainingPreferences = {
     seriesMetric?: string; progressMetric?: string; progressView?: 'history' | 'compare' };
   recentPracticeLimit?: number;
   reportOrder?: ReportBlock[];
+  reportComposition?: { png?: ReportComposition; pdf?: ReportComposition };
   displayName?: string;
   shootingBaseMinutes?: number;
   rankAssignments?: RankAssignment[];

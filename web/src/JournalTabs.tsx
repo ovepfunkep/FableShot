@@ -178,9 +178,16 @@ export function JournalHistory({ entries, filters, onFilters, onOpen, tournament
   </section>;
 }
 
-export function JournalProgress({ entries, onOpen, onPractice }: { entries: readonly JournalEntry[]; onOpen: (id: string) => void; onPractice: () => void }) {
+export type ProgressViewState = { filters: ProgressFilters; comparisonKey: string | null; selectedId: string | null };
+export const defaultProgressView: ProgressViewState = { filters: DEFAULT_PROGRESS_FILTERS, comparisonKey: null, selectedId: null };
+
+export function JournalProgress({ entries, onOpen, onPractice, view, onView }: {
+  entries: readonly JournalEntry[]; onOpen: (id: string) => void; onPractice: () => void;
+  view: ProgressViewState; onView: (view: ProgressViewState) => void;
+}) {
   const { preferences } = useTrainingPreferences();
-  const [filters, setFilters] = useState<ProgressFilters>(DEFAULT_PROGRESS_FILTERS);
+  const { filters, comparisonKey, selectedId } = view;
+  const setFilters = (filters: ProgressFilters) => onView({ ...view, filters, selectedId: null });
   const [filterOpen, setFilterOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const showAverage = statisticVisible(preferences, 'average');
@@ -188,7 +195,6 @@ export function JournalProgress({ entries, onOpen, onPractice }: { entries: read
   const filtered = useMemo(() => filterProgressEntries(entries, filters), [entries, filters]);
   const groups = useMemo(() => buildProgressTimeline(filtered, preferences).filter(group => group.comparable), [filtered, preferences]);
   const history = useMemo(() => buildTrainingHistoryTimeline(filtered, preferences), [filtered, preferences]);
-  const [comparisonKey, setComparisonKey] = useState<string | null>(null);
   const comparison = groups.find(group => group.key === comparisonKey) ?? groups[0];
   const sessions = filtered.map(entry => {
     const shots = entry.practice.rounds.flatMap(roundShots);
@@ -212,15 +218,19 @@ export function JournalProgress({ entries, onOpen, onPractice }: { entries: read
       {activeFilters && hasResults ? <button className="text-action" type="button" onClick={() => setFilters(DEFAULT_PROGRESS_FILTERS)}>Сбросить фильтры</button>
         : <button className="text-action" type="button" onClick={onPractice}>Перейти к тренировке</button>}
     </EmptyState> : <>
-      {(showAverage || showVolume) && <section className="journal-tab-panel progress-period-result" aria-labelledby="progress-period-title">
-        <h2 id="progress-period-title"><Icon name="stats" />Итог периода</h2>
-        <dl className="journal-tab-metrics">
-        {showAverage && <div><dt>Средний балл</dt><dd>{formatAverage(totals.points / totals.arrows, preferences.averageHundredths)}</dd></div>}
-        {showVolume && <><div><dt>Тренировки</dt><dd>{number.format(sessions.length)}</dd></div>
-          <div><dt>Стрелы</dt><dd>{number.format(totals.arrows)}</dd></div></>}
-        </dl>
+      {(showAverage || showVolume) && <section className="report-metrics-card report-metrics-result progress-period-result" aria-labelledby="progress-period-title">
+        <div className="report-result-label"><h3 id="progress-period-title">Итог периода</h3><span>{period}</span></div>
+        {showAverage && <div className="report-result-score-row">
+          <div className="report-metrics-score"><strong>{formatAverage(totals.points / totals.arrows, preferences.averageHundredths)}</strong><span>/ 10</span></div>
+          <span className="report-metrics-muted">Средний балл</span>
+        </div>}
+        {showVolume && <dl className="report-metric-grid report-result-metrics">
+          <div><dt>Тренировки</dt><dd>{number.format(sessions.length)}</dd></div>
+          <div><dt>Стрелы</dt><dd>{number.format(totals.arrows)}</dd></div>
+        </dl>}
       </section>}
-      <ProgressTimeline groups={groups} history={history} comparisonKey={comparisonKey} onCompare={setComparisonKey} onOpen={onOpen} />
+      <ProgressTimeline groups={groups} history={history} comparisonKey={comparisonKey} onCompare={comparisonKey => onView({ ...view, comparisonKey, selectedId: null })}
+        onOpen={onOpen} selectedId={selectedId} onSelect={selectedId => onView({ ...view, selectedId })} />
       {comparison && <GeometryTrend group={comparison} />}
     </>}
     {filterOpen && <ProgressFiltersSheet entries={entries} value={filters} onClose={() => setFilterOpen(false)}

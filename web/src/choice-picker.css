@@ -11,3 +11,4 @@
 .choice-picker-options button { width: 100%; overflow-wrap: anywhere; }
 .choice-picker-options button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .choice-picker-trigger:focus-visible, .choice-picker-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice-picker-sheet .condition-sheet-body > h2 { text-align: start; }

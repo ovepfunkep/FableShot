@@ -38,9 +38,10 @@
 .achievement-close { color: var(--accent); }
 
 .achievement-card.achievement-mystery {
-  min-height: 86px; background: #14131a; color: #efedf9;
-  border: 1px solid #77758d; cursor: default;
+  min-height: 86px; cursor: default;
 }
 
 .achievement-family { display: grid; gap: 6px; }
+.achievement-upcoming-details > summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--muted); }
+.achievement-upcoming-details > article + article { margin-top: 8px; }
 .achievement-mystery .achievement-flavor > span { display: block; }

@@ -106,7 +106,8 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
     let cancelled = false;
     const timer = window.setInterval(() => {
       void probe.status().then(result => {
-        if (!cancelled) setRoom(current => current.invitation === room.invitation ? result : current);
+        if (!cancelled) setRoom(current => current.invitation !== room.invitation ||
+          current.finalizedAt && result.invitation === current.invitation && !result.finalizedAt ? current : result);
       }, () => {
         if (!cancelled) setError('Не удалось прочитать состояние комнаты.');
       });
@@ -138,34 +139,41 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
       <p>Подождите, пока все отправят серии. После фиксации участники смогут открыть и сохранить таблицу, а приём новых серий завершится.</p>
       <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
         await onFinalResults?.();
+        setRoom(await probe.status());
         setConfirmResults(false);
       })}>Зафиксировать итоги</button>
       {error && <p role="alert">{error}</p>}
     </BottomSheet>}
-    {confirmClose && <BottomSheet title="Закрыть комнату?" onClose={() => setConfirmClose(false)}>
-      <p>{room.finalizedAt ? 'Перед закрытием дайте участникам открыть или обновить таблицу, чтобы они получили зафиксированные итоги.' :
-        'Обмен закончится для всех. Уже сохранённые тренировки и таблицы останутся в истории. Серии в очереди больше не отправятся в эту комнату.'}</p>
+    {confirmClose && <BottomSheet title={room.finalizedAt ? 'Отключить выдачу итогов?' : 'Закрыть комнату?'} onClose={() => setConfirmClose(false)}>
+      <p>{room.finalizedAt ? 'Дайте участникам получить итоги, прежде чем отключать обмен. Уже полученные таблицы останутся в истории.' :
+        'Участники больше не смогут обновлять результат в комнате. В итогах останутся уже полученные серии.'}</p>
       <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
-        await probe.stop();
-        setRoom({});
+        if (room.invitation && room.trainingCompletion && !room.finalizedAt && onFinalResults) {
+          await onFinalResults();
+          setRoom(await probe.status());
+        } else {
+          await probe.stop();
+          setRoom({});
+        }
         setConfirmClose(false);
-      })}>Закрыть для всех</button>
+      })}>{room.finalizedAt ? 'Отключить' : 'Закрыть для всех'}</button>
       <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(false)}>Оставить открытой</button>
       {error && <p role="alert">{error}</p>}
     </BottomSheet>}
     {native && (flow === 'host' || room.invitation || room.restorable) && <div className="settings-panel room-probe-panel">
       <h2>{room.roomName || 'Создать комнату'}</h2>
       {room.invitation ? <>
-        <p>Подключите участника к той же сети Wi-Fi. Покажите QR или передайте код.</p>
+        {!room.finalizedAt && <><p>Подключите участника к той же сети Wi-Fi. Покажите QR или передайте код.</p>
         <InvitationQr invitation={room.invitation} />
         <label>Код приглашения<input readOnly value={room.invitation} onFocus={event => event.currentTarget.select()} /></label>
         <button type="button" className="secondary" disabled={busy} onClick={() => void run(async () => {
           await navigator.clipboard.writeText(room.invitation!);
           setMessage('Код скопирован.');
-        })}>Скопировать код</button>
+        })}>Скопировать код</button></>}
         <div className="room-entry-state" role="status">
-          <span>{room.finalizedAt ? 'Итоги зафиксированы' : 'Комната открыта'}</span>
+          <span>{room.finalizedAt ? 'Комната закрыта · итоги доступны' : 'Комната открыта'}</span>
           {room.participantCount !== undefined ? <span>Участников · {room.participantCount}</span> : <span>Серий · {room.acceptedSeries ?? 0}</span>}
+          {!room.finalizedAt && !!room.finishedCount && <span>Завершили · {room.finishedCount}</span>}
         </div>
         {onTraining && !room.finalizedAt && nameField}
         {onTraining && !room.finalizedAt && <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => {
@@ -176,7 +184,7 @@ export default function LocalRoomProbe({ native, onTraining, unavailableReason, 
           if (room.finalizedAt) void run(onFinalResults);
           else setConfirmResults(true);
         }}>{room.finalizedAt ? 'Открыть итоги' : 'Подвести итоги'}</button>}
-        <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>Закрыть комнату</button>
+        <button type="button" className="room-pill" disabled={busy} onClick={() => setConfirmClose(true)}>{room.finalizedAt ? 'Отключить выдачу итогов' : 'Закрыть комнату'}</button>
       </> : <>
         {!room.restorable && <label>Название комнаты<input maxLength={60} placeholder="Групповая тренировка" value={roomTitle}
           onChange={event => setRoomTitle(event.target.value)} /></label>}

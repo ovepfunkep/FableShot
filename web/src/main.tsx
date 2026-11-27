@@ -24,7 +24,7 @@ import { TripleTargetControls } from './TripleTargetControls.tsx';
 import { Icon, shotStripCapacity, TrainingFooter, TrainingShotStrip, TrainingSummary } from './TrainingChrome.tsx';
 import { JournalHome, JournalShell } from './JournalShell.tsx';
 import type { JournalTab } from './JournalShell.tsx';
-import { JournalHistory, JournalProgress } from './JournalTabs.tsx';
+import { defaultProgressView, JournalHistory, JournalProgress } from './JournalTabs.tsx';
 import { TournamentsScreen } from './TournamentsScreen.tsx';
 import { finishTournament, linkTournamentSession, saveTournament, unlinkTournamentSession } from './tournaments.ts';
 import type { TournamentChoice } from './tournaments.ts';
@@ -53,6 +53,7 @@ import type { AchievementGrant, AchievementMoment } from './achievement-ledger.t
 import { ACHIEVEMENT_ACTION_RULE_IDS, awardPublication, awardServiceAction, awardTrainingChange, eligibleForAchievements } from './achievement-diary.ts';
 import type { AchievementActionId } from './achievement-diary.ts';
 import { achievementValidity, dependsOnTraining, removeAchievementEvidence } from './achievement-validity.ts';
+import { reconcileConditionsCorrection, refreshCorrectedProgress } from './conditions-correction-results.ts';
 import { ACHIEVEMENT_EVIDENCE_RULE_IDS, evaluateAchievementEvidence } from './achievement-evidence.ts';
 import { STAGE_RANK_RULES } from './achievement-catalog.ts';
 import { STAGE_RANK_ENROLLMENT_VERSION } from './stage-rank-achievements.ts';
@@ -76,7 +77,7 @@ import { initializeAppStorage, onJournalCommit } from './app-storage.ts';
 import { driveBackupAvailable, driveBackupState, resumeDriveBackup, scheduleDriveBackup, subscribeDriveBackup } from './drive-backup.ts';
 import { isDiary, loadDiary, saveDiary, sendPendingGroupSeries, updateGroupSeriesInDiary } from './persistence.ts';
 import { newGroupSeriesJournal, pendingGroupSeries } from './group-series.ts';
-import { announceRoomEntry, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
+import { announceRoomEntry, finishRoomTraining, loadRoomMembership, readRoomName, roomBridge, roomSnapshot, roomTransport, saveRoomMembership, supportsLocalRoom } from './group-room-membership.ts';
 import { readRoomHistory } from './group-leaderboard.ts';
 import type { RoomHistory } from './group-leaderboard.ts';
 import { awardRoomAchievements, ROOM_ACHIEVEMENT_IDS } from './room-achievements.ts';
@@ -138,6 +139,7 @@ function App() {
   const diaryWrites = useRef(Promise.resolve());
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tab, setTab] = useState<JournalTab>('home');
+  const [progressView, setProgressView] = useState(defaultProgressView);
   const [page, setPage] = useState<'journal' | 'training' | 'editor' | 'report' | 'conditions' | 'settings' | 'statistics' | 'archive' | 'profile' | 'achievements' | 'records' | 'best-ranks' | 'notebook' | 'tournaments' | 'group-room'>('journal');
   const [tournamentsBack, setTournamentsBack] = useState<'journal' | 'profile'>('journal');
   const [tournamentPassportId, setTournamentPassportId] = useState<string | null>(null);
@@ -149,6 +151,9 @@ function App() {
   useEffect(clearImportReceipt, []);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [hostResults, setHostResults] = useState<{ history: RoomHistory; name?: string } | null>(null);
+  const [hostClosePrompt, setHostClosePrompt] = useState<{ trainingId: string; roomId: string; remaining: number } | null>(null);
+  const [hostClosing, setHostClosing] = useState(false);
+  const [hostCloseError, setHostCloseError] = useState('');
   const [onboardingRequested, setOnboardingRequested] = useState(false);
   const [targetGuide, setTargetGuide] = useState<'standard' | 'triple' | null>(null);
   const [tutorialChapter, setTutorialChapter] = useState<Exclude<OnboardingChapter, 'welcome'> | null>(null);
@@ -224,13 +229,13 @@ function App() {
     return () => pending.abort();
   }, []);
 
-  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false): Promise<boolean> {
-    const operation = diaryWrites.current.then(() => persistDiary(change, trainingId, removingEvidence));
+  function writeDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false, correctingConditions = false): Promise<boolean> {
+    const operation = diaryWrites.current.then(() => persistDiary(change, trainingId, removingEvidence, correctingConditions));
     diaryWrites.current = operation.then(() => {}, () => {});
     return operation;
   }
 
-  async function persistDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false): Promise<boolean> {
+  async function persistDiary(change: (previous: Diary) => Diary, trainingId?: string, removingEvidence = false, correctingConditions = false): Promise<boolean> {
     const previous = diaryRef.current;
     if (!previous) return false;
     try {
@@ -239,7 +244,9 @@ function App() {
       const now = new Date().toISOString();
       const awarded = trainingId && !removingEvidence ? awardTrainingChange(previous, proposed, trainingId, preferences.rankCategory ?? null, now)
         : { diary: proposed, added: [] };
-      let next = trainingId ? removingEvidence ? removeAchievementEvidence(previous, proposed, trainingId, now)
+      let next = trainingId ? correctingConditions
+        ? reconcileConditionsCorrection(previous, proposed, trainingId, preferences.rankCategory ?? null, now)
+        : removingEvidence ? removeAchievementEvidence(previous, proposed, trainingId, now)
         : awardRoomAchievements(awarded.diary, trainingId, now) : awarded.diary;
       let newRecords: PersonalRecordEvent[] = [];
       let moment: TrainingMoment | undefined;
@@ -258,7 +265,7 @@ function App() {
       }
       const known = new Set(previous.achievementLedger?.grants.map(grant => `${grant.id}:${grant.scope}`));
       const added = next.achievementLedger?.grants.filter(grant => !known.has(`${grant.id}:${grant.scope}`)) ?? [];
-      const noticeMoment = added.length ? crypto.randomUUID() : undefined;
+      const noticeMoment = added.length && !correctingConditions ? crypto.randomUUID() : undefined;
       if (noticeMoment && next.achievementLedger) next = { ...next,
         achievementLedger: { ...next.achievementLedger, grants: next.achievementLedger.grants.map(grant =>
           known.has(`${grant.id}:${grant.scope}`) ? grant : { ...grant, noticeMoment,
@@ -275,6 +282,11 @@ function App() {
           const remaining = pending.grants.filter(grant => retained.has(achievementReceiptKey(grant)));
           return remaining.length ? [{ ...pending, grants: remaining }] : [];
         }));
+      }
+      if (correctingConditions) {
+        const records = new Set(next.entries.flatMap(entry => entry.personalRecords?.map(record => record.id) ?? []));
+        setRecordQueue(queue => queue.filter(record => records.has(record.id)));
+        setFinishMoment(current => current?.sessionId === trainingId ? null : current);
       }
       if (moment && trainingId) {
         setFinishMoment({ sessionId: trainingId, moment });
@@ -316,6 +328,7 @@ function App() {
       if (!manual && (!roomName || roomName === item.groupRoomName) &&
         JSON.stringify(item.groupRoomHistory?.series) === JSON.stringify(history.series) &&
         JSON.stringify(item.groupRoomHistory?.participants) === JSON.stringify(history.participants) &&
+        item.groupRoomHistory?.trainingCompletion === history.trainingCompletion &&
         item.groupRoomHistory?.finalizedAt === history.finalizedAt) return previous;
       const updated = { ...previous, entries: previous.entries.map(candidate => candidate === item ? { ...item,
         groupRoomName: roomName ?? item.groupRoomName ?? 'Групповая тренировка', groupRoomHistory: history,
@@ -324,16 +337,35 @@ function App() {
     });
   }
 
+  async function finalizeHostedRoom(expectedId?: string) {
+    const snapshot = await roomBridge.finalizeResults(expectedId ? { roomId: expectedId } : undefined);
+    const history = readRoomHistory(snapshot);
+    if (!history.finalizedAt) throw new Error('Комната не подтвердила итоги.');
+    const name = readRoomName(snapshot);
+    const diary = diaryRef.current;
+    const participants = new Set([...history.participants, ...history.series].map(person => person.entryId));
+    for (const journal of diary?.groupSeries ?? []) {
+      if (journal.trainingId && (journal.roomId === expectedId || participants.has(journal.entryId)) &&
+        !await saveRoomHistory(journal.trainingId, history, name, true)) {
+        throw new Error('Комната закрыта. Не удалось сохранить итоги в дневник. Откройте их повторно.');
+      }
+    }
+    return { history, name };
+  }
+
   useEffect(() => {
     if (!supportsLocalRoom()) return;
     const retry = async () => {
       if (syncingRoom.current || document.visibilityState !== 'visible') return;
       const diary = diaryRef.current;
-      const active = diary?.entries.find(item => !item.practice.savedAt && !item.paused && !item.deletedAt);
-      const journals = diary?.groupSeries?.filter(journal => !diary.entries.some(item => item.id === journal.trainingId && item.groupRoomHistory?.finalizedAt) &&
-        (journal.trainingId === active?.id || pendingGroupSeries(journal).length ||
-        diary.entries.some(item => item.id === journal.trainingId && !item.deletedAt && item.achievementEnrollment?.roomAwards &&
-          item.practice.savedAt && Date.now() - Date.parse(item.practice.savedAt) < 60_000))) ?? [];
+      const entriesById = new Map(diary?.entries.map(item => [item.id, item]));
+      const journals = diary?.groupSeries?.filter(journal => {
+        const item = entriesById.get(journal.trainingId ?? '');
+        if (!item || item.deletedAt || item.groupRoomHistory?.finalizedAt) return false;
+        return (!item.practice.savedAt && !item.paused) || pendingGroupSeries(journal).length ||
+          (!!item.practice.savedAt && Date.now() - Date.parse(item.practice.savedAt) <
+            (item.groupRoomHistory?.trainingCompletion ? 86_400_000 : 60_000));
+      }) ?? [];
       if (!journals.length) return;
       syncingRoom.current = true;
       try {
@@ -341,9 +373,10 @@ function App() {
           let membership: RoomMembership | null;
           try { membership = loadRoomMembership(journal.entryId); }
           catch { continue; }
-          if (!membership) continue;
-          if (active && journal.trainingId === active.id) {
-            const category = currentSeries(active.practice)?.series.conditions.equipment?.bow.category ?? null;
+          if (!membership || !journal.trainingId) continue;
+          const entry = entriesById.get(journal.trainingId)!;
+          if (!entry.practice.savedAt && !entry.paused) {
+            const category = currentSeries(entry.practice)?.series.conditions.equipment?.bow.category ?? null;
             if (membership.roomName && (!announcedRooms.current.has(journal.entryId) || announcedRooms.current.get(journal.entryId) !== category)) {
               try {
                 await announceRoomEntry(membership, category);
@@ -353,9 +386,25 @@ function App() {
           }
           try { await sendPendingGroupSeries(journal.entryId, roomTransport(journal.entryId), () => diaryRef.current, writeDiary); }
           catch { /* No receipt was stored. The next attempt will retry the latest revision. */ }
-          if (journal.trainingId) {
-            try { await refreshRoomHistory(journal.trainingId, membership); }
-            catch { /* Keep the latest valid snapshot during an outage. */ }
+          try {
+            const history = await refreshRoomHistory(journal.trainingId, membership);
+            if (history.finalizedAt || !history.trainingCompletion) continue;
+            const current = diaryRef.current;
+            const finished = current?.entries.find(item => item.id === journal.trainingId && item.practice.savedAt && !item.deletedAt);
+            const latest = current?.groupSeries?.find(item => item.entryId === journal.entryId);
+            if (!finished || !latest || pendingGroupSeries(latest).length) continue;
+            const person = history.participants.find(item => item.entryId === journal.entryId);
+            if (person?.finished) continue;
+            if (!person) {
+              const bow = currentSeries(finished.practice)?.series.conditions.equipment?.bow.category ?? null;
+              await announceRoomEntry(membership, bow);
+            }
+            if (diaryRef.current !== current) continue;
+            await finishRoomTraining(membership, latest.ends.reduce((sum, end) => sum + end.revision, 0));
+            announcedRooms.current.delete(journal.entryId);
+            await refreshRoomHistory(journal.trainingId, membership);
+          } catch {
+            // Keep the last snapshot and retry unconfirmed completion on the next exchange.
           }
         }
       } finally { syncingRoom.current = false; }
@@ -376,12 +425,15 @@ function App() {
     } catch (cause) { setState(previous => ({ ...previous, error: cause instanceof Error ? cause.message : 'Не удалось сохранить достижение памятки.' })); }
   }
 
-  function update(change: (previous: Practice) => Practice, rememberSetup = false, removingEvidence = false): Promise<boolean> {
+  function update(change: (previous: Practice) => Practice, rememberSetup = false, removingEvidence = false, correctingConditions = false): Promise<boolean> {
     return writeDiary(previous => {
       const entry = previous.entries.find(item => item.id === sessionId);
       if (!entry) return previous;
       let practice = change(entry.practice);
       if (practice === entry.practice) return rememberSetup ? { ...previous, lastSetup: trainingSetup(practice) } : previous;
+      if (correctingConditions && !entry.source && !entry.nativeArchiveSession && !previous.groupSeries?.some(journal => journal.trainingId === entry.id)) {
+        practice = refreshCorrectedProgress(entry.practice, practice, previous.entries, entry);
+      }
       // Deleting the final shot from a finished session leaves no saved session.
       const remove = entry.practice.savedAt !== null && practice.savedAt === null &&
         !practice.rounds.some(round => round.series.some(series => series.shots.length));
@@ -400,7 +452,7 @@ function App() {
         : remove && !notes?.length ? [] : [{ ...item, practice,
           ...(entry.practice.savedAt !== null && practice.savedAt === null && item.personalRecords === undefined ? { personalRecords: [] } : {}),
           ...(notes ? { notes } : {}), ...(trainingTime ? { trainingTime } : {}) }]) };
-    }, sessionId ?? undefined, removingEvidence);
+    }, sessionId ?? undefined, removingEvidence, correctingConditions);
   }
 
   async function saveEdit(keepSelection = false): Promise<boolean> {
@@ -525,6 +577,7 @@ function App() {
     setRepeatSetup(null);
     setRoomSetup(null);
     selectEntry(item, 'training');
+    if (item.groupRoomName) void syncRoomNow.current?.();
     return true;
   }
 
@@ -600,6 +653,7 @@ function App() {
     setSelection(null);
     setReportTrail([]);
     selectEntry(diaryRef.current!.entries.find(entry => entry.id === item.id)!, 'training');
+    void syncRoomNow.current?.();
     return true;
   }
 
@@ -611,12 +665,13 @@ function App() {
     } : item) }))) setPage('journal');
   }
 
-  function openRecordReport(id: string, from: 'profile' | 'records' | 'best-ranks' | 'notebook' | 'report') {
+  function openRecordReport(id: string, from: 'profile' | 'records' | 'best-ranks' | 'notebook' | 'report', roundId?: number) {
     const item = recent.find(candidate => candidate.id === id);
     if (!item) return;
     if (from === 'report' && sessionId) setReportTrail(trail => [...trail, sessionId]);
     else if (from !== 'report') { setReportTrail([]); setReportBack(from); }
     selectEntry(item, 'report');
+    if (roundId !== undefined) reportPosition.current = { id, position: { blocks: ['series'], anchor: 'series', offset: 0, roundId } };
   }
 
   function leaveReport() {
@@ -893,6 +948,15 @@ function App() {
       setReportTrail([]);
       setReportBack('journal');
       setPage('report');
+      if (roomJournal && sessionId) void (async () => {
+        await syncRoomNow.current?.();
+        if (!Capacitor.isPluginAvailable('LocalRoomProbe')) return;
+        const status = await roomBridge.status();
+        if (status.roomId !== roomJournal.roomId || status.finalizedAt) return;
+        const remaining = Math.max(0, (status.participantCount ?? 0) - (status.finishedCount ?? 0));
+        setHostCloseError('');
+        setHostClosePrompt({ trainingId: sessionId, roomId: roomJournal.roomId, remaining });
+      })().catch(() => { /* The room can be opened separately if the hotspot is unavailable. */ });
     }
   }
 
@@ -900,9 +964,10 @@ function App() {
     if (pulse.current || !suggestRound || !preferences.animations || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     pulse.current = primary.current?.animate([
       { boxShadow: 'inset 0 0 0 0 transparent' },
-      { boxShadow: 'inset 0 0 0 3px var(--on-action)', offset: .14 },
+      { boxShadow: '0 0 18px var(--accent-line), inset 0 0 0 3px var(--accent)', offset: .22 },
       { boxShadow: 'inset 0 0 0 0 transparent' },
-    ], { duration: 600, easing: 'ease-out' }) ?? null;
+    ], { duration: 950, easing: 'ease-out' }) ?? null;
+    if (pulse.current) pulse.current.onfinish = () => { pulse.current = null; };
   }
 
   const error = (state.error || screenError) && <div role="alert" className="practice-error">
@@ -1116,7 +1181,7 @@ function App() {
       <p>Текущая тренировка будет приостановлена, когда ты начнёшь турнир.</p>
       <button type="button" className="primary" onClick={() => prepareTournament(confirmTournament)}>Перейти к условиям</button>
     </BottomSheet>}
-    {tab === 'progress' && <JournalProgress entries={recent} onOpen={openSaved} onPractice={() => setTab('home')} />}
+    {tab === 'progress' && <JournalProgress entries={recent} onOpen={openSaved} onPractice={() => setTab('home')} view={progressView} onView={setProgressView} />}
     {tab === 'equipment' && <EquipmentCatalog history={recent} />}
     {releaseNotes}
     {notice}
@@ -1132,7 +1197,7 @@ function App() {
     {notice}
   </>;
   if (page === 'best-ranks') return <>
-    <PersonalRanksScreen entries={recent} onBack={() => setPage(ranksBack)} onOpen={id => openRecordReport(id, 'best-ranks')} onProfile={openRankProfile} />
+    <PersonalRanksScreen entries={recent} onBack={() => setPage(ranksBack)} onOpen={(id, roundId) => openRecordReport(id, 'best-ranks', roundId)} onProfile={openRankProfile} />
     {notice}
   </>;
   if (page === 'notebook') return <NotebookScreen entries={entries} notes={state.diary?.notes ?? []}
@@ -1175,20 +1240,7 @@ function App() {
       <Suspense fallback={<p>Открываем комнаты…</p>}><LocalRoomProbe native={Capacitor.isPluginAvailable('LocalRoomProbe')}
         displayName={displayName}
         onTraining={state.diary ? enterRoomTraining : undefined}
-        onFinalResults={async () => {
-          const snapshot = await roomBridge.finalizeResults();
-          const history = readRoomHistory(snapshot);
-          if (!history.finalizedAt) throw new Error('Комната не подтвердила итоги.');
-          const name = readRoomName(snapshot);
-          const saved = await writeDiary(previous => {
-            const matching = new Set(previous.groupSeries?.filter(journal => history.participants.some(person => person.entryId === journal.entryId) ||
-              history.series.some(series => series.entryId === journal.entryId)).map(journal => journal.trainingId));
-            return matching.size ? { ...previous, entries: previous.entries.map(item => matching.has(item.id)
-              ? { ...item, groupRoomName: name ?? item.groupRoomName, groupRoomHistory: history } : item) } : previous;
-          });
-          if (!saved) throw new Error('Не удалось сохранить итоги в дневник. Откройте их повторно.');
-          setHostResults({ history, name });
-        }}
+        onFinalResults={async () => setHostResults(await finalizeHostedRoom())}
         unavailableReason={state.diary ? undefined : state.error || 'Сначала откройте дневник.'} /></Suspense>
       {hostResults && <GroupLeaderboard archived mySeries={1} saved={hostResults.history} title={hostResults.name}
         onClose={() => setHostResults(null)} />}
@@ -1286,9 +1338,8 @@ function App() {
           if (!current || current.progressBaselineId !== undefined || current.shots.length) return proposed;
           return attachProgressBaseline(proposed, freezeProgressBaseline(diaryRef.current?.entries ?? [], entry.id,
             entry.startedAt, current.conditions, new Date().toISOString()));
-        }, false, true);
+        }, false, true, true);
         if (success) {
-          setRecordQueue(queue => queue.filter(record => record.sessionId !== sessionId || record.kind === 'volume'));
           leaveConditions();
         }
         return success;
@@ -1320,6 +1371,24 @@ function App() {
 
   if (page === 'report') return <>
     {offlineLabel}
+    {hostClosePrompt?.trainingId === sessionId && !entry?.groupRoomHistory?.finalizedAt && <BottomSheet
+      title="Подвести итоги?" tag="host-close-room" onClose={() => setHostClosePrompt(null)} onDismissRequest={() => !hostClosing}>
+      {hostClosePrompt.remaining > 0 && <p>Ждём завершения · {hostClosePrompt.remaining}</p>}
+      <p>После закрытия участники больше не смогут обновлять результат в комнате. В итогах останутся уже полученные серии.</p>
+      <button type="button" className="primary" disabled={hostClosing} onClick={async () => {
+        setHostClosing(true);
+        setHostCloseError('');
+        try {
+          await finalizeHostedRoom(hostClosePrompt.roomId);
+          setHostClosePrompt(null);
+          setRoomLeaderboardOpen(true);
+        } catch (cause) {
+          setHostCloseError(cause instanceof Error ? cause.message : 'Не удалось закрыть комнату.');
+        } finally { setHostClosing(false); }
+      }}>Закрыть комнату</button>
+      <button type="button" className="room-pill" disabled={hostClosing} onClick={() => setHostClosePrompt(null)}>Оставить открытой</button>
+      {hostCloseError && <p role="alert">{hostCloseError}</p>}
+    </BottomSheet>}
     {entry?.groupRoomHistory && roomLeaderboardOpen && <GroupLeaderboard archived entryId={roomJournal?.entryId} mySeries={lastClosedRoomSeries}
       saved={entry.groupRoomHistory} title={entry.groupRoomName} onClose={() => setRoomLeaderboardOpen(false)}
       onRefresh={roomJournal && !entry.groupRoomHistory.finalizedAt && !entry.deletedAt && supportsLocalRoom() ? async () => {

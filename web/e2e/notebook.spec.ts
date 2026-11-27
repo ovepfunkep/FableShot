@@ -33,7 +33,8 @@ test('notebook creates and deletes standalone notes while preserving hidden data
   await page.getByTestId('notebook-search').fill('выдох');
   const item = page.getByTestId('notebook-item');
   await expect(item).toHaveCount(1);
-  await expect(item).toContainText('Отдельная запись');
+  await expect(item).toContainText('Выдох перед выстрелом');
+  await expect(item.getByTestId('notebook-source')).toHaveCount(0);
   await item.getByRole('button').click();
   await page.getByTestId('note-delete').click();
   await page.getByTestId('note-delete-confirm').click();

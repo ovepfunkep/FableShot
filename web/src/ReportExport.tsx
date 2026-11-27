@@ -9,7 +9,7 @@ import type { PreparedReport, ReportFormat } from './report-share-session.ts';
 import { PdfReportPreview } from './PdfReportPreview.tsx';
 import { shareReport } from './share-report.ts';
 import type { AchievementGrant } from './achievement-ledger.ts';
-import { defaultComposition, exportSectionOptions } from './report-composition.ts';
+import { defaultComposition, exportSectionOptions, readReportComposition } from './report-composition.ts';
 import type { ReportComposition } from './report-composition.ts';
 import { reportBlockOrder } from './statistics-visibility.ts';
 import './report-export.css';
@@ -18,19 +18,23 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
   entry: DiaryEntry; open: boolean; onClose: () => void; onAchievement?: (id: 'APP04') => void;
   grants: readonly AchievementGrant[];
 }) {
-  const { preferences } = useTrainingPreferences();
+  const { preferences, update } = useTrainingPreferences();
   // Achievement notifications or opening another sheet must not invalidate files.
   const source = JSON.stringify([entry.id, entry.title, entry.startedAt, entry.localDate, entry.source?.kind, entry.practice, entry.trainingTime, entry.personalRecords,
-    preferences.rankCategory, preferences.averageHundredths, preferences.disabledStatistics, preferences.showAchievementNotices, preferences.maximumSpread]);
+    preferences.rankCategory, preferences.averageHundredths, preferences.disabledStatistics, preferences.showAchievementNotices, preferences.maximumSpread,
+    preferences.statisticsView?.distributionView]);
   const snapshot = useMemo(() => reportSnapshot(entry, preferences.rankCategory ?? null, preferences.averageHundredths,
     { grants: preferences.showAchievementNotices === false ? [] : grants, disabledStatistics: preferences.disabledStatistics,
-      maximumSpread: preferences.maximumSpread }), [source]);
+      maximumSpread: preferences.maximumSpread, distributionView: preferences.statisticsView?.distributionView }), [source]);
   const order = useMemo(() => reportBlockOrder(preferences), [preferences.reportOrder]);
   const [format, setFormat] = useState<ReportFormat>('png');
-  const [choices, setChoices] = useState<Partial<Record<ReportFormat, ReportComposition>>>({});
+  const [draftChoices, setDraftChoices] = useState<typeof preferences.reportComposition>();
+  const choiceWrite = useRef(0);
+  const [choiceError, setChoiceError] = useState('');
+  const choices = draftChoices ?? preferences.reportComposition;
   const compositions = useMemo(() => {
     const build = (kind: ReportFormat) => {
-      const choice = choices[kind];
+      const choice = readReportComposition(choices?.[kind], kind);
       if (!choice) return defaultComposition(snapshot, kind, order);
       return { ...choice, sections: exportSectionOptions(snapshot, kind, order)
         .filter(option => option.available && choice.sections.includes(option.id)).map(option => option.id) };
@@ -40,7 +44,19 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
   const session = useMemo(() => createReportShareSession(snapshot, compositions), [snapshot, compositions]);
   const composition = compositions[format];
   const sectionOptions = exportSectionOptions(snapshot, format, order);
-  function setComposition(next: ReportComposition) { setChoices(previous => ({ ...previous, [format]: next })); }
+  function setComposition(next: ReportComposition) {
+    const saved = readReportComposition(choices?.[format], format);
+    const unavailable = new Set(sectionOptions.filter(option => !option.available).map(option => option.id));
+    const preserved = saved?.sections.filter(id => unavailable.has(id)) ?? [];
+    const reportComposition = { ...choices, [format]: { ...next, sections: [...next.sections, ...preserved] } };
+    const revision = ++choiceWrite.current;
+    setDraftChoices(reportComposition);
+    setChoiceError('');
+    void update({ ...preferences, reportComposition }).then(saved => {
+      if (revision !== choiceWrite.current) return;
+      if (!saved) setChoiceError('Не удалось сохранить состав отчёта.');
+    });
+  }
   const [prepared, setPrepared] = useState<{ session: typeof session; format: ReportFormat; value: PreparedReport } | null>(null);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -97,6 +113,7 @@ export function ReportExport({ entry, open, onClose, onAchievement, grants }: {
     </div>
     <details className="report-export-composition">
       <summary>Состав отчёта <span>{composition.sections.length}</span></summary>
+      {choiceError && <p role="alert">{choiceError}</p>}
       <div className="report-export-sections">
         {sectionOptions.map(option => <label key={option.id}>
           <input type="checkbox" checked={composition.sections.includes(option.id)} disabled={!option.available}

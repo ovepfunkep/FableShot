@@ -3,7 +3,8 @@ import { exchangeBrowserRoom } from './browser-room-probe.ts';
 import type { GroupSeriesRevision, GroupSeriesTransport } from './group-series.ts';
 
 type RoomCapabilities = { cg3?: boolean; pg1?: boolean; shotPositions?: boolean };
-export type RoomStatus = RoomCapabilities & { invitation?: string; checks?: number; acceptedSeries?: number; participantCount?: number; roomName?: string; restorable?: boolean; finalizedAt?: number };
+export type RoomStatus = RoomCapabilities & { invitation?: string; roomId?: string; checks?: number; acceptedSeries?: number;
+  participantCount?: number; finishedCount?: number; roomName?: string; restorable?: boolean; finalizedAt?: number; trainingCompletion?: true };
 export type RoomMembership = RoomCapabilities & { roomId: string; entryId: string; invitation: string; publicKey: string; privateKey: string; displayName?: string; roomName?: string };
 
 export const roomBridge = registerPlugin<{
@@ -12,7 +13,7 @@ export const roomBridge = registerPlugin<{
   status(): Promise<RoomStatus>;
   check(options: { invitation: string }): Promise<{ milliseconds: number }>;
   stop(): Promise<void>;
-  finalizeResults(): Promise<unknown>;
+  finalizeResults(options?: { roomId: string }): Promise<unknown>;
   publish(options: { invitation: string; payload: string; publicKey: string; signature: string }): Promise<unknown>;
   snapshot(options: { invitation: string }): Promise<unknown>;
 }>('LocalRoomProbe');
@@ -83,6 +84,13 @@ export async function announceRoomEntry(value: RoomMembership, bowCategory: stri
   const receipt = await signedRoomRequest(value, { action: 'join', displayName: value.displayName, bowCategory });
   if (!receipt || typeof receipt !== 'object' || !('joined' in receipt) || receipt.joined !== value.entryId) {
     throw new Error('Комната не подтвердила вход.');
+  }
+}
+
+export async function finishRoomTraining(value: RoomMembership, revisionTotal: number) {
+  const receipt = await signedRoomRequest(value, { action: 'finish', revisionTotal });
+  if (!receipt || typeof receipt !== 'object' || !('finished' in receipt) || receipt.finished !== value.entryId) {
+    throw new Error('Комната ещё не подтвердила завершение тренировки.');
   }
 }
 

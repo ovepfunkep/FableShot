@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import { Icon } from './TrainingChrome.tsx';
@@ -15,7 +15,8 @@ export function AchievementHeading({ rule, rarity, id, shimmer = false }: {
 }) {
   return <span className="achievement-heading" data-rarity={rarity}>
     <span className="achievement-medal" data-shimmer={shimmer || undefined}><Icon name="trophy" /></span>
-    <span className="achievement-heading-text"><strong id={id}>{rule.title}</strong><small>{ACHIEVEMENT_RARITY_LABELS[rarity]}</small></span>
+    <span className="achievement-heading-text"><strong id={id}>{rule.title}</strong><small>{ACHIEVEMENT_RARITY_LABELS[rarity]}</small>
+      <span className="achievement-short-condition">{rule.plainCondition}</span></span>
   </span>;
 }
 
@@ -24,37 +25,37 @@ function TierButton({ grant, onOpen, buttonProps }: {
   buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>;
 }) {
   const rule = getAchievementDefinition(grant.id)!;
-  return <button type="button" aria-haspopup="dialog" onClick={() => onOpen(grant)} {...buttonProps} className="achievement-tier-open">
-    <AchievementHeading rule={rule} rarity={grantRarity(grant)} />
+  return <button type="button" aria-label={rule.title} aria-haspopup="dialog" onClick={() => onOpen(grant)} {...buttonProps} className="achievement-tier-open">
+    <AchievementHeading rule={rule} rarity={grantRarity(grant)} shimmer />
     <span className="achievement-tier-arrow"><Icon name="right" /></span>
   </button>;
 }
 
-export function AchievementStack({ group, onOpen, variant, rootProps, leadingContent, active = true, onExpandedChange }: {
+export function AchievementTierList({ grants, onOpen }: {
+  grants: readonly AchievementGrant[]; onOpen: (grant: AchievementGrant) => void;
+}) {
+  return <ul className="achievement-tier-list">{grants.map(level => <li className="achievement-tier" key={level.id} data-rarity={grantRarity(level)}>
+    <TierButton grant={level} onOpen={onOpen} />
+  </li>)}</ul>;
+}
+
+export function AchievementStack({ group, onOpen, variant, rootProps, leadingContent }: {
   group: AchievementGroup; onOpen: (grant: AchievementGrant) => void;
   variant?: 'profile' | 'notice'; rootProps?: ButtonHTMLAttributes<HTMLButtonElement>;
-  leadingContent?: ReactNode; active?: boolean; onExpandedChange?: (expanded: boolean) => void;
+  leadingContent?: ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const id = useId();
   const { leading, additional } = group;
-  const open = expanded && active;
   return <div className="achievement-stack" data-variant={variant}>
     <div className="achievement-tier achievement-stack-leading" data-rarity={grantRarity(leading)}>
       <TierButton grant={leading} onOpen={onOpen} buttonProps={rootProps} />
-      {additional.length > 0 && <button type="button" className="achievement-stack-toggle" aria-expanded={open} aria-controls={id}
-        aria-label={open ? 'Свернуть младшие награды' : `Раскрыть младшие награды, ${additional.length}`}
-        onClick={() => { setExpanded(!expanded); onExpandedChange?.(!expanded); }}>
+      {additional.length > 0 && <button type="button" className="achievement-stack-toggle" aria-haspopup="dialog"
+        aria-label={`Посмотреть достижение и ещё ${additional.length} уровней`}
+        onClick={() => onOpen(leading)}>
         <b>+{additional.length}</b><Icon name="right" />
       </button>}
       {leadingContent}
     </div>
-    {additional.length > 0 && <div className="achievement-stack-tail" data-open={open} id={id} inert={!open}>
-      <div><ul className="achievement-tier-list">{additional.map(grant => <li className="achievement-tier" key={grant.id} data-rarity={grantRarity(grant)}>
-        <TierButton grant={grant} onOpen={onOpen} />
-      </li>)}</ul></div>
-    </div>}
-    {additional.length > 0 && !open && <div className="achievement-stack-peek" aria-hidden="true">
+    {additional.length > 0 && <div className="achievement-stack-peek" aria-hidden="true">
       {additional.slice(0, 2).map(grant => <span key={grant.id} data-rarity={grantRarity(grant)} />)}
     </div>}
   </div>;
@@ -65,8 +66,7 @@ export function AchievementConditions({ rule, scope, grant }: {
 }) {
   const swing = grant?.seriesSwing;
   return <details className="achievement-conditions">
-    <summary>Условия получения</summary>
-    <p>{rule.plainCondition}</p>
+    <summary>Точные условия</summary>
     <div className="achievement-criteria">
       <p>{rule.description}</p>
       {scope !== 'global' && <p>{achievementScopeLabel(scope)}</p>}
@@ -77,15 +77,26 @@ export function AchievementConditions({ rule, scope, grant }: {
   </details>;
 }
 
-export function AchievementGrantDetails({ grant, onClose }: { grant: AchievementGrant; onClose: () => void }) {
-  const rule = getAchievementDefinition(grant.id)!;
-  const date = new Date(grant.earnedAt);
-  return <BottomSheet title={rule.title} onClose={onClose} tag="achievement-details">
-    <article className="achievement-detail" data-testid={`achievement-detail-${rule.id}`} data-state="earned">
-      <AchievementHeading rule={rule} rarity={grantRarity(grant)} shimmer />
+export function AchievementGrantDetails({ grant, additional = [], onClose }: {
+  grant: AchievementGrant; additional?: readonly AchievementGrant[]; onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<AchievementGrant | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const current = selected ?? grant;
+  const rule = getAchievementDefinition(current.id)!;
+  const date = new Date(current.earnedAt);
+  return <BottomSheet title={rule.title} onClose={() => selected ? setSelected(null) : onClose()} tag="achievement-details">
+    {selected && <button type="button" className="text-action" onClick={() => setSelected(null)}>Ко всем уровням</button>}
+    <article className="achievement-detail" data-testid={`achievement-detail-${rule.id}`} data-state="earned" data-rarity={grantRarity(current)}>
+      <AchievementHeading rule={rule} rarity={grantRarity(current)} shimmer />
       <span className="achievement-state">Получено <time dateTime={grant.earnedAt}>{date.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</time></span>
       <p className="achievement-flavor">{rule.flavor}</p>
-      <AchievementConditions rule={rule} scope={grant.scope} grant={grant} />
+      <AchievementConditions rule={rule} scope={current.scope} grant={current} />
     </article>
+    {!selected && additional.length > 0 && <div>
+      <button type="button" className="text-action achievement-level-toggle" aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}>{expanded ? 'Свернуть уровни' : `Ещё уровни · ${additional.length}`} <Icon name="right" /></button>
+      {expanded && <AchievementTierList grants={additional} onOpen={setSelected} />}
+    </div>}
   </BottomSheet>;
 }

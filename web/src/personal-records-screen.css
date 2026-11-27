@@ -41,7 +41,7 @@
 .personal-records-numbers span, .personal-records-meta, .personal-records-empty { color: var(--muted); font-size: .8rem; }
 .personal-records-conditions { font-size: .9rem; }
 .personal-records-entry { display: grid; border: 1px solid var(--edge); border-radius: 18px; background: var(--surface); }
-.personal-records-history-open { justify-self: end; min-height: 44px; margin: 0 8px 4px; padding-inline: 12px; }
+.personal-records-history-open { justify-self: end; min-height: 44px; margin: 0 12px 10px; padding-inline: 12px; border: 1px solid var(--edge); border-radius: 12px; background: var(--raised); }
 .personal-records-scope, .personal-records-history button { min-height: 44px; border-radius: 12px; border: 1px solid var(--edge); background: var(--raised); color: var(--ink); padding: 8px 12px; }
 .personal-records-history { display: grid; gap: 8px; }
 .personal-records-history button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; text-align: start; }

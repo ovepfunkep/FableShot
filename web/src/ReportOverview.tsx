@@ -32,7 +32,7 @@ import { frequentTrainingTitles } from './diary-history.ts';
 import { TrainingTitleSuggestions } from './TrainingTitleSuggestions.tsx';
 import './report-overview.css';
 
-export type ReportPosition = { blocks: string[]; anchor: string; offset: number; series?: TrendSeriesPosition };
+export type ReportPosition = { blocks: string[]; anchor: string; offset: number; series?: TrendSeriesPosition; roundId?: number };
 
 export function captureReportPosition(body: HTMLElement | null): ReportPosition | undefined {
   if (!body || body.scrollTop <= 4) return;
@@ -118,7 +118,8 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
     const blocks = Array.from(body.querySelectorAll<HTMLElement>('[data-report-block]'));
     const current = restorePosition.blocks.indexOf(restorePosition.anchor);
     const candidates = [restorePosition.anchor, ...restorePosition.blocks.slice(current + 1), ...restorePosition.blocks.slice(0, current).reverse()];
-    const target = candidates.map(id => blocks.find(block => block.dataset.reportBlock === id)).find(Boolean);
+    const round = restorePosition.roundId === undefined ? null : body.querySelector<HTMLElement>(`[data-report-round-id="${restorePosition.roundId}"]`);
+    const target = round ?? candidates.map(id => blocks.find(block => block.dataset.reportBlock === id)).find(Boolean);
     if (target) {
       const offset = target.dataset.reportBlock === restorePosition.anchor
         ? Math.min(restorePosition.offset, Math.max(0, target.offsetHeight - 32)) : 0;
@@ -203,7 +204,7 @@ export function ReportOverview({ practice, entries, entryId, onBack, onSelectSer
         const shots = roundShots(round);
         if (!shots.length) return null;
         let cumulative = 0;
-        return <section className="report-round" key={round.id} data-testid={`report-round-${roundIndex + 1}`}
+        return <section className="report-round" key={round.id} data-report-round-id={round.id} data-testid={`report-round-${roundIndex + 1}`}
           data-wide-series-number={round.series.some((end, index) => index >= 9 && end.shots.length > 0) || undefined}>
           <div className="report-round-heading">
             <h3 data-testid={`report-round-total-${roundIndex + 1}`}>Раунд {roundIndex + 1}{summary(shots) && ` · ${summary(shots)}`}</h3>

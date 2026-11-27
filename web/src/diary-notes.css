@@ -37,6 +37,9 @@
 .diary-notes-grid [aria-invalid=true] { border-color: #ffd8d1; }
 .diary-notes-grid [role=alert] { color: #ffd8d1; margin: 0; }
 .diary-notes-actions { display: flex; gap: 8px; }
+[data-testid="note-editor"] > .diary-notes-actions {
+  position: sticky; z-index: 1; bottom: 0; padding-block: 6px; background: var(--surface);
+}
 .diary-notes-actions button { flex: 1; min-height: 48px; padding: 6px 12px; }
 .diary-notes-actions button:not(.primary) { border: 1px solid var(--edge); border-radius: 16px; background: transparent; }
 .diary-notes-grid .diary-notes-danger { color: #ffd8d1; }

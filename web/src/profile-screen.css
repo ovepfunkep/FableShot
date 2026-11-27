@@ -27,6 +27,8 @@
 .profile-name .profile-avatar { background: var(--raised); }
 .journal-topbar .profile-avatar img { border-radius: inherit; }
 .profile-name small { color: var(--muted); font-size: .75rem; }
+.profile-name:has(> .google-account-icon) { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; }
+.profile-name > p[role="alert"] { grid-column: 1 / -1; margin: 0; font-size: .8rem; }
 .profile-account-actions {
   grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--edge);
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
@@ -42,6 +44,10 @@
   background: transparent; border: 0;
 }
 .google-account-icon img { display: block; }
+.google-account-icon.profile-account-button, .google-account-icon.archive-action {
+  border-radius: 50%; width: 44px; min-height: 44px;
+  background: light-dark(#f2f2f2, #131314); border: 1px solid light-dark(#747775, #8e918f);
+}
 .profile-account-actions p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .8rem; }
 .profile-metric > div { display: grid; gap: 2px; }
 .profile-metric strong { font-size: 1.5rem; line-height: 1.15; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
@@ -69,9 +75,9 @@ html:is([data-theme-style="sport"], [data-theme-style="pop"]) .profile-achieveme
 }
 .profile-achievement-row > small { color: var(--muted); }
 .profile-achievements-link { justify-self: start; border: 0; background: transparent; padding: 8px 0; min-height: 44px; color: var(--muted); }
-.profile-rank-category { margin: 0; min-width: 0; padding: 7px 12px 12px; }
-.profile-rank-category > legend { padding-inline: 5px; font-weight: 700; }
-.profile-rank-category > div { display: flex; gap: 5px; }
-.profile-rank-category button { border: 1px solid var(--edge); border-radius: 10px; background: var(--raised); color: var(--ink); min-width: 44px; min-height: 44px; padding-inline: 10px; font: inherit; }
-.profile-rank-category button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); color: var(--accent); }
-.profile-rank-category small { display: block; margin-block-start: 8px; color: var(--muted); }
+.profile-settings-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+.profile-settings-row > .profile-metric { grid-template-columns: minmax(0, 1fr) auto; gap: 2px; padding: 10px; }
+.profile-settings-row > .profile-metric > svg { display: none; }
+.profile-settings-row .profile-metric strong { font-size: 1.125rem; }
+.profile-rank-category { align-content: center; gap: 4px; padding: 8px 10px; border-radius: 14px; }
+.profile-rank-category > span { font-size: .8125rem; color: var(--muted); }

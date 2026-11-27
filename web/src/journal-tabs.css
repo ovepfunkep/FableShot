@@ -104,9 +104,8 @@
 .journal-tab-metrics dt { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: .75rem; }
 .journal-tab-metrics dt svg { flex: none; width: 15px; height: 15px; }
 .journal-tab-metrics dd { margin: 0; font-size: 1.4rem; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.progress-period-result { display: grid; gap: 12px; }
-.progress-period-result h2 { display: flex; align-items: center; gap: 8px; }
-.progress-period-result h2 svg { width: 18px; height: 18px; color: var(--accent); }
+.progress-period-result .report-result-label { justify-content: space-between; color: var(--muted); font-size: 12px; }
+.progress-period-result .report-metrics-score strong { color: var(--ink); }
 
 .journal-tab-chart figure { margin: 8px 0 0; }
 .journal-tab-chart svg { display: block; width: 100%; height: auto; overflow: visible; }

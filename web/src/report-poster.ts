@@ -4,6 +4,7 @@ import { reportSectionShown } from './report-composition.ts';
 import type { ReportComposition } from './report-composition.ts';
 import { summarize } from './target.ts';
 import { exerciseRankCoverage } from './exercise-rank.ts';
+import { distributionHeight, distributionWidth, reportDistribution } from './report-distribution.ts';
 
 const palette = { background: '#0e160f', surface: '#1a271d', ink: '#f2f6ee', muted: '#b2beb1',
   accent: '#c6f43d', edge: '#334331', gold: '#f4d35e' };
@@ -110,18 +111,24 @@ export async function createReportPosters(snapshot: ReportSnapshot, composition?
   const rankCoverage = posterRank?.label ? exerciseRankCoverage(snapshot.rankDetails) : null;
   const posterComposite = reportSectionShown(snapshot, composition, 'general_score') ? snapshot.composite : null;
   const distributionShown = reportSectionShown(snapshot, composition, 'distribution') && !!composition;
-  const interval = posterRank?.label ? snapshot.interval : null;
   const heroHeight = resultShown || posterRank?.label || posterComposite !== null
-    ? (resultShown || posterRank?.label ? 168 : 74) + (rankCoverage ? 26 : 0) + (posterComposite !== null ? 42 : 0) + (interval ? 115 : 0) : 0;
-  const summaryHeight = (heroHeight ? heroHeight + gap : 0) + (distributionShown ? 166 : 0);
+    ? (resultShown || posterRank?.label ? 168 : 74) + (rankCoverage ? 26 : 0) + (posterComposite !== null ? 42 : 0) : 0;
+  const summaryHeight = heroHeight ? heroHeight + gap : 0;
   if (summaryHeight && introPages.at(-1)!.bottom + summaryHeight + footerHeight > pageLimit) {
     introPages.push({ lines: [], bottom: 110 });
   }
   const summaryPage = introPages.length - 1;
   const heroTop = introPages[summaryPage].bottom;
-  const distributionTop = heroTop + (heroHeight ? heroHeight + gap : 0);
-  const gridTop = distributionTop + (distributionShown ? 166 : 0);
+  const gridTop = heroTop + summaryHeight;
   const layout = posterTablePages(cards, columns, gridTop);
+  const lastTable = layout.at(-1)!.at(-1);
+  const distributionScale = 1.36;
+  const distributionCardHeight = 48 + distributionHeight * distributionScale;
+  let distributionTop = lastTable ? lastTable.top + lastTable.height + gap : gridTop;
+  if (distributionShown && distributionTop + distributionCardHeight + footerHeight > pageLimit) {
+    layout.push([]);
+    distributionTop = 106;
+  }
   const pages = layout.length + summaryPage;
   if (pages > 100) throw new Error('Слишком много данных для картинки. Выбери подробный PDF.');
   for (let pageIndex = 0; pageIndex < pages; pageIndex++) {
@@ -130,11 +137,11 @@ export async function createReportPosters(snapshot: ReportSnapshot, composition?
     const showResult = summary && resultShown;
     const rank = summary ? posterRank : null;
     const composite = summary ? posterComposite : null;
-    const showDistribution = summary && distributionShown;
-    const band = summary ? interval : null;
+    const showDistribution = distributionShown && pageIndex === pages - 1;
     const racks = layout[pageIndex - summaryPage] ?? [];
     const lastRack = racks.at(-1);
-    const contentBottom = lastRack ? lastRack.top + lastRack.height : summary ? gridTop : introPages[pageIndex]?.bottom ?? 110;
+    const contentBottom = showDistribution ? distributionTop + distributionCardHeight
+      : lastRack ? lastRack.top + lastRack.height : summary ? gridTop : introPages[pageIndex]?.bottom ?? 110;
     canvas.height = Math.max(250, Math.min(pageLimit, contentBottom + footerHeight));
     function text(value: string, x: number, y: number, size = 27, color = palette.ink, bold = false) {
       face(size, bold); ctx!.fillStyle = color; ctx!.fillText(value, x, y);
@@ -170,38 +177,35 @@ export async function createReportPosters(snapshot: ReportSnapshot, composition?
     }
     if (composite !== null) text(`Общие очки ${composite} / 105`, 88,
       heroTop + (showResult || rank?.label ? 193 : 48) + (rankCoverage ? 26 : 0), 25, palette.accent, true);
-    if (band) {
-      const fraction = Math.max(0, Math.min(1, (band.points - band.lowerScore) / Math.max(1, band.upperScore - band.lowerScore)));
-      const scale = heroTop + heroHeight - 56;
-      text(`${band.lower} · ${band.lowerScore}`, 88, scale - 24, 23, palette.muted);
-      text(`${band.upper} · ${band.upperScore}`, 695, scale - 24, 23, palette.muted);
-      ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.strokeStyle = palette.edge;
-      ctx.beginPath(); ctx.moveTo(100, scale); ctx.lineTo(980, scale); ctx.stroke();
-      ctx.strokeStyle = palette.accent; ctx.beginPath(); ctx.moveTo(100, scale); ctx.lineTo(100 + 880 * fraction, scale); ctx.stroke();
-      ctx.fillStyle = palette.ink; ctx.beginPath(); ctx.arc(100 + 880 * fraction, scale, 11, 0, Math.PI * 2); ctx.fill();
-    }
     if (showDistribution) {
-      box(56, distributionTop, 968, 142);
+      box(56, distributionTop, 968, distributionCardHeight);
       text('Распределение попаданий', 88, distributionTop + 42, 25, palette.ink, true);
       const counts = zoneColors.map((_, zone) => snapshot.analysis.reduce((sum, scope) => sum + scope.distribution[zone], 0));
-      const total = counts.reduce((sum, count) => sum + count, 0);
-      let x = 88;
-      counts.forEach((count, zone) => {
-        if (!count) return;
-        const width = 904 * count / total;
-        ctx.fillStyle = zoneColors[zone]; ctx.fillRect(x, distributionTop + 67, width, 34);
-        if (width > 33) text(zone ? String(zone) : 'M', x + 7, distributionTop + 93, 21, zone === 0 || zone === 3 || zone === 4 ? palette.ink : palette.background, true);
-        x += width;
-      });
-      text(`Доля 10 · ${formatAverage(100 * counts[10] / total, false)}%      Доля 10+9 · ${formatAverage(100 * (counts[10] + counts[9]) / total, false)}%`, 88, distributionTop + 128, 21, palette.muted);
+      ctx.save();
+      ctx.translate((1080 - distributionWidth * distributionScale) / 2, distributionTop + 47);
+      ctx.scale(distributionScale, distributionScale);
+      for (const mark of reportDistribution(counts, snapshot.distributionView)) {
+        if (mark.type === 'tile') {
+          ctx.beginPath(); ctx.roundRect(mark.x, mark.y, mark.side, mark.side, 2);
+          ctx.fillStyle = mark.color; ctx.fill();
+        } else if (mark.type === 'path') {
+          ctx.beginPath(); mark.points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+          ctx.lineWidth = .85; ctx.strokeStyle = mark.color ? palette.surface : palette.muted;
+          if (mark.color) { ctx.closePath(); ctx.fillStyle = mark.color; ctx.fill(); }
+          ctx.stroke();
+        } else {
+          face(mark.size, true); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = mark.color ?? palette.ink; ctx.fillText(mark.text, mark.x, mark.y);
+        }
+      }
+      ctx.restore();
     }
     const width = columns === 1 ? 968 : 472;
     racks.forEach(rack => rack.cards.forEach((card, column) => {
       const left = 56 + column * (width + 24);
       const gridTop = rack.top;
       box(left, gridTop, width, cardHeight(card));
-      text(`Раунд ${card.round.number}${card.part > 1 ? ' · продолжение' : ''}`, left + 16, gridTop + 29, 23, palette.ink, true);
-      if (card.part === 1) text(`${card.round.result.points}/${card.round.result.maximum}`, left + width - 105, gridTop + 29, 19, palette.ink, true);
+      text(`Раунд ${card.round.number}${card.part > 1 ? ' · продолжение' : ` — ${card.round.result.points}/${card.round.result.maximum}`}`, left + 16, gridTop + 29, 23, palette.ink, true);
       const metrics = left + width - 175;
       const middle = (value: string, x: number, y: number, size: number, color: string, bold = false) => {
         face(size, bold);

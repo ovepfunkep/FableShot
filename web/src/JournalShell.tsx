@@ -287,6 +287,5 @@ export function JournalHome({ active, paused, recent, practiceCount, arrowCount,
       </button>
     </section>}
     <PracticeTimeline recent={recent} onOpen={onOpen} />
-    <a className="journal-privacy" href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener">Политика конфиденциальности</a>
   </div>;
 }

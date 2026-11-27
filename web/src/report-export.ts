@@ -83,7 +83,7 @@ function appendCsvRows(entry: DiaryEntry, rows: string[]) {
 }
 
 export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null, hundredths: boolean,
-  details: { grants?: readonly AchievementGrant[]; disabledStatistics?: readonly StatisticFeature[]; maximumSpread?: boolean } = {}) {
+  details: { grants?: readonly AchievementGrant[]; disabledStatistics?: readonly StatisticFeature[]; maximumSpread?: boolean; distributionView?: DistributionView } = {}) {
   const practice = entry.practice;
   const rounds = practice.rounds.flatMap((round, r) => {
     const series = round.series.flatMap((series, s) => series.shots.length ? [{ ...series, number: s + 1 }] : []);
@@ -128,6 +128,7 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
   return { entryId: entry.id, startedAt: entry.startedAt, startLabel: reportedTrainingStart(entry)?.label,
     completed: practice.savedAt !== null, rounds, result, analysis,
     title: entry.title?.trim() || 'Тренировка', hundredths, rankDetails: rank, rankDisplay: exerciseRankDisplay(rank),
+    distributionView: details.distributionView === 'pie' ? 'pie' as const : 'mosaic' as const,
     rankCoverage: exerciseRankCoverage(rank),
     duration: duration === null ? null : `${formatTrainingTime(duration)}${entry.trainingTime?.partial ? ' · учтённое время' : ''}`,
     focus: [focus?.focus1, focus?.focus2].filter((value): value is string => !!value),
@@ -149,3 +150,4 @@ export function reportSnapshot(entry: DiaryEntry, category: RankCategory | null,
 }
 
 export type ReportSnapshot = ReturnType<typeof reportSnapshot>;
+import type { DistributionView } from './report-composition.ts';

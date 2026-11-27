@@ -70,3 +70,5 @@
 .geometry-trend-reading button:disabled { opacity: .35; }
 .geometry-trend-comparison > span { display: grid; gap: 3px; }
 .geometry-trend-comparison strong { color: var(--text); }
+.geometry-trend-points { touch-action: pan-y; }
+.geometry-trend .geometry-trend-reading { grid-template-columns: minmax(0, 1fr); }

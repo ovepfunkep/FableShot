@@ -1,10 +1,11 @@
 import { StatisticRules } from './StatisticRules.tsx';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
 import type { TimelineGroup } from './progress-timeline.ts';
 import { statisticVisible } from './statistics-visibility.ts';
 import { Icon } from './TrainingChrome.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
+import { useChartScrub } from './useChartScrub.ts';
 import './geometry-trend.css';
 
 const measures = [
@@ -22,12 +23,11 @@ export function GeometryTrend({ group }: { group: TimelineGroup }) {
   const [requested, setRequested] = useState<'rms' | 'offset'>('rms');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const chart = useRef<HTMLDivElement>(null);
   const available = measures.filter(measure => statisticVisible(preferences, measure.feature));
-  if (!statisticVisible(preferences, 'geometry_trend') || !available.length) return null;
-
   const measure = available.find(item => item.key === requested) ?? available[0];
   const showVolume = statisticVisible(preferences, 'volume');
-  const eligible = group.points.flatMap(point => point.geometry ? [{ ...point, known: point.geometry.known, mm: point.geometry[measure.field] }] : []);
+  const eligible = group.points.flatMap(point => point.geometry && measure ? [{ ...point, known: point.geometry.known, mm: point.geometry[measure.field] }] : []);
   const shown = eligible.slice(-WINDOW);
   const ceiling = Math.max(1, Math.ceil(Math.max(0, ...shown.map(point => point.mm)) - NOISE));
   const selected = shown.find(point => point.id === selectedId) ?? shown.at(-1);
@@ -38,6 +38,14 @@ export function GeometryTrend({ group }: { group: TimelineGroup }) {
   const percent = first && first.mm > NOISE ? 100 * signedDifference / first.mm : null;
   const x = (position: number) => shown.length === 1 ? 50 : 5 + 90 * position / (shown.length - 1);
   const y = (value: number) => 94 - 88 * Math.min(1, value / ceiling);
+  const scrub = useChartScrub<HTMLDivElement>(clientX => {
+    const rect = chart.current?.getBoundingClientRect();
+    if (!rect?.width || !shown.length) return;
+    const position = (clientX - rect.left) / rect.width * 100;
+    const index = Math.max(0, Math.min(shown.length - 1, Math.round((position - 5) / 90 * (shown.length - 1))));
+    setSelectedId(shown[index].id);
+  });
+  if (!statisticVisible(preferences, 'geometry_trend') || !measure) return null;
 
   return <section className="progress-timeline geometry-trend journal-tab-panel"
     aria-label="Кучность и точность по занятиям" data-testid="geometry-trend">
@@ -60,7 +68,13 @@ export function GeometryTrend({ group }: { group: TimelineGroup }) {
         <div className="geometry-trend-scale" aria-hidden="true">
           {[ceiling, ceiling / 2, 0].map(tick => <span key={tick}>{number(tick)}</span>)}
         </div>
-        <div className="geometry-trend-points" role="group" aria-label={`${measure.title}, от 0 до ${number(ceiling)} мм`} data-testid="geometry-trend-chart">
+        <div className="geometry-trend-points" ref={chart} {...scrub} role="group" aria-label={`${measure.title}, от 0 до ${number(ceiling)} мм`} data-testid="geometry-trend-chart"
+          onKeyDown={event => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            const point = shown[index + (event.key === 'ArrowLeft' ? -1 : 1)];
+            if (point) setSelectedId(point.id);
+          }}>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {[6, 50, 94].map(level => <line key={level} x1="5" x2="95" y1={level} y2={level} className="progress-timeline-grid" />)}
             {shown.length > 1 && <polyline className="progress-timeline-line"
@@ -76,15 +90,11 @@ export function GeometryTrend({ group }: { group: TimelineGroup }) {
       {shown.length > 1 && <p className="geometry-trend-caption">{date(shown[0].date)} — {date(shown.at(-1)!.date)}
         {showVolume && eligible.length > shown.length && ` · ${shown.length} из ${eligible.length}`}</p>}
       <div className="geometry-trend-reading" data-testid="geometry-trend-selection" aria-live="polite">
-        <button type="button" aria-label="Предыдущее занятие" disabled={index <= 0} data-testid="geometry-trend-prev"
-          onClick={() => setSelectedId(shown[index - 1].id)}><Icon name="back" /></button>
         <div>
           <strong data-testid="geometry-trend-selected-value">{number(selected.mm, 2)} мм</strong>
           <span data-testid="geometry-trend-selected-session">{date(selected.date)} · {selected.title}</span>
           {showVolume && <small>Координаты {selected.known} из {selected.arrows}</small>}
         </div>
-        <button type="button" aria-label="Следующее занятие" disabled={index >= shown.length - 1} data-testid="geometry-trend-next"
-          onClick={() => setSelectedId(shown[index + 1].id)}><Icon name="right" /></button>
       </div>
       {eligible.length >= 2 && <div className="geometry-trend-comparison">
         <span>Последнее <strong data-testid="geometry-trend-latest">{number(latest!.mm)} мм</strong></span>

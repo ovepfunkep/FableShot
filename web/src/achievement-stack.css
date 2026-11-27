@@ -27,7 +27,7 @@
   [data-motion="on"] .achievement-heading:is([data-rarity="Legendary"], [data-rarity="Mythic"], [data-rarity="Mystery"]) .achievement-medal[data-shimmer]::after {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--achievement-tint) 58%, transparent) 50%, transparent 70%);
-    animation: achievement-shimmer 670ms ease-in-out 2;
+    animation: achievement-shimmer 4.6s ease-in-out infinite;
   }
 }
 @keyframes achievement-shimmer { from { translate: -115% 0; } to { translate: 115% 0; } }
@@ -54,29 +54,47 @@
 }
 .achievement-stack-toggle svg { rotate: 90deg; }
 .achievement-stack-toggle[aria-expanded="true"] svg { rotate: -90deg; }
-.achievement-stack-tail { display: grid; grid-template-rows: 0fr; visibility: hidden; }
-.achievement-stack-tail[data-open="true"] { grid-template-rows: 1fr; visibility: visible; }
-.achievement-stack-tail > div { overflow: hidden; }
 .achievement-tier-list, .achievement-session-stacks { display: grid; gap: 8px; }
 .achievement-tier-list { list-style: none; margin: 0; padding: 8px 0 0; }
-.achievement-stack-peek { display: grid; margin: -9px 0 0; padding: 0 12px; }
+.achievement-stack-peek { display: grid; margin: -8px 0 0; padding: 0 10px; isolation: isolate; }
 .achievement-stack-peek span {
-  height: 15px; margin-inline: 7px; border: 1px solid color-mix(in srgb, var(--achievement-tint) 48%, var(--edge));
-  border-radius: 0 0 12px 12px; background: color-mix(in srgb, var(--achievement-tint) 15%, var(--raised));
+  position: relative; z-index: 1; height: 12px; margin-inline: 0; border: 1px solid color-mix(in srgb, var(--achievement-tint) 48%, var(--edge));
+  border-radius: 0 0 12px 12px; background: color-mix(in srgb, var(--achievement-tint) 12%, var(--raised));
 }
-.achievement-stack-peek span + span { margin: -9px 16px 0; }
+.achievement-stack-peek span + span { z-index: 0; margin: -8px 10px 0; }
 .achievement-tier-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0 8px 8px; color: var(--muted); }
 .achievement-stack[data-variant="profile"] .achievement-tier { grid-template-columns: minmax(0, 1fr) 52px; }
-.achievement-stack[data-variant="profile"] .achievement-tier-open { min-height: 64px; }
+.achievement-stack[data-variant="profile"] .achievement-tier-open { min-height: 86px; }
 .achievement-stack[data-variant="profile"] .achievement-heading-text > strong {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 .achievement-stack[data-variant="profile"] .achievement-heading-text > small { display: none; }
-.achievement-stack[data-variant="profile"] .achievement-stack-peek { height: 12px; }
-.achievement-stack[data-variant="profile"]:not(:has(.achievement-stack-peek)) { padding-block-end: 3px; }
+.achievement-short-condition { color: var(--muted); font-size: .75rem; line-height: 1.3; }
+.achievement-stack[data-variant="notice"] .achievement-short-condition { -webkit-line-clamp: 1; }
+.achievement-tier .achievement-short-condition {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.achievement-level-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.achievement-level-toggle svg { width: 16px; height: 16px; rotate: 90deg; }
+.achievement-level-toggle[aria-expanded="true"] svg { rotate: -90deg; }
+.achievement-stack-leading[data-rarity="Mystery"], .achievement-detail[data-rarity="Mystery"], .achievement-card.achievement-mystery {
+  --achievement-tint: #c8b8ee; --ink: #f5f0ff; --muted: #d2c9e2;
+  color: var(--ink); background: linear-gradient(145deg, #302b3d, #16141d 48%, #08080d);
+}
+.achievement-stack-leading:is([data-rarity="Legendary"], [data-rarity="Mythic"], [data-rarity="Mystery"]),
+.achievement-detail[data-state="earned"]:is([data-rarity="Legendary"], [data-rarity="Mythic"], [data-rarity="Mystery"]),
+.achievement-card.achievement-mystery {
+  border-color: color-mix(in srgb, var(--achievement-tint) 65%, var(--edge));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--achievement-tint) 25%, transparent);
+}
 @media (prefers-reduced-motion: no-preference) {
-  [data-motion="on"] .achievement-stack-tail { transition: grid-template-rows 180ms ease, visibility 180ms; }
-  [data-motion="on"] .achievement-stack-toggle svg { transition: rotate 180ms ease; }
+  [data-motion="on"] .achievement-stack-leading:is([data-rarity="Legendary"], [data-rarity="Mythic"], [data-rarity="Mystery"]),
+  [data-motion="on"] .achievement-detail[data-state="earned"]:is([data-rarity="Legendary"], [data-rarity="Mythic"], [data-rarity="Mystery"]),
+  [data-motion="on"] .achievement-card.achievement-mystery { animation: achievement-glow 4.6s ease-in-out infinite; }
+}
+@keyframes achievement-glow {
+  0%, 100% { box-shadow: 0 0 8px color-mix(in srgb, var(--achievement-tint) 18%, transparent); }
+  50% { box-shadow: 0 0 16px color-mix(in srgb, var(--achievement-tint) 44%, transparent); }
 }
 
 .achievement-detail {

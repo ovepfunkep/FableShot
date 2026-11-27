@@ -39,29 +39,33 @@ export function NotebookScreen({ entries, notes, onSaveStandalone, onSaveSession
     ? { ...(editor.note.seriesId !== undefined ? { seriesId: editor.note.seriesId } : {}),
       ...(editor.note.conditionKey !== undefined ? { conditionKey: editor.note.conditionKey } : {}) } : {};
   return <main className="conditions-page" data-testid="notebook-screen">
-    <header className="topbar"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Заметки</h1></header>
+    <header className="topbar notebook-header"><button type="button" className="icon-button" aria-label="Назад" onClick={onBack}><Icon name="back" /></button><h1>Заметки</h1>
+      <button type="button" className="icon-button notebook-add" aria-label="Написать заметку" data-testid="notebook-add"
+        onClick={() => setEditor({ create: true })}><span aria-hidden="true">＋</span></button>
+    </header>
     <div className="conditions-content notebook-content">
       <div className="notebook-search">
         <label><span className="sr-only">Поиск по заметкам</span><input type="search" placeholder="Поиск по заметкам"
           maxLength={120} value={query} data-testid="notebook-search" onChange={event => setQuery(event.target.value)} /></label>
-        <button type="button" className="icon-button notebook-add" aria-label="Написать заметку" data-testid="notebook-add"
-          onClick={() => setEditor({ create: true })}><span aria-hidden="true">＋</span></button>
       </div>
       {!shown.length ? <p className="notebook-empty" role="status">{needle ? 'Ничего не найдено' : 'Пока нет заметок. Можно написать отдельную запись без тренировки.'}</p>
-        : <ul className="notebook-list">{shown.map(({ note, entry }) => <li key={`${entry?.id ?? 'standalone'}:${note.id}`}
-          data-testid="notebook-item">
+        : <ul className="notebook-list">{shown.map(({ note, entry }) => {
+          const [first, ...rest] = note.body.trim().split(/\r?\n/u);
+          const context = [note.place, note.feeling, note.conditions].filter(value => value.trim()).join(' · ');
+          const heading = first.length > 64 ? first.slice(0, 64).replace(/\s+\S*$/u, '') : first;
+          const preview = [first.slice(heading.length).trim(), ...rest].join(' ').trim() || context;
+          return <li key={`${entry?.id ?? 'standalone'}:${note.id}`} data-testid="notebook-item">
           <button type="button" className="notebook-note" onClick={() => setEditor({ entry, note })}>
-            <span className="notebook-note-meta"><Icon name="notes" /><time dateTime={note.localDate}>{displayDate(note.localDate)}</time>
-              <span className="notebook-kind">{entry ? scopeTitle(note) : 'Отдельная запись'}</span></span>
-            {note.body.trim() && <span className="notebook-body">{note.body}</span>}
-            {[note.place, note.feeling, note.conditions].some(value => value.trim()) && <span className="notebook-context">
-              {[note.place, note.feeling, note.conditions].filter(value => value.trim()).join(' · ')}</span>}
+            <span className="notebook-note-meta"><Icon name="notes" /><strong>{heading || scopeTitle(note)}</strong>
+              <time dateTime={note.localDate}>{displayDate(note.localDate)}</time></span>
+            {preview && <span className="notebook-body">{preview}</span>}
             {!!note.tags.length && <span className="diary-note-tags">{note.tags.map(tag => <span key={tag}>#{tag}</span>)}</span>}
           </button>
           {entry && (!entry.deletedAt ? <button type="button" className="notebook-source" data-testid="notebook-source"
             onClick={() => onOpenSession(entry.id)}><span>{entry.title || 'Открыть тренировку'}</span><Icon name="right" /></button>
             : <p className="notebook-unavailable">{scopeTitle(note)} · тренировка в корзине</p>)}
-        </li>)}</ul>}
+        </li>;
+        })}</ul>}
     </div>
     {editor && <DiaryNotesSheet key={`${editor.entry?.id ?? 'standalone'}:${editor.note?.id ?? 'new'}`}
       notes={editorNotes} scope={scope} standalone={!editor.entry} initialNoteId={editor.note?.id} initialNew={editor.create}

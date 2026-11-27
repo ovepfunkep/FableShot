@@ -15,13 +15,12 @@ const groupGrants = (group: AchievementGroup) => [group.leading, ...group.additi
 const animated = () => document.documentElement.dataset.motion !== 'off' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
-  group: AchievementGroup; compact?: boolean; onOpen: (grant: AchievementGrant) => void; onNext: () => void; onShown: () => void;
+  group: AchievementGroup; compact?: boolean; onOpen: (grant?: AchievementGrant) => void; onNext: () => void; onShown: () => void;
 }) {
   const banner = useRef<HTMLElement>(null);
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const suppressClick = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [leaving, setLeaving] = useState<'up' | 'left'>();
   const remaining = useRef(noticeDuration + (animated() ? noticeEnter : 0));
   const next = useRef(onNext);
@@ -35,14 +34,14 @@ function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
       const end = window.setTimeout(() => next.current(), noticeExit);
       return () => window.clearTimeout(end);
     }
-    if (dragging || expanded) return;
+    if (dragging) return;
     const started = Date.now();
     const timer = window.setTimeout(() => setLeaving('up'), remaining.current);
     return () => {
       window.clearTimeout(timer);
       remaining.current = Math.max(0, remaining.current - (Date.now() - started));
     };
-  }, [dragging, expanded, leaving]);
+  }, [dragging, leaving]);
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
     const point = start.current;
@@ -62,13 +61,13 @@ function AchievementBanner({ group, compact, onOpen, onNext, onShown }: {
   }
 
   return <aside ref={banner} className="achievement-notice" aria-label="Новое достижение" data-testid="achievement-notice"
-    data-rarity={grantRarity(group.leading)} data-compact={compact || undefined} data-dragging={dragging || undefined} data-leaving={leaving} data-expanded={expanded || undefined}
+    data-rarity={grantRarity(group.leading)} data-compact={compact || undefined} data-dragging={dragging || undefined} data-leaving={leaving}
     onAnimationEnd={event => {
       if (event.target === event.currentTarget && event.animationName === 'achievement-notice-in') banner.current?.setAttribute('data-arrived', '');
     }}>
-    <AchievementStack group={group} variant="notice" onOpen={onOpen} onExpandedChange={setExpanded}
+    <AchievementStack group={group} variant="notice" onOpen={onOpen}
       rootProps={{ 'aria-label': 'Посмотреть полученные достижения', onClick: () => {
-        if (!suppressClick.current && !leaving) onOpen(group.leading);
+        if (!suppressClick.current && !leaving) onOpen();
         suppressClick.current = false;
       }, onPointerDown: event => {
       if (leaving || event.button !== 0 || start.current) return;
@@ -151,14 +150,14 @@ export function AchievementNotice({ groups, compact, onNext, onShown }: {
   const current = waiting[0];
   if (reading) return <BottomSheet title="Полученные достижения" onClose={onNext}>
     <AchievementMomentDetails groups={groups} initial={Math.max(0, groups.findIndex(group => group.key === reading))} onOpen={setSelected} />
-    {selected && <AchievementGrantDetails grant={selected} onClose={() => setSelected(null)} />}
+    {selected && <AchievementGrantDetails grant={selected} additional={groups.find(group => group.leading === selected)?.additional} onClose={() => setSelected(null)} />}
   </BottomSheet>;
   if (!current) return null;
   return <AchievementBanner key={current.key} group={current} compact={compact} onShown={() => onShown(groupGrants(current))}
     onNext={() => waiting.length > 1 ? setSeen(keys => [...keys, current.key]) : onNext()}
     onOpen={grant => {
       setReading(current.key);
-      if (grant !== current.leading) setSelected(grant);
+      setSelected(grant ?? null);
       onShown(groups.flatMap(groupGrants));
     }} />;
 }
@@ -175,7 +174,7 @@ export function SessionAchievements({ grants }: { grants: readonly AchievementGr
     </button>
     {expanded && <BottomSheet title="Достижения тренировки" onClose={() => setExpanded(false)}>
       <div className="achievement-session-stacks">{groups.map(group => <AchievementStack key={group.key} group={group} onOpen={setSelected} />)}</div>
-      {selected && <AchievementGrantDetails grant={selected} onClose={() => setSelected(null)} />}
+      {selected && <AchievementGrantDetails grant={selected} additional={groups.find(group => group.leading.id === selected.id && group.leading.scope === selected.scope)?.additional} onClose={() => setSelected(null)} />}
     </BottomSheet>}
   </span>;
 }

@@ -17,7 +17,8 @@ test('rank category is saved, series and round forecasts differ, and the grid op
   await page.getByRole('button', { name: 'Указать пол в профиле' }).click();
   const profile = page.getByTestId('profile-screen');
   await expect(profile.getByRole('group', { name: 'Пол для нормативов' })).toBeInViewport();
-  await profile.getByRole('button', { name: 'Мужской', exact: true }).click();
+  await profile.getByRole('button', { name: 'Пол для нормативов' }).click();
+  await page.getByRole('dialog', { name: 'Пол для нормативов' }).getByRole('button', { name: 'Мужской', exact: true }).click();
   await profile.getByRole('button', { name: 'Назад', exact: true }).click();
   await expect(page.getByTestId('rank-details')).toBeVisible();
   await page.getByTestId('rank-category-female').click();

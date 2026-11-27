@@ -26,12 +26,20 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     private volatile int acceptedSeries;
 
     int acceptedSeries() { return acceptedSeries; }
+    String roomId() { return roomId; }
+    synchronized long finalizedAt() { return finalizedAt; }
+
+    private static final String ROOM_ENTRIES = "SELECT entry FROM participants WHERE room = ? UNION SELECT entry FROM series WHERE room = ?";
 
     synchronized int participantCount() {
-        String sql = "SELECT COUNT(*) FROM (SELECT entry FROM participants WHERE room = ? UNION SELECT entry FROM series WHERE room = ?)";
+        String sql = "SELECT COUNT(*) FROM (" + ROOM_ENTRIES + ")";
         try (Cursor rows = getReadableDatabase().rawQuery(sql, new String[] {roomId, roomId})) {
             return rows.moveToFirst() ? rows.getInt(0) : 0;
         }
+    }
+
+    synchronized int finishedCount() {
+        return (int) count(getReadableDatabase(), "SELECT COUNT(*) FROM participants WHERE room = ? AND finished = 1", roomId);
     }
 
     synchronized void loadAcceptedCount() {
@@ -41,7 +49,7 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
     }
 
     LocalRoomSeriesStore(Context context, byte[] roomSecret, String roomName) {
-        super(context.getApplicationContext(), "fableshot-local-room-series.db", null, 2);
+        super(context.getApplicationContext(), "fableshot-local-room-series.db", null, 3);
         roomId = fingerprint(roomSecret);
         this.roomName = roomName;
     }
@@ -50,15 +58,23 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE series (room TEXT, entry TEXT, id INTEGER, ordinal INTEGER, revision INTEGER, payload TEXT, "
             + "PRIMARY KEY (room, entry, id), UNIQUE (room, entry, ordinal))");
         createParticipants(db);
+        createFinalizations(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion == 1 && newVersion == 2) createParticipants(db);
-        else throw new IllegalStateException("Unknown room database version");
+        if (newVersion != 3 || oldVersion < 1 || oldVersion > 2) throw new IllegalStateException("Unknown room database version");
+        if (oldVersion == 1) createParticipants(db);
+        else db.execSQL("ALTER TABLE participants ADD COLUMN finished INTEGER NOT NULL DEFAULT 0");
+        createFinalizations(db);
     }
 
     private static void createParticipants(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE participants (room TEXT NOT NULL, entry TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (room, entry))");
+        db.execSQL("CREATE TABLE participants (room TEXT NOT NULL, entry TEXT NOT NULL, payload TEXT NOT NULL, "
+            + "finished INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (room, entry))");
+    }
+
+    private static void createFinalizations(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE room_finalizations (room TEXT PRIMARY KEY NOT NULL, time INTEGER NOT NULL)");
     }
 
     synchronized byte[] receive(byte[] frame) throws IOException {
@@ -68,7 +84,6 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             if (request.length() == 1 && "snapshot".equals(request.optString("action"))) {
                 return snapshot().toString().getBytes(StandardCharsets.UTF_8);
             }
-            if (finalizedAt > 0) throw new IOException("Room results are finalized");
             String payload = request.getString("payload");
             byte[] publicKey = Base64.decode(request.getString("publicKey"), Base64.DEFAULT);
             byte[] signature = Base64.decode(request.getString("signature"), Base64.DEFAULT);
@@ -88,6 +103,16 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             if (!roomId.equals(end.getString("roomId")) || !entryId.equals(end.getString("entryId"))) {
                 throw new IOException("Invalid room or entry");
             }
+            if ("finish".equals(end.optString("action"))) {
+                if (end.length() != 4) throw new IOException("Invalid completion fields");
+                Object value = end.get("revisionTotal");
+                if (!(value instanceof Integer || value instanceof Long)) throw new IOException("Invalid revision total");
+                long total = ((Number) value).longValue();
+                if (total < 0 || total > 9007199254740991L) throw new IOException("Invalid revision total");
+                finishTraining(entryId, total);
+                return new JSONObject().put("finished", entryId).toString().getBytes(StandardCharsets.UTF_8);
+            }
+            if (finalizedAt > 0) throw new IOException("Room results are finalized");
             if ("join".equals(end.optString("action"))) {
                 if (end.length() != (end.has("displayName") ? 5 : 4)) throw new IOException("Invalid participant fields");
                 Object bow = end.get("bowCategory");
@@ -148,26 +173,79 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             }
         }
         org.json.JSONArray participants = new org.json.JSONArray();
-        try (Cursor rows = getReadableDatabase().query("participants", new String[] {"payload"}, "room = ?",
+        try (Cursor rows = getReadableDatabase().query("participants", new String[] {"payload", "finished"}, "room = ?",
                 new String[] {roomId}, null, null, "entry")) {
-            while (rows.moveToNext()) participants.put(new JSONObject(rows.getString(0)));
+            while (rows.moveToNext()) {
+                JSONObject participant = new JSONObject(rows.getString(0));
+                if (rows.getInt(1) == 1) participant.put("finished", true);
+                participants.put(participant);
+            }
         }
         JSONObject result = new JSONObject().put("roomName", roomName).put("cg3", true).put("pg1", true).put("shotPositions", true)
+            .put("trainingCompletion", true)
             .put("series", series).put("participants", participants);
         if (finalizedAt > 0) result.put("finalizedAt", finalizedAt);
         return result;
     }
 
-    synchronized JSONObject finalizeResults(android.content.SharedPreferences preferences) throws JSONException, IOException {
+    private static long count(SQLiteDatabase db, String sql, String... args) {
+        try (Cursor rows = db.rawQuery(sql, args)) {
+            return rows.moveToFirst() ? rows.getLong(0) : 0;
+        }
+    }
+
+    private void writeFinalization(SQLiteDatabase db, long time) {
+        ContentValues values = new ContentValues();
+        values.put("room", roomId);
+        values.put("time", time);
+        db.insertOrThrow("room_finalizations", null, values);
+    }
+
+    private void finishTraining(String entryId, long total) throws IOException {
+        SQLiteDatabase db = getWritableDatabase();
+        long time = 0;
+        db.beginTransaction();
+        try {
+            if (count(db, "SELECT COUNT(*) FROM participants WHERE room = ? AND entry = ?", roomId, entryId) != 1) {
+                throw new IOException("Participant did not join");
+            }
+            // IDs are append-only and accepted revisions only increase. Their sum identifies
+            // the revision of this participant's complete series journal, including deletions.
+            if (count(db, "SELECT COALESCE(SUM(revision), 0) FROM series WHERE room = ? AND entry = ?", roomId, entryId) != total) {
+                throw new IOException("Series have not been confirmed");
+            }
+            if (finalizedAt > 0) {
+                if (count(db, "SELECT finished FROM participants WHERE room = ? AND entry = ?", roomId, entryId) != 1) {
+                    throw new IOException("Room results are finalized");
+                }
+            } else {
+                db.execSQL("UPDATE participants SET finished = 1 WHERE room = ? AND entry = ?", new String[] {roomId, entryId});
+                String remaining = "SELECT COUNT(*) FROM (" + ROOM_ENTRIES
+                    + " EXCEPT SELECT entry FROM participants WHERE room = ? AND finished = 1)";
+                if (count(db, remaining, roomId, roomId, roomId) == 0) {
+                    time = System.currentTimeMillis();
+                    writeFinalization(db, time);
+                }
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        if (time > 0) finalizedAt = time;
+    }
+
+    synchronized JSONObject finalizeResults() throws JSONException, IOException {
         if (finalizedAt == 0) {
             long now = System.currentTimeMillis();
-            if (!preferences.edit().putLong("finalizedAt", now).commit()) throw new IOException("Could not save room finalization");
+            writeFinalization(getWritableDatabase(), now);
             finalizedAt = now;
         }
         return snapshot();
     }
 
-    synchronized void restoreFinalization(long time) { finalizedAt = time; }
+    synchronized void restoreFinalization(long legacy) {
+        finalizedAt = Math.max(legacy, count(getReadableDatabase(), "SELECT time FROM room_finalizations WHERE room = ?", roomId));
+    }
 
     @Override public synchronized void close() {
         closed = true;
@@ -201,6 +279,7 @@ final class LocalRoomSeriesStore extends SQLiteOpenHelper {
             values.put("payload", payload);
             if (existing) db.update("series", values, filter, key);
             else db.insertOrThrow("series", null, values);
+            db.execSQL("UPDATE participants SET finished = 0 WHERE room = ? AND entry = ?", new String[] {roomId, entryId});
             db.setTransactionSuccessful();
             added = !existing;
             return revision;

@@ -1,30 +1,31 @@
 import { useMemo, useState } from 'react';
 import { BottomSheet } from './ConditionsScreen.tsx';
-import { confirmedExerciseRanks } from './exercise-rank.ts';
+import { exerciseRankCoverage, personalBestExerciseCandidates } from './exercise-rank.ts';
 import type { DiaryEntry } from './persistence.ts';
 import { formatAverage } from './preferences.ts';
 import { timelineDate } from './progress-timeline.ts';
 import { RANK_SOURCE } from './sport-ranks.ts';
-import type { RankCategory, StageRank } from './sport-ranks.ts';
+import type { RankCategory } from './sport-ranks.ts';
 import { RankCategoryPreview, RankReference } from './SportRanks.tsx';
 import { Icon } from './TrainingChrome.tsx';
 import { useTrainingPreferences } from './TrainingPreferences.tsx';
 import './personal-records-screen.css';
 
-type BestRank = { entry: DiaryEntry; classLabel: string; evaluation: NonNullable<StageRank['evaluation']> };
+type BestRank = { entry: DiaryEntry; rank: ReturnType<typeof personalBestExerciseCandidates>[number]; evaluation: ReturnType<typeof personalBestExerciseCandidates>[number]['evaluation'] };
 
 export function bestRankResults(entries: readonly DiaryEntry[], category: RankCategory | null) {
   const best = new Map<string, BestRank>();
   if (!category) return [];
   for (const entry of entries) {
     if (entry.deletedAt || entry.practice.savedAt === null) continue;
-    for (const { evaluation, classLabel } of confirmedExerciseRanks(entry.practice, category)) {
+    for (const rank of personalBestExerciseCandidates(entry.practice, category)) {
+      const { evaluation } = rank;
       const previous = best.get(evaluation.exercise.id);
       const startedAt = Date.parse(entry.startedAt) || Date.parse(entry.createdAt ?? '') || 0;
       const previousStartedAt = previous ? Date.parse(previous.entry.startedAt) || Date.parse(previous.entry.createdAt ?? '') || 0 : 0;
       if (previous && (previous.evaluation.points - evaluation.points ||
         startedAt - previousStartedAt || entry.id.localeCompare(previous.entry.id)) >= 0) continue;
-      best.set(evaluation.exercise.id, { entry, evaluation, classLabel });
+      best.set(evaluation.exercise.id, { entry, evaluation, rank });
     }
   }
   return [...best.values()].sort(({ evaluation: a }, { evaluation: b }) =>
@@ -32,7 +33,7 @@ export function bestRankResults(entries: readonly DiaryEntry[], category: RankCa
 }
 
 export function PersonalRanksScreen({ entries, onBack, onOpen, onProfile }: {
-  entries: readonly DiaryEntry[]; onBack: () => void; onOpen: (id: string) => void; onProfile: () => void;
+  entries: readonly DiaryEntry[]; onBack: () => void; onOpen: (id: string, roundId: number) => void; onProfile: () => void;
 }) {
   const { preferences } = useTrainingPreferences();
   const [panel, setPanel] = useState<'reference' | 'help' | null>(null);
@@ -56,12 +57,12 @@ export function PersonalRanksScreen({ entries, onBack, onOpen, onProfile }: {
       {category && !results.length && <p className="personal-records-empty" data-testid="personal-ranks-empty" role="status">
         Пока нет полного совместимого упражнения.
       </p>}
-      {results.map(({ entry, evaluation, classLabel }) => {
+      {results.map(({ entry, evaluation, rank }) => {
         const { exercise, points, average, result, next } = evaluation;
         const date = timelineDate(entry);
         return <button type="button" className="personal-records-card" data-testid={`personal-best-${exercise.id}`}
-          key={exercise.id} onClick={() => onOpen(entry.id)}>
-          <span className="personal-records-conditions">{classLabel} · {exercise.distance} м · {exercise.arrows} стрел</span>
+          key={exercise.id} onClick={() => onOpen(entry.id, rank.coverage.rounds[0].id)}>
+          <span className="personal-records-conditions">{rank.classLabel} · {exercise.distance} м · {exerciseRankCoverage(rank)?.label}</span>
           <span className="personal-records-numbers"><strong>{points}/{exercise.arrows * 10}</strong>
             <span>Ср. {formatAverage(average, preferences.averageHundredths)}</span></span>
           <span className="personal-records-conditions">{result?.label ?? '—'}</span>

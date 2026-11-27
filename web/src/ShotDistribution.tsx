@@ -4,14 +4,11 @@ import { formatAverage } from './preferences.ts';
 import { zoneColor } from './target.ts';
 import './shot-distribution.css';
 import { useReportView } from './report-view.ts';
-import { packMosaicGroups } from './mosaic-layout.ts';
+import { center, distributionMosaic, inner, mosaicLimit, outer, ringLabels } from './shot-distribution-layout.ts';
+import type { Zone } from './shot-distribution-layout.ts';
+import type { DistributionView } from './report-composition.ts';
 
-type Zone = { score: number; count: number; label: string };
-export type DistributionView = 'mosaic' | 'pie';
-const mosaicLimit = 120;
-const center = 110;
-const outer = 104;
-const inner = 58;
+export type { DistributionView } from './report-composition.ts';
 const point = (angle: number, radius: number) =>
   `${center + Math.cos(angle) * radius} ${center + Math.sin(angle) * radius}`;
 const distributionColor = (score: number) => score === 10 ? 'var(--score-ten)' : score % 2 === 0 ? zoneColor(score)
@@ -23,46 +20,10 @@ function ringSector(start: number, end: number) {
     L ${point(end, inner)} A ${inner} ${inner} 0 ${large} 0 ${point(start, inner)} Z`;
 }
 
-function ringLabels(zones: readonly Zone[], total: number) {
-  let angle = -Math.PI / 2;
-  const sectors = zones.map(zone => {
-    const start = angle;
-    angle += 2 * Math.PI * zone.count / total;
-    const middle = (start + angle) / 2;
-    const left = Math.cos(middle) < 0;
-    const fontSize = Math.min(14, Math.floor((outer + inner) * (angle - start) / (2 * zone.label.length * .8)));
-    return { ...zone, start, end: angle, middle, left, fontSize, y: center + Math.sin(middle) * (outer + 15) };
-  });
-  for (const left of [true, false]) {
-    const side = sectors.filter(sector => sector.left === left).sort((a, b) => a.y - b.y);
-    let limit = -8;
-    for (const sector of side) {
-      sector.y = Math.max(sector.y, limit);
-      limit = sector.y + 16;
-    }
-    limit = 228;
-    for (const sector of [...side].reverse()) {
-      sector.y = Math.min(sector.y, limit);
-      limit = sector.y - 16;
-    }
-  }
-  return sectors;
-}
-
 function Mosaic({ zones, total, selected, onSelect }: {
   zones: readonly Zone[]; total: number; selected: number | null; onSelect: (score: number) => void;
 }) {
-  const layout = useMemo(() => {
-    const exact = total <= mosaicLimit;
-    const extra = mosaicLimit - zones.length;
-    let seen = 0;
-    const weighted = zones.map(({ score, count }) => {
-      const before = seen;
-      seen += count;
-      return { score, tiles: exact ? count : 1 + Math.round(extra * seen / total) - Math.round(extra * before / total) };
-    });
-    return packMosaicGroups(weighted);
-  }, [zones, total]);
+  const layout = useMemo(() => distributionMosaic(zones, total), [zones, total]);
   const cellSize = 16;
   return <svg className="shot-mosaic" style={{ maxWidth: layout.columns * 27 }} data-testid="shot-mosaic" role="group" aria-label="Мозаика попаданий"
     viewBox={`0 0 ${layout.columns * cellSize} ${layout.rows * cellSize}`}>

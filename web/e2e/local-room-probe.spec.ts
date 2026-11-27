@@ -3,6 +3,72 @@ import { expect, test } from '@playwright/test';
 import { createHash, createHmac, createPublicKey, verify } from 'node:crypto';
 import { advanceSeries, appendShot, emptyPractice } from '../src/practice.ts';
 
+for (const closeEarly of [false, true]) {
+  test(`hotspot host ${closeEarly ? 'can close early after a warning' : 'waits for the final participant before closing'}`, async ({ page }) => {
+    const secret = 'a'.repeat(32);
+    const invite = 'FS1:192.168.43.1:25000:' + secret;
+    const roomId = createHash('sha256').update(Buffer.from(secret, 'base64url')).digest('hex');
+    const guest = { entryId: 'b'.repeat(64), displayName: 'Гость', bowCategory: 'barebow' };
+    const participants = new Map<string, { entryId: string; displayName?: string; bowCategory: string | null; finished?: true }>([[guest.entryId, guest]]);
+    const series: { entryId: string; ordinal: number; revision: number; result: { points: number; arrows: number; bowCategory: null } }[] = [];
+    let finalizedAt: number | undefined;
+    let manual = 0;
+    await page.exposeFunction('hotspotOperation', (method: string, options?: { payload: string }) => {
+      if (method === 'status') return { invitation: invite, roomId, roomName: 'Клуб', trainingCompletion: true, finalizedAt,
+        participantCount: participants.size, finishedCount: [...participants.values()].filter(person => person.finished).length };
+      if (method === 'finalizeResults') { manual++; finalizedAt ??= Date.now(); }
+      if (method === 'snapshot' || method === 'finalizeResults') {
+        return { roomName: 'Клуб', trainingCompletion: true, finalizedAt, participants: [...participants.values()], series };
+      }
+      const operation = JSON.parse(options!.payload);
+      if (operation.action === 'join') {
+        expect(finalizedAt).toBeUndefined();
+        participants.set(operation.entryId, { entryId: operation.entryId, displayName: operation.displayName, bowCategory: operation.bowCategory });
+        return { joined: operation.entryId };
+      }
+      if (operation.action === 'finish') {
+        expect(series).toHaveLength(1);
+        expect(operation.revisionTotal).toBe(series[0].revision);
+        participants.get(operation.entryId)!.finished = true;
+        return { finished: operation.entryId };
+      }
+      series.push({ entryId: operation.entryId, ordinal: operation.ordinal, revision: operation.revision,
+        result: { points: 0, arrows: 1, bowCategory: null } });
+      return { endId: operation.endId, revision: operation.revision };
+    });
+    await page.addInitScript(() => {
+      Object.assign(window, { androidBridge: {}, Capacitor: {
+        PluginHeaders: [{ name: 'LocalRoomProbe', methods: ['status', 'publish', 'snapshot', 'finalizeResults'].map(name => ({ name, rtype: 'promise' })) }],
+        nativePromise: async (_plugin: string, method: string, options?: object) =>
+          (window as unknown as { hotspotOperation: (method: string, options?: object) => Promise<unknown> }).hotspotOperation(method, options),
+      } });
+    });
+    await page.goto('./');
+    await page.getByTestId('home-group-room').click();
+    await page.getByRole('button', { name: 'Начать групповую тренировку' }).click();
+    await page.getByTestId('start-training').click();
+    await page.getByRole('button', { name: 'Отметить промах' }).click();
+    await page.getByRole('button', { name: 'Завершить тренировку', exact: true }).click();
+    await page.getByTestId('training-confirm').click();
+    const prompt = page.getByTestId('host-close-room');
+    await expect(prompt).toContainText('участники больше не смогут обновлять результат');
+    await expect.poll(() => [...participants.values()].filter(person => person.finished).length).toBe(1);
+    if (closeEarly) {
+      await prompt.getByRole('button', { name: 'Закрыть комнату' }).click();
+      await expect(page.getByTestId('room-leaderboard')).toContainText('Итоги');
+      expect(manual).toBe(1);
+    } else {
+      await prompt.getByRole('button', { name: 'Оставить открытой' }).click();
+      expect(finalizedAt).toBeUndefined();
+      participants.set(guest.entryId, { ...guest, finished: true });
+      finalizedAt = Date.now();
+      await page.evaluate(() => window.dispatchEvent(new Event('online')));
+      expect(manual).toBe(0);
+    }
+    await expect.poll(async () => (await readDiary(page)).entries[0]?.groupRoomHistory?.finalizedAt).toBe(finalizedAt);
+  });
+}
+
 test('the host can restore a saved room on the current hotspot address', async ({ page }) => {
   const invitation = 'FS1:192.168.44.1:25000:' + 'a'.repeat(32);
   await page.addInitScript(invite => {
@@ -114,7 +180,7 @@ test('Android group training keeps its series queued during an outage and sends 
   await page.getByRole('button', { name: 'Как работает комната' }).click();
   const help = page.getByRole('dialog', { name: 'Как работает комната' });
   await help.getByText('Что будет, если закрыть комнату?', { exact: true }).click();
-  await expect(help.getByText(/завершит обмен для всех/)).toBeVisible();
+  await expect(help.getByText(/комната закроется автоматически/)).toBeVisible();
   await page.keyboard.press('Escape');
   const alexey = page.locator('[data-room-member]').filter({ hasText: 'Алексей' });
   await expect(alexey.getByTestId('room-score-classic')).toHaveText('22/30');
